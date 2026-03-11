@@ -1,0 +1,26 @@
+# Dependencies
+dart/pubspec.lock
+dart/.dart_tool/
+dart/.packages
+.dart_tool/
+
+# Build output
+native/build/
+native/third_party/
+*.o
+*.so
+*.dylib
+*.dll
+*.lib
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated
+dart/lib/src/engine/bindings.g.dart
