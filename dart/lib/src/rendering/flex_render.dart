@@ -1,0 +1,328 @@
+import 'dart:math' as math;
+
+import '../foundation/geometry.dart';
+import 'box.dart';
+import 'object.dart';
+import 'time_box.dart';
+
+/// The direction children are laid out in a flex container.
+enum Axis {
+  horizontal,
+  vertical,
+}
+
+/// How children are placed along the main axis.
+enum MainAxisAlignment {
+  start,
+  end,
+  center,
+  spaceBetween,
+  spaceAround,
+  spaceEvenly,
+}
+
+/// How children are placed along the cross axis.
+enum CrossAxisAlignment {
+  start,
+  end,
+  center,
+  stretch,
+}
+
+/// How much space a flex container should occupy on the main axis.
+enum MainAxisSize {
+  /// As small as possible on the main axis.
+  min,
+
+  /// As large as possible on the main axis.
+  max,
+}
+
+/// Data stored per child in a flex layout.
+class FlexParentData {
+  int flex;
+  FlexFit fit;
+
+  FlexParentData({this.flex = 0, this.fit = FlexFit.tight});
+}
+
+/// How a flex child is inscribed into the available space.
+enum FlexFit {
+  tight,
+  loose,
+}
+
+class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
+  RenderFlex({
+    required this.direction,
+    this.mainAxisAlignment = MainAxisAlignment.start,
+    this.crossAxisAlignment = CrossAxisAlignment.center,
+    this.mainAxisSize = MainAxisSize.max,
+  });
+
+  final Axis direction;
+  final MainAxisAlignment mainAxisAlignment;
+  final CrossAxisAlignment crossAxisAlignment;
+  final MainAxisSize mainAxisSize;
+
+  /// Per-child parent data, keyed by child index for simplicity.
+  final Map<RenderObject, FlexParentData> _parentData = {};
+
+  /// Sets the flex parent data for a child.
+  void setParentData(RenderObject child, FlexParentData data) {
+    _parentData[child] = data;
+  }
+
+  FlexParentData _getParentData(RenderObject child) {
+    return _parentData[child] ?? FlexParentData();
+  }
+
+  double _getMainAxisExtent(Size size) =>
+      direction == Axis.horizontal ? size.width : size.height;
+
+  double _getCrossAxisExtent(Size size) =>
+      direction == Axis.horizontal ? size.height : size.width;
+
+  double _getMainAxisConstraintMax(BoxConstraints c) =>
+      direction == Axis.horizontal ? c.maxWidth : c.maxHeight;
+
+  double _getCrossAxisConstraintMax(BoxConstraints c) =>
+      direction == Axis.horizontal ? c.maxHeight : c.maxWidth;
+
+  @override
+  void performLayout() {
+    final parentConstraints = constraints;
+    final maxMainAxis = _getMainAxisConstraintMax(parentConstraints);
+    final maxCrossAxis = _getCrossAxisConstraintMax(parentConstraints);
+
+    // Propagate time constraints if available.
+    Duration? currentTime;
+    if (parentConstraints is TimeBoxConstraints) {
+      currentTime = parentConstraints.currentTime;
+    }
+
+    // Phase 1: Lay out non-flex children and compute total flex.
+    double allocatedMainAxis = 0;
+    double maxChildCrossAxis = 0;
+    int totalFlex = 0;
+    final List<double> childMainAxisExtents = List.filled(children.length, 0);
+
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      final parentData = _getParentData(child);
+      final flex = parentData.flex;
+
+      if (flex > 0) {
+        totalFlex += flex;
+      } else {
+        // Non-flex child: lay out with loose cross-axis constraints.
+        final childConstraints = _makeChildConstraints(
+          mainAxisMax: maxMainAxis,
+          crossAxisMin:
+              crossAxisAlignment == CrossAxisAlignment.stretch
+                  ? maxCrossAxis
+                  : 0,
+          crossAxisMax: maxCrossAxis,
+          currentTime: currentTime,
+        );
+        child.layout(childConstraints, parentUsesSize: true);
+        final childMainExtent = _getMainAxisExtent(child.size);
+        allocatedMainAxis += childMainExtent;
+        childMainAxisExtents[i] = childMainExtent;
+        maxChildCrossAxis =
+            math.max(maxChildCrossAxis, _getCrossAxisExtent(child.size));
+      }
+    }
+
+    // Phase 2: Distribute remaining space to flex children.
+    final double freeSpace = math.max(0, maxMainAxis - allocatedMainAxis);
+    final double spacePerFlex = totalFlex > 0 ? freeSpace / totalFlex : 0;
+
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      final parentData = _getParentData(child);
+      final flex = parentData.flex;
+
+      if (flex > 0) {
+        final double childMainExtent = spacePerFlex * flex;
+        final childConstraints = _makeChildConstraints(
+          mainAxisMin:
+              parentData.fit == FlexFit.tight ? childMainExtent : 0,
+          mainAxisMax: childMainExtent,
+          crossAxisMin:
+              crossAxisAlignment == CrossAxisAlignment.stretch
+                  ? maxCrossAxis
+                  : 0,
+          crossAxisMax: maxCrossAxis,
+          currentTime: currentTime,
+        );
+        child.layout(childConstraints, parentUsesSize: true);
+        childMainAxisExtents[i] = _getMainAxisExtent(child.size);
+        allocatedMainAxis += childMainAxisExtents[i];
+        maxChildCrossAxis =
+            math.max(maxChildCrossAxis, _getCrossAxisExtent(child.size));
+      }
+    }
+
+    // Determine own size.
+    final double idealMainAxis =
+        mainAxisSize == MainAxisSize.max ? maxMainAxis : allocatedMainAxis;
+    final double actualMainAxis =
+        direction == Axis.horizontal
+            ? parentConstraints.constrainWidth(idealMainAxis)
+            : parentConstraints.constrainHeight(idealMainAxis);
+    final double actualCrossAxis =
+        crossAxisAlignment == CrossAxisAlignment.stretch
+            ? maxCrossAxis
+            : direction == Axis.horizontal
+                ? parentConstraints.constrainHeight(maxChildCrossAxis)
+                : parentConstraints.constrainWidth(maxChildCrossAxis);
+
+    size =
+        direction == Axis.horizontal
+            ? Size(actualMainAxis, actualCrossAxis)
+            : Size(actualCrossAxis, actualMainAxis);
+
+    // Phase 3: Position children (compute offsets for paint).
+    _childOffsets.clear();
+    final double remainingSpace = actualMainAxis - allocatedMainAxis;
+    final int childCount = children.length;
+
+    double leadingSpace;
+    double betweenSpace;
+    switch (mainAxisAlignment) {
+      case MainAxisAlignment.start:
+        leadingSpace = 0;
+        betweenSpace = 0;
+      case MainAxisAlignment.end:
+        leadingSpace = remainingSpace;
+        betweenSpace = 0;
+      case MainAxisAlignment.center:
+        leadingSpace = remainingSpace / 2;
+        betweenSpace = 0;
+      case MainAxisAlignment.spaceBetween:
+        leadingSpace = 0;
+        betweenSpace =
+            childCount > 1 ? remainingSpace / (childCount - 1) : 0;
+      case MainAxisAlignment.spaceAround:
+        betweenSpace = childCount > 0 ? remainingSpace / childCount : 0;
+        leadingSpace = betweenSpace / 2;
+      case MainAxisAlignment.spaceEvenly:
+        betweenSpace =
+            childCount > 0 ? remainingSpace / (childCount + 1) : 0;
+        leadingSpace = betweenSpace;
+    }
+
+    double mainAxisOffset = leadingSpace;
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      final childCrossExtent = _getCrossAxisExtent(child.size);
+
+      double crossAxisOffset;
+      switch (crossAxisAlignment) {
+        case CrossAxisAlignment.start:
+          crossAxisOffset = 0;
+        case CrossAxisAlignment.end:
+          crossAxisOffset = actualCrossAxis - childCrossExtent;
+        case CrossAxisAlignment.center:
+        case CrossAxisAlignment.stretch:
+          crossAxisOffset = (actualCrossAxis - childCrossExtent) / 2;
+      }
+
+      _childOffsets[child] =
+          direction == Axis.horizontal
+              ? Offset(mainAxisOffset, crossAxisOffset)
+              : Offset(crossAxisOffset, mainAxisOffset);
+
+      mainAxisOffset += childMainAxisExtents[i] + betweenSpace;
+    }
+  }
+
+  /// Stored child offsets for painting.
+  final Map<RenderObject, Offset> _childOffsets = {};
+
+  BoxConstraints _makeChildConstraints({
+    double mainAxisMin = 0,
+    double mainAxisMax = double.infinity,
+    double crossAxisMin = 0,
+    double crossAxisMax = double.infinity,
+    Duration? currentTime,
+  }) {
+    if (currentTime != null) {
+      return direction == Axis.horizontal
+          ? TimeBoxConstraints(
+              currentTime: currentTime,
+              minWidth: mainAxisMin,
+              maxWidth: mainAxisMax,
+              minHeight: crossAxisMin,
+              maxHeight: crossAxisMax,
+            )
+          : TimeBoxConstraints(
+              currentTime: currentTime,
+              minWidth: crossAxisMin,
+              maxWidth: crossAxisMax,
+              minHeight: mainAxisMin,
+              maxHeight: mainAxisMax,
+            );
+    }
+    return direction == Axis.horizontal
+        ? BoxConstraints(
+            minWidth: mainAxisMin,
+            maxWidth: mainAxisMax,
+            minHeight: crossAxisMin,
+            maxHeight: crossAxisMax,
+          )
+        : BoxConstraints(
+            minWidth: crossAxisMin,
+            maxWidth: crossAxisMax,
+            minHeight: mainAxisMin,
+            maxHeight: mainAxisMax,
+          );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    for (final child in children) {
+      final childOffset = _childOffsets[child] ?? Offset.zero;
+      context.paintChild(child, Offset(
+        offset.dx + childOffset.dx,
+        offset.dy + childOffset.dy,
+      ));
+    }
+  }
+}
+
+/// A pass-through render object that communicates flex data to its parent
+/// [RenderFlex] via parent data.
+class RenderExpanded extends RenderBox with ContainerRenderObjectMixin {
+  RenderExpanded({this.flex = 1, this.fit = FlexFit.tight});
+  final int flex;
+  final FlexFit fit;
+
+  @override
+  void performLayout() {
+    // Register our flex data with the parent RenderFlex.
+    if (parent is RenderFlex) {
+      (parent! as RenderFlex).setParentData(
+        this,
+        FlexParentData(flex: flex, fit: fit),
+      );
+    }
+
+    // Lay out our single child with the same constraints we received.
+    if (children.isNotEmpty) {
+      final child = children.first;
+      child.layout(constraints, parentUsesSize: true);
+      size = child.size;
+    } else {
+      size = Size(constraints.minWidth, constraints.minHeight);
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (children.isNotEmpty) {
+      context.paintChild(children.first, offset);
+    }
+  }
+}

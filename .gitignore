@@ -24,3 +24,6 @@ Thumbs.db
 
 # Generated
 dart/lib/src/engine/bindings.g.dart
+
+# this fucker
+native/.cache
