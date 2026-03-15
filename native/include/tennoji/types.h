@@ -12,6 +12,8 @@ typedef struct TennojiDecoder TennojiDecoder;
 typedef struct TennojiEncoder TennojiEncoder;
 typedef struct TennojiTexture TennojiTexture;
 typedef struct TennojiCanvas TennojiCanvas;
+typedef struct TennojiParagraphBuilder TennojiParagraphBuilder;
+typedef struct TennojiCanvasImage TennojiCanvasImage; // for the most part it holds a skimage
 
 typedef enum {
   TENNOJI_HW_ACCEL_AUTO,   // try NVENC/VAAPI/VT, fallback to SW

@@ -1,11 +1,9 @@
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart';
 
-import '../engine/bindings.dart';
 import '../engine/engine.dart';
-import '../foundation/geometry.dart';
-import '../painting/paint.dart';
 import 'object.dart';
 import 'pipeline_owner.dart';
 import 'time_box.dart';
@@ -24,7 +22,7 @@ class RenderVideoClip extends RenderTimeBox {
   final double playbackSpeed;
 
   Pointer<TennojiDecoder>? _decoder;
-  int? _textureId;
+  Pointer<TennojiCanvasImage>? _texture;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
 
@@ -32,7 +30,7 @@ class RenderVideoClip extends RenderTimeBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = bindings.decoder_open(
+    _decoder = tennoji_decoder_open(
       Engine.instance.nativePtr,
       uri.cast(),
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
@@ -42,12 +40,13 @@ class RenderVideoClip extends RenderTimeBox {
 
   @override
   void detach() {
-    if (_textureId != null) {
-      bindings.texture_release(Engine.instance.nativePtr, _textureId!);
-      _textureId = null;
+    if (_texture != null) {
+      // ask the lib to call delete
+      tennoji_texture_release(_texture!);
+      _texture = null;
     }
     if (_decoder != null) {
-      bindings.decoder_close(_decoder!);
+      tennoji_decoder_close(_decoder!);
       _decoder = null;
     }
     super.detach();
@@ -65,14 +64,16 @@ class RenderVideoClip extends RenderTimeBox {
     final timeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
 
     // Release previous texture before acquiring a new one
-    if (_textureId != null) {
-      bindings.texture_release(Engine.instance.nativePtr, _textureId!);
+    if (_texture != null) {
+      tennoji_texture_release(_texture!);
     }
 
-    _textureId = bindings.decoder_get_texture(_decoder!, timeUs);
+    _texture = tennoji_decoder_get_texture(_decoder!, timeUs);
 
-    if (_textureId != null && _textureId! >= 0) {
-      context.canvas.drawImage(_textureId!, offset, Paint());
+    if (_texture != nullptr) {
+      context.canvas.drawImage(_texture!, offset, Paint());
+    } else {
+      _texture = null;
     }
   }
 }
@@ -98,7 +99,7 @@ class RenderAudioClip extends RenderTimeBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = bindings.decoder_open(
+    _decoder = tennoji_decoder_open(
       Engine.instance.nativePtr,
       uri.cast(),
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
@@ -109,7 +110,7 @@ class RenderAudioClip extends RenderTimeBox {
   @override
   void detach() {
     if (_decoder != null) {
-      bindings.decoder_close(_decoder!);
+      tennoji_decoder_close(_decoder!);
       _decoder = null;
     }
     super.detach();

@@ -47,9 +47,5 @@ TENNOJI_EXPORT void tennoji_engine_destroy(TennojiEngine* engine) {
     delete engine;
 }
 
-TENNOJI_EXPORT void tennoji_texture_release(TennojiEngine* engine, int texture_id) {
-    if (!engine) return;
-    engine->release_texture(texture_id);
-}
 
 } // extern "C"

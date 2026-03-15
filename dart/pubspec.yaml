@@ -7,7 +7,9 @@ environment:
 
 dependencies:
   ffi: ^2.1.0
+  hooks: ^1.0.2
   meta: ^1.9.0
+  native_assets_cli: ^0.18.0
 
 dev_dependencies:
   lints: ^6.1.0
@@ -18,16 +20,26 @@ ffigen:
   output: 'lib/src/engine/bindings.dart'
   name: 'TennojiBindings'
   description: 'Bindings for tennoji native library'
+  ffi-native:
+    asset-id: 'package:tennoji/rina'
   headers:
     entry-points:
       - '../native/include/tennoji/engine.h'
     include-directives:
       - '../native/include/tennoji/*.h'
-
+  compiler-opts:
+    - '-Dbool=_Bool'
+    - '-Dtrue=1'
+    - '-Dfalse=0'
   functions:
-    rename:
-      'tennoji_(.*)': '$1'
-
+    leaf:
+      include:
+        - 'tennoji_rsuperellipse_contains'
+        - 'tennoji_canvas_.*'     # All canvas recording ops
+        - 'tennoji_decoder_get_.*' # Simple getters
+        - 'tennoji_decoder_duration'
+    #rename:
+    #  'tennoji_(.*)': '$1'
   macros:
     include:
       - 'TENNOJI_*'

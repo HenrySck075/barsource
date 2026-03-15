@@ -1,4 +1,5 @@
 #include "../engine_internal.h"
+#include "../dart_ui/image_internal.h"
 #include "decoder_internal.h"
 
 extern "C" {
@@ -282,9 +283,9 @@ TENNOJI_EXPORT int tennoji_decoder_seek(TennojiDecoder* decoder, int64_t timesta
     return 0;
 }
 
-TENNOJI_EXPORT int tennoji_decoder_get_texture(TennojiDecoder* decoder,
+TENNOJI_EXPORT TennojiCanvasImage* tennoji_decoder_get_texture(TennojiDecoder* decoder,
                                                 int64_t timestamp_us) {
-    if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return -1;
+    if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return nullptr;
 
     // Seek if the requested timestamp is far from the last seek
     AVRational tb = decoder->fmtCtx->streams[decoder->videoStreamIdx]->time_base;
@@ -334,19 +335,18 @@ TENNOJI_EXPORT int tennoji_decoder_get_texture(TennojiDecoder* decoder,
 
     // Get the best matching frame from pool
     AVFrame* bestFrame = decoder->framePool->get_frame(target_pts);
-    int texture_id = -1;
 
     if (bestFrame) {
         sk_sp<SkImage> image = avframe_to_skimage(decoder, bestFrame);
         if (image) {
-            texture_id = decoder->engine->register_texture(std::move(image));
+            return new TennojiCanvasImage{.image = std::move(image)};
         }
     }
 
     av_frame_free(&frame);
     av_packet_free(&pkt);
 
-    return texture_id;
+    return nullptr;
 }
 
 TENNOJI_EXPORT int64_t tennoji_decoder_duration(TennojiDecoder* decoder) {

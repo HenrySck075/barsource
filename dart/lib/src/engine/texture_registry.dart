@@ -15,7 +15,7 @@ class TextureRegistry {
   void release(int id) {
     final handle = _textures.remove(id);
     if (handle != null) {
-      bindings.texture_release(Engine.instance.nativePtr, handle);
+      tennoji_texture_release(Engine.instance.nativePtr, handle);
     }
   }
 
