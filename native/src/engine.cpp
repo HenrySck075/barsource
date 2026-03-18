@@ -3,10 +3,32 @@
 #include <cstring>
 #include <thread>
 
+#include "include/codec/SkCodec.h"
+#include "include/codec/SkJpegDecoder.h"
+#include "include/codec/SkPngDecoder.h"
+#include "include/codec/SkWebpDecoder.h"
+#include "src/shaders/gradients/SkGradientBaseShader.h"
+
+void setup_codecs() {
+  static bool doned = false;
+  if (doned) return;
+  SkCodecs::Register(SkPngDecoder::Decoder());
+  SkCodecs::Register(SkJpegDecoder::Decoder());
+  SkCodecs::Register(SkWebpDecoder::Decoder());
+
+
+  SkRegisterConicalGradientShaderFlattenable();
+  SkRegisterLinearGradientShaderFlattenable();
+  SkRegisterRadialGradientShaderFlattenable();
+  SkRegisterSweepGradientShaderFlattenable();
+  doned = true;
+}
 extern "C" {
 
 TENNOJI_EXPORT TennojiEngine* tennoji_engine_create(const TennojiEngineConfig* config) {
     if (!config) return nullptr;
+
+    setup_codecs();
 
     auto* engine = new TennojiEngine();
     engine->width = config->width;

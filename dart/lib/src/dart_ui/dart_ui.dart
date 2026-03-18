@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/engine/bindings.dart';
 import 'package:tennoji/src/engine/engine.dart';
 

@@ -74,7 +74,35 @@ TENNOJI_EXPORT int tennoji_canvas_save_layer(TennojiCanvas* canvas, int alpha);
 
 // Texture (GPU texture handle, opaque int ID)
 // no longer true
-TENNOJI_EXPORT void tennoji_texture_release(TennojiCanvasImage* texture);
+TENNOJI_EXPORT void tennoji_texture_destroy(TennojiCanvasImage* texture);
+
+TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_encoded(const uint8_t* data, const uint32_t length);
+TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_file(const char* path);
+TENNOJI_EXPORT void tennoji_codec_destroy(TennojiCodec* codec);
+TENNOJI_EXPORT int tennoji_codec_get_frame_count(TennojiCodec* codec);
+TENNOJI_EXPORT int tennoji_codec_get_repetition_count(TennojiCodec* codec);
+TENNOJI_EXPORT TennojiFrameInfo* tennoji_codec_get_frame_info(TennojiCodec* codec, int index);
+TENNOJI_EXPORT void tennoji_frame_info_destroy(TennojiFrameInfo* info);
+
+TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_encoded(const uint8_t* data, const uint32_t length);
+TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_raw(
+  const uint8_t* data, 
+  const uint32_t width, const uint32_t height,
+  int8_t rowBytes,
+  const int8_t pixelFormat // doesnt care because flutter hardcodes a 4
+                               // on the bytes per pixel value where this matters
+);
+
+TENNOJI_EXPORT uint32_t tennoji_idesc_get_width(TennojiImageDescriptor* descriptor);
+TENNOJI_EXPORT uint32_t tennoji_idesc_get_height(TennojiImageDescriptor* descriptor);
+
+TENNOJI_EXPORT TennojiCodec* tennoji_idesc_instantiate_codec(TennojiImageDescriptor* descriptor, uint32_t targetWidth, uint32_t targetHeight, uint8_t targetPixelFormat);
+TENNOJI_EXPORT void tennoji_idesc_destroy(TennojiImageDescriptor* descriptor);
+
+TENNOJI_EXPORT bool tennoji_texture_equals(
+  TennojiCanvasImage* tex1,
+  TennojiCanvasImage* tex2
+);
 
 TENNOJI_EXPORT int tennoji_texture_get_width(TennojiCanvasImage* texture);
 TENNOJI_EXPORT int tennoji_texture_get_height(TennojiCanvasImage* texture);
@@ -127,6 +155,60 @@ TENNOJI_EXPORT bool tennoji_rsuperellipse_contains(
     double blRx, double blRy,        // Bottom-Left Radii
     double brRx, double brRy         // Bottom-Right Radii
 );
+
+// Vertices
+TENNOJI_EXPORT TennojiCanvasVertices* tennoji_vertices_init(
+  uint8_t mode,
+  uint64_t length, // used by positions, textureCoordinates, colors assuming they matches the length
+  float* positions, 
+  float* textureCoordinates, // nullable
+  int32_t* colors, // also nullable
+  uint16_t* indices, uint64_t iLength
+);
+TENNOJI_EXPORT void tennoji_vertices_destroy(TennojiCanvasVertices* vertices);
+TENNOJI_EXPORT void tennoji_canvas_draw_vertices(
+  TennojiCanvas* canvas,
+  TennojiCanvasVertices* vertices,
+  uint32_t blendMode, // SkBlendMode
+  uint32_t color
+);
+
+// shaders
+TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_linear(
+  float x0, float y0, float x1, float y1,
+  uint32_t* colors, // length must match stops
+  float* stops, // nullable, if null then it will be evenly distributed
+  uint64_t length,
+  uint32_t tileMode, // SkTileMode
+  double* matrix4 // aka SkMatrix
+);
+TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_radial(
+  float cx, float cy, float radius,
+  uint32_t* colors, // length must match stops
+  float* stops, // nullable, if null then it will be evenly distributed
+  uint64_t length,
+  uint32_t tileMode, // SkTileMode
+  double* matrix4 
+);
+TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_sweep(
+  float cx, float cy, 
+  float startAngle, float endAngle,
+  uint32_t* colors, // length must match stops
+  float* stops, // nullable, if null then it will be evenly distributed
+  uint64_t length,
+  uint32_t tileMode, // SkTileMode
+  double* matrix4 
+);
+TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_conical(
+  float startCx, float startCy, float startRadius,
+  float endCx, float endCy, float endRadius,
+  uint32_t* colors, // length must match stops
+  float* stops, // nullable, if null then it will be evenly distributed
+  uint64_t length,
+  uint32_t tileMode, // SkTileMode
+  double* matrix4 
+);
+TENNOJI_EXPORT void tennoji_gradient_destroy(TennojiCanvasGradient* gradient);
 
 #ifdef __cplusplus
 }

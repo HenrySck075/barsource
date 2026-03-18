@@ -33,13 +33,8 @@ ffigen:
     - '-Dfalse=0'
   functions:
     leaf:
-      include:
-        - 'tennoji_rsuperellipse_contains'
-        - 'tennoji_canvas_.*'     # All canvas recording ops
-        - 'tennoji_decoder_get_.*' # Simple getters
-        - 'tennoji_decoder_duration'
-    #rename:
-    #  'tennoji_(.*)': '$1'
+      include: 
+         - "tennoji_.*" 
   macros:
     include:
       - 'TENNOJI_*'

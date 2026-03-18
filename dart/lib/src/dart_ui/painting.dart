@@ -2028,7 +2028,7 @@ class Image {
     return disposed ??
         (throw StateError('Image.debugDisposed is only available when asserts are enabled.'));
   }
-
+/*
   /// Converts the [Image] object into a byte array.
   ///
   /// The [format] argument specifies the format in which the bytes will be
@@ -2048,7 +2048,7 @@ class Image {
     assert(!_disposed && !_image._disposed);
     return _image.toByteData(format: format);
   }
-
+*/
   /// The color space that is used by the [Image]'s colors.
   ///
   /// This value is a consequence of how the [Image] has been created.  For
@@ -2201,10 +2201,13 @@ base class _Image {
 
   final Pointer<TennojiCanvasImage> _nativePtr;
 
-  int get width;
+  int get width => tennoji_texture_get_width(_nativePtr);
 
-  int get height;
+  int get height => tennoji_texture_get_height(_nativePtr);
 
+// usually you dont have to do this. until the demand is high then.
+// but even then, its probably going to be synchronous
+/*
   Future<ByteData?> toByteData({ImageByteFormat format = ImageByteFormat.rawRgba}) {
     return _futurizeWithError((_CallbackWithError<ByteData?> callback) {
       return _toByteData(format.index, (Uint8List? encoded, String? error) {
@@ -2220,7 +2223,7 @@ base class _Image {
   /// Returns an error message on failure, null on success.
   @Native<Handle Function(Pointer<Void>, Int32, Handle)>(symbol: 'Image::toByteData')
   external String? _toByteData(int format, void Function(Uint8List?, String?) callback);
-
+*/
   bool _disposed = false;
   void dispose() {
     assert(!_disposed);
@@ -2229,21 +2232,17 @@ base class _Image {
       'Attempted to dispose of an Image object that has ${_handles.length} '
       'open handles.\n'
       'If you see this, it is a bug in dart:ui. Please file an issue at '
-      'https://github.com/flutter/flutter/issues/new.',
+      'https://github.com/flutter/flutter/issues/new.\n'
+      'If you believe the issue has already been fixed, please file an issue at '
+      'e', //todo: url
     );
     _disposed = true;
-    _dispose();
+    tennoji_texture_destroy(_nativePtr);
   }
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Image::dispose')
-  external void _dispose();
 
   final Set<Image> _handles = <Image>{};
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'Image::colorSpace')
-  external int get colorSpace;
+  final int colorSpace = ColorSpace.sRGB.index; // skia images use this color space and we only use skia anyway
 
   @override
   String toString() => '[$width\u00D7$height]';
@@ -2253,9 +2252,6 @@ base class _Image {
 Image _wrapImage(_Image image) {
   return Image._(image, image.width, image.height);
 }
-
-/// Callback signature for [decodeImageFromList].
-typedef ImageDecoderCallback = void Function(Image result);
 
 /// Information for a single frame of an animation.
 ///
@@ -2346,7 +2342,7 @@ abstract class Codec {
   ///
   /// The caller of this method is responsible for disposing the
   /// [FrameInfo.image] on the returned object.
-  Future<FrameInfo> getNextFrame();
+  FrameInfo? getNextFrame();
 
   /// Release the resources used by this object. The object is no longer usable
   /// after this method is called.
@@ -2356,33 +2352,36 @@ abstract class Codec {
   void dispose();
 }
 
-base class _NativeCodec extends NativeFieldWrapperClass1 implements Codec {
+base class _NativeCodec implements Codec {
   //
   // This class is created by the engine, and should not be instantiated
   // or extended directly.
   //
   // To obtain an instance of the [Codec] interface, see
   // [instantiateImageCodec].
-  _NativeCodec._();
+  _NativeCodec._(this._nativePtr);
+
+  final Pointer<TennojiCodec> _nativePtr;
 
   int? _cachedFrameCount;
 
   @override
   int get frameCount => _cachedFrameCount ??= _frameCount;
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'Codec::frameCount', isLeaf: true)
-  external int get _frameCount;
+  int get _frameCount => tennoji_codec_get_frame_count(_nativePtr);
 
   int? _cachedRepetitionCount;
 
   @override
   int get repetitionCount => _cachedRepetitionCount ??= _repetitionCount;
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'Codec::repetitionCount', isLeaf: true)
-  external int get _repetitionCount;
+  int get _repetitionCount => tennoji_codec_get_repetition_count(_nativePtr);
+
+  int _currentFrameIndex = 0;
 
   @override
-  Future<FrameInfo> getNextFrame() async {
+  FrameInfo? getNextFrame() {
+    /*
     final completer = Completer<FrameInfo>.sync();
     final String? error = _getNextFrame((
       _Image? image,
@@ -2407,20 +2406,29 @@ base class _NativeCodec extends NativeFieldWrapperClass1 implements Codec {
       throw Exception(error);
     }
     return completer.future;
+    */
+    var bart = tennoji_codec_get_frame_info(_nativePtr, _currentFrameIndex);
+
+    if (bart == nullptr) return null;
+
+    _currentFrameIndex++;
+
+    final img = _Image._(bart.ref.image);
+    final duration = bart.ref.durationMs;
+    // todo: ?
+    tennoji_frame_info_destroy(bart);
+    return FrameInfo._(
+      duration: Duration(milliseconds: duration), 
+      image: Image._(img, img.width, img.height)
+    );
   }
 
-  /// Returns an error message on failure, null on success.
-  @Native<Handle Function(Pointer<Void>, Handle)>(symbol: 'Codec::getNextFrame')
-  external String? _getNextFrame(void Function(_Image?, int, String) callback);
-
   @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Codec::dispose')
-  external void dispose();
+  void dispose() => tennoji_codec_destroy(_nativePtr);
 
   @override
   String toString() => 'Codec(${_cachedFrameCount == null ? "" : "$_cachedFrameCount frames"})';
 }
-
 /// Instantiates an image [Codec].
 ///
 /// This method is a convenience wrapper around the [ImageDescriptor] API, and
@@ -2456,68 +2464,14 @@ base class _NativeCodec extends NativeFieldWrapperClass1 implements Codec {
 ///
 /// The returned future can complete with an error if the image decoding has
 /// failed.
-Future<Codec> instantiateImageCodec(
+Codec instantiateImageCodec(
   Uint8List list, {
-  int? targetWidth,
-  int? targetHeight,
-  bool allowUpscaling = true,
-}) async {
-  final ImmutableBuffer buffer = await ImmutableBuffer.fromUint8List(list);
-  return instantiateImageCodecFromBuffer(
-    buffer,
-    targetWidth: targetWidth,
-    targetHeight: targetHeight,
-    allowUpscaling: allowUpscaling,
-  );
-}
-
-/// Instantiates an image [Codec].
-///
-/// This method is a convenience wrapper around the [ImageDescriptor] API, and
-/// using [ImageDescriptor] directly is preferred since it allows the caller to
-/// make better determinations about how and whether to use the `targetWidth`
-/// and `targetHeight` parameters.
-///
-/// The [buffer] parameter is the binary image data (e.g a PNG or GIF binary data).
-/// The data can be for either static or animated images. The following image
-/// formats are supported: {@macro dart.ui.imageFormats}
-///
-/// The [buffer] will be disposed by this method once the codec has been created,
-/// so the caller must relinquish ownership of the [buffer] when they call this
-/// method.
-///
-/// The [targetWidth] and [targetHeight] arguments specify the size of the
-/// output image, in image pixels. If they are not equal to the intrinsic
-/// dimensions of the image, then the image will be scaled after being decoded.
-/// If the `allowUpscaling` parameter is not set to true, both dimensions will
-/// be capped at the intrinsic dimensions of the image, even if only one of
-/// them would have exceeded those intrinsic dimensions. If exactly one of these
-/// two arguments is specified, then the aspect ratio will be maintained while
-/// forcing the image to match the other given dimension. If neither is
-/// specified, then the image maintains its intrinsic size.
-///
-/// Scaling the image to larger than its intrinsic size should usually be
-/// avoided, since it causes the image to use more memory than necessary.
-/// Instead, prefer scaling the [Canvas] transform. If the image must be scaled
-/// up, the `allowUpscaling` parameter must be set to true.
-///
-/// The returned future can complete with an error if the image decoding has
-/// failed.
-///
-/// ## Compatibility note on the web
-///
-/// When running Flutter on the web, only the CanvasKit renderer supports image
-/// resizing capabilities (not the HTML renderer). So if image resizing is
-/// critical to your use case, and you're deploying to the web, you should
-/// build using the CanvasKit renderer.
-Future<Codec> instantiateImageCodecFromBuffer(
-  ImmutableBuffer buffer, {
   int? targetWidth,
   int? targetHeight,
   bool allowUpscaling = true,
 }) {
   return instantiateImageCodecWithSize(
-    buffer,
+    list,
     getTargetSize: (int intrinsicWidth, int intrinsicHeight) {
       if (!allowUpscaling) {
         if (targetWidth != null && targetWidth! > intrinsicWidth) {
@@ -2567,12 +2521,12 @@ Future<Codec> instantiateImageCodecFromBuffer(
 /// resizing capabilities (not the HTML renderer). So if image resizing is
 /// critical to your use case, and you're deploying to the web, you should
 /// build using the CanvasKit renderer.
-Future<Codec> instantiateImageCodecWithSize(
-  ImmutableBuffer buffer, {
+Codec instantiateImageCodecWithSize(
+  Uint8List buffer, {
   TargetImageSizeCallback? getTargetSize,
-}) async {
+}) {
   getTargetSize ??= _getDefaultImageSize;
-  final ImageDescriptor descriptor = await ImageDescriptor.encoded(buffer);
+  final ImageDescriptor descriptor = ImageDescriptor.encoded(buffer);
   try {
     final TargetImageSize targetSize = getTargetSize(descriptor.width, descriptor.height);
     assert(targetSize.width == null || targetSize.width! > 0);
@@ -2582,7 +2536,7 @@ Future<Codec> instantiateImageCodecWithSize(
       targetHeight: targetSize.height,
     );
   } finally {
-    buffer.dispose();
+    descriptor.dispose();
   }
 }
 
@@ -2646,12 +2600,14 @@ class TargetImageSize {
 /// This is a convenience wrapper around [instantiateImageCodec]. Prefer using
 /// [instantiateImageCodec] which also supports multi frame images and offers
 /// better error handling. This function swallows asynchronous errors.
-void decodeImageFromList(Uint8List list, ImageDecoderCallback callback) {
-  _decodeImageFromListAsync(list, callback);
+Image? decodeImageFromList(Uint8List list) {
+  final Codec codec = instantiateImageCodec(list);
+  final frameInfo = codec.getNextFrame();
+  return frameInfo?.image;
 }
 
+/*
 Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback callback) async {
-  final Codec codec = await instantiateImageCodec(list);
   final FrameInfo frameInfo;
   try {
     frameInfo = await codec.getNextFrame();
@@ -2660,6 +2616,7 @@ Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback call
   }
   callback(frameInfo.image);
 }
+*/
 
 /// Convert an array of pixel values into an [Image] object.
 ///
@@ -2685,12 +2642,11 @@ Future<void> _decodeImageFromListAsync(Uint8List list, ImageDecoderCallback call
 /// avoided, since it causes the image to use more memory than necessary.
 /// Instead, prefer scaling the [Canvas] transform. If the image must be scaled
 /// up, the `allowUpscaling` parameter must be set to true.
-void decodeImageFromPixels(
+Image? decodeImageFromPixels(
   Uint8List pixels,
   int width,
   int height,
-  PixelFormat format,
-  ImageDecoderCallback callback, {
+  PixelFormat format, {
   int? rowBytes,
   int? targetWidth,
   int? targetHeight,
@@ -2704,68 +2660,35 @@ void decodeImageFromPixels(
     assert(allowUpscaling || targetHeight <= height);
   }
 
-  ImmutableBuffer.fromUint8List(pixels).then((ImmutableBuffer buffer) {
-    final descriptor = ImageDescriptor.raw(
-      buffer,
-      width: width,
-      height: height,
-      rowBytes: rowBytes,
-      pixelFormat: format,
-    );
+  final descriptor = ImageDescriptor.raw(
+    pixels,
+    width: width,
+    height: height,
+    rowBytes: rowBytes,
+    pixelFormat: format,
+  );
 
-    if (!allowUpscaling) {
-      if (targetWidth != null && targetWidth! > descriptor.width) {
-        targetWidth = descriptor.width;
-      }
-      if (targetHeight != null && targetHeight! > descriptor.height) {
-        targetHeight = descriptor.height;
-      }
+  if (!allowUpscaling) {
+    if (targetWidth != null && targetWidth > descriptor.width) {
+      targetWidth = descriptor.width;
     }
+    if (targetHeight != null && targetHeight > descriptor.height) {
+      targetHeight = descriptor.height;
+    }
+  }
 
-    descriptor
-        .instantiateCodec(
-          targetWidth: targetWidth,
-          targetHeight: targetHeight,
-          targetFormat: targetFormat,
-        )
-        .then((Codec codec) {
-          final Future<FrameInfo> frameInfo = codec.getNextFrame();
-          codec.dispose();
-          return frameInfo;
-        })
-        .then((FrameInfo frameInfo) {
-          buffer.dispose();
-          descriptor.dispose();
+  final codec = descriptor
+      .instantiateCodec(
+        targetWidth: targetWidth,
+        targetHeight: targetHeight,
+        targetFormat: targetFormat,
+      );
 
-          return callback(frameInfo.image);
-        });
-  });
+  final frameInfo = codec.getNextFrame();
+  codec.dispose();
+  descriptor.dispose();
+  return frameInfo?.image;
 }
-
-/// Decodes the given [pixels] into an [Image] synchronously.
-///
-/// The [pixels] are expected to be in the format specified by [format].
-///
-/// The [width] and [height] arguments specify the dimensions of the image.
-///
-/// This function returns an [Image] immediately. The image might not be
-/// fully decoded yet, but it can be drawn to a [Canvas].
-Image decodeImageFromPixelsSync(Uint8List pixels, int width, int height, PixelFormat format) {
-  final image = Image._(_Image._(), width, height);
-  _decodeImageFromPixelsSync(pixels, width, height, format.index, image._image);
-  return image;
-}
-
-@Native<Void Function(Handle, Int32, Int32, Int32, Handle)>(
-  symbol: 'Image::decodeImageFromPixelsSync',
-)
-external void _decodeImageFromPixelsSync(
-  Uint8List pixels,
-  int width,
-  int height,
-  int format,
-  _Image outImage,
-);
 
 /// Determines the winding rule that decides how the interior of a [Path] is
 /// calculated.
@@ -2849,36 +2772,6 @@ enum PathOperation {
   ///  * [difference], which is the same but subtracting the second path
   ///    from the first.
   reverseDifference,
-}
-
-/// A handle for the framework to hold and retain an engine layer across frames.
-abstract class EngineLayer {
-  /// Release the resources used by this object. The object is no longer usable
-  /// after this method is called.
-  ///
-  /// EngineLayers indirectly retain platform specific graphics resources. Some
-  /// of these resources, such as images, may be memory intensive. It is
-  /// important to dispose of EngineLayer objects that will no longer be used as
-  /// soon as possible to avoid retaining these resources until the next
-  /// garbage collection.
-  ///
-  /// Once this EngineLayer is disposed, it is no longer eligible for use as a
-  /// retained layer, and must not be passed as an `oldLayer` to any of the
-  /// [SceneBuilder] methods which accept that parameter.
-  ///
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  void dispose();
-}
-
-base class _NativeEngineLayer extends NativeFieldWrapperClass1 implements EngineLayer {
-  /// This class is created by the engine, and should not be instantiated
-  /// or extended directly.
-  _NativeEngineLayer._();
-
-  @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'EngineLayer::dispose')
-  external void dispose();
 }
 
 /// A complex, one-dimensional subset of a plane.
@@ -4814,11 +4707,13 @@ base class _ImageFilter extends NativeFieldWrapperClass1 {
 
 /// Base class for objects such as [Gradient] and [ImageShader] which
 /// correspond to shaders as used by [Paint.shader].
-base class Shader extends NativeFieldWrapperClass1 {
+base class Shader {
   /// This class is created by the engine, and should not be instantiated
   /// or extended directly.
   @pragma('vm:entry-point')
-  Shader._();
+  Shader._(this._nativePtr);
+
+  Pointer<TennojiShader> _nativePtr;
 
   bool _debugDisposed = false;
 
@@ -4977,18 +4872,18 @@ Float32List _encodeWideColorList(List<Color> colors) {
   return result;
 }
 
-Int32List _encodeColorList(List<Color> colors) {
+(Pointer<Int32>, int) _encodeColorList(List<Color> colors) {
   final int colorCount = colors.length;
-  final result = Int32List(colorCount);
+  final result = malloc<Int32>(colorCount);
   for (var i = 0; i < colorCount; i++) {
     result[i] = colors[i].value;
   }
-  return result;
+  return (result, colorCount);
 }
 
-Float32List _encodePointList(List<Offset> points) {
+(Pointer<Float>, int) _encodePointList(List<Offset> points) {
   final int pointCount = points.length;
-  final result = Float32List(pointCount * 2);
+  final result = malloc<Float>(pointCount * 2);
   for (var i = 0; i < pointCount; i++) {
     final int xIndex = i * 2;
     final int yIndex = xIndex + 1;
@@ -4997,7 +4892,7 @@ Float32List _encodePointList(List<Offset> points) {
     result[xIndex] = point.dx;
     result[yIndex] = point.dy;
   }
-  return result;
+  return (result, pointCount*2);
 }
 
 Float32List _encodeTwoPoints(Offset pointA, Offset pointB) {
@@ -6199,7 +6094,7 @@ enum VertexMode {
 /// the conversion overhead. The raw constructor is useful if the data is coming
 /// from another source (e.g. a file) and can therefore be parsed directly into
 /// the underlying representation.
-base class Vertices extends NativeFieldWrapperClass1 {
+base class Vertices {
   /// Creates a set of vertex data for use with [Canvas.drawVertices].
   ///
   /// The `mode` parameter describes how the points should be interpreted: as
@@ -6269,25 +6164,41 @@ base class Vertices extends NativeFieldWrapperClass1 {
       }
       return true;
     }());
-    final Float32List encodedPositions = _encodePointList(positions);
-    final Float32List? encodedTextureCoordinates = (textureCoordinates != null)
+    final encodedPositions = _encodePointList(positions);
+    final encodedTextureCoordinates = (textureCoordinates != null)
         ? _encodePointList(textureCoordinates)
-        : null;
-    final Int32List? encodedColors = colors != null ? _encodeColorList(colors) : null;
-    final Uint16List? encodedIndices = indices != null ? Uint16List.fromList(indices) : null;
+        : (nullptr.cast<Float>(),0);
+    final encodedColors = (colors != null)
+        ? _encodeColorList(colors)
+        : (nullptr.cast<Int32>(),0);
+    final encodedIndices = (indices != null) 
+        ? _encodeIndicesList(indices)
+        : (nullptr.cast<Uint16>(),0);
 
-    if (!_init(
-      this,
+    _nativePtr = tennoji_vertices_init(
       mode.index,
-      encodedPositions,
-      encodedTextureCoordinates,
-      encodedColors,
-      encodedIndices,
-    )) {
+      encodedPositions.$2,
+      encodedPositions.$1,
+      encodedTextureCoordinates.$1,
+      encodedColors.$1,
+      encodedIndices.$1, encodedIndices.$2,
+    );
+    if (_nativePtr == nullptr) {
       throw ArgumentError('Invalid configuration for vertices.');
     }
+    // release the pointers
+    malloc.free(encodedPositions.$1);
+    if (textureCoordinates != null) malloc.free(encodedTextureCoordinates.$1);
+    if (colors != null) malloc.free(encodedColors.$1);
+    if (indices != null) malloc.free(encodedIndices.$1);
   }
 
+  static (Pointer<Uint16>, int) _encodeIndicesList(List<int> indices) {
+    final indicesCount = indices.length;
+    final list = malloc<Uint16>(indicesCount);
+    list.asTypedList(indicesCount).setAll(0,indices);
+    return (list, indicesCount);
+  }
   /// Creates a set of vertex data for use with [Canvas.drawVertices], using the
   /// encoding expected by the Flutter engine.
   ///
@@ -6364,21 +6275,46 @@ base class Vertices extends NativeFieldWrapperClass1 {
       }
       return true;
     }());
-    if (!_init(this, mode.index, positions, textureCoordinates, colors, indices)) {
+
+    // because these fuckers does not allow real address pinning of typed_data objects
+    final tcPtr = textureCoordinates != null ? malloc<Float>(textureCoordinates.length) : nullptr.cast<Float>();
+    if (textureCoordinates != null) {
+      tcPtr.asTypedList(textureCoordinates.length).setAll(0, textureCoordinates);
+    }
+    final cPtr = colors != null ? malloc<Int32>(colors.length) : nullptr.cast<Int32>();
+    if (colors != null) {
+      cPtr.asTypedList(colors.length).setAll(0, colors);
+    }
+    final iPtr = indices != null ? malloc<Uint16>(indices.length) : nullptr.cast<Uint16>();
+    if (indices != null) {
+      iPtr.asTypedList(indices.length).setAll(0, indices);
+    }
+    
+    _nativePtr = tennoji_vertices_init(
+      mode.index, 
+      positions.length,
+      positions.address, 
+      tcPtr, cPtr, 
+      iPtr, indices?.length ?? 0
+    );
+    if (_nativePtr == nullptr) {
       throw ArgumentError('Invalid configuration for vertices.');
     }
   }
 
-  @Native<Bool Function(Handle, Int32, Handle, Handle, Handle, Handle)>(symbol: 'Vertices::init')
-  external static bool _init(
+  late final Pointer<TennojiCanvasVertices> _nativePtr;
+
+/*
+  static bool _init(
     Vertices outVertices,
     int mode,
     Float32List positions,
     Float32List? textureCoordinates,
     Int32List? colors,
     Uint16List? indices,
-  );
-
+                );
+      )
+*/
   /// Release the resources used by this object. The object is no longer usable
   /// after this method is called.
   void dispose() {
@@ -6387,14 +6323,8 @@ base class Vertices extends NativeFieldWrapperClass1 {
       _disposed = true;
       return true;
     }());
-    _dispose();
+    tennoji_vertices_destroy(_nativePtr);
   }
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Vertices::dispose')
-  external void _dispose();
-
   bool _disposed = false;
 
   /// Whether this reference to the underlying vertex data is [dispose]d.
@@ -6455,1587 +6385,7 @@ enum ClipOp {
   intersect,
 }
 
-/// An interface for recording graphical operations.
-///
-/// [Canvas] objects are used in creating [Picture] objects, which can
-/// themselves be used with a [SceneBuilder] to build a [Scene]. In
-/// normal usage, however, this is all handled by the framework.
-///
-/// A canvas has a current transformation matrix which is applied to all
-/// operations. Initially, the transformation matrix is the identity transform.
-/// It can be modified using the [translate], [scale], [rotate], [skew],
-/// and [transform] methods.
-///
-/// A canvas also has a current clip region which is applied to all operations.
-/// Initially, the clip region is infinite. It can be modified using the
-/// [clipRect], [clipRRect], and [clipPath] methods.
-///
-/// The current transform and clip can be saved and restored using the stack
-/// managed by the [save], [saveLayer], and [restore] methods.
-///
-/// ## Use with the Flutter framework
-///
-/// The Flutter framework's [RendererBinding] provides a hook for creating
-/// [Canvas] objects ([RendererBinding.createCanvas]) that allows tests to hook
-/// into the scene creation logic. When creating a [Canvas] that will be used
-/// with a [PictureLayer] as part of the [Scene] in the context of the Flutter
-/// framework, consider calling [RendererBinding.createCanvas] instead of
-/// calling the [Canvas.new] constructor directly.
-///
-/// This does not apply when using a canvas to generate a bitmap for other
-/// purposes, e.g. for generating a PNG image using [Picture.toImage].
-abstract class Canvas {
-  /// Creates a canvas for recording graphical operations into the
-  /// given picture recorder.
-  ///
-  /// Graphical operations that affect pixels entirely outside the given
-  /// `cullRect` might be discarded by the implementation. However, the
-  /// implementation might draw outside these bounds if, for example, a command
-  /// draws partially inside and outside the `cullRect`. To ensure that pixels
-  /// outside a given region are discarded, consider using a [clipRect]. The
-  /// `cullRect` is optional; by default, all operations are kept.
-  ///
-  /// To end the recording, call [PictureRecorder.endRecording] on the
-  /// given recorder.
-  factory Canvas(PictureRecorder recorder, [Rect? cullRect]) = _NativeCanvas;
-
-  /// Saves a copy of the current transform and clip on the save stack.
-  ///
-  /// Call [restore] to pop the save stack.
-  ///
-  /// See also:
-  ///
-  ///  * [saveLayer], which does the same thing but additionally also groups the
-  ///    commands done until the matching [restore].
-  void save();
-
-  /// Saves a copy of the current transform and clip on the save stack, and then
-  /// creates a new group which subsequent calls will become a part of. When the
-  /// save stack is later popped, the group will be flattened into a layer and
-  /// have the given `paint`'s [Paint.colorFilter] and [Paint.blendMode]
-  /// applied.
-  ///
-  /// This lets you create composite effects, for example making a group of
-  /// drawing commands semi-transparent. Without using [saveLayer], each part of
-  /// the group would be painted individually, so where they overlap would be
-  /// darker than where they do not. By using [saveLayer] to group them
-  /// together, they can be drawn with an opaque color at first, and then the
-  /// entire group can be made transparent using the [saveLayer]'s paint.
-  ///
-  /// Call [restore] to pop the save stack and apply the paint to the group.
-  ///
-  /// ## Using saveLayer with clips
-  ///
-  /// When a rectangular clip operation (from [clipRect]) is not axis-aligned
-  /// with the raster buffer, or when the clip operation is not rectilinear
-  /// (e.g. because it is a rounded rectangle clip created by [clipRRect] or an
-  /// arbitrarily complicated path clip created by [clipPath]), the edge of the
-  /// clip needs to be anti-aliased.
-  ///
-  /// If two draw calls overlap at the edge of such a clipped region, without
-  /// using [saveLayer], the first drawing will be anti-aliased with the
-  /// background first, and then the second will be anti-aliased with the result
-  /// of blending the first drawing and the background. On the other hand, if
-  /// [saveLayer] is used immediately after establishing the clip, the second
-  /// drawing will cover the first in the layer, and thus the second alone will
-  /// be anti-aliased with the background when the layer is clipped and
-  /// composited (when [restore] is called).
-  ///
-  /// For example, this [CustomPainter.paint] method paints a clean white
-  /// rounded rectangle:
-  ///
-  /// ```dart
-  /// void paint(Canvas canvas, Size size) {
-  ///   Rect rect = Offset.zero & size;
-  ///   canvas.save();
-  ///   canvas.clipRRect(RRect.fromRectXY(rect, 100.0, 100.0));
-  ///   canvas.saveLayer(rect, Paint());
-  ///   canvas.drawPaint(Paint()..color = Colors.red);
-  ///   canvas.drawPaint(Paint()..color = Colors.white);
-  ///   canvas.restore();
-  ///   canvas.restore();
-  /// }
-  /// ```
-  ///
-  /// On the other hand, this one renders a red outline, the result of the red
-  /// paint being anti-aliased with the background at the clip edge, then the
-  /// white paint being similarly anti-aliased with the background _including
-  /// the clipped red paint_:
-  ///
-  /// ```dart
-  /// void paint(Canvas canvas, Size size) {
-  ///   // (this example renders poorly, prefer the example above)
-  ///   Rect rect = Offset.zero & size;
-  ///   canvas.save();
-  ///   canvas.clipRRect(RRect.fromRectXY(rect, 100.0, 100.0));
-  ///   canvas.drawPaint(Paint()..color = Colors.red);
-  ///   canvas.drawPaint(Paint()..color = Colors.white);
-  ///   canvas.restore();
-  /// }
-  /// ```
-  ///
-  /// This point is moot if the clip only clips one draw operation. For example,
-  /// the following paint method paints a pair of clean white rounded
-  /// rectangles, even though the clips are not done on a separate layer:
-  ///
-  /// ```dart
-  /// void paint(Canvas canvas, Size size) {
-  ///   canvas.save();
-  ///   canvas.clipRRect(RRect.fromRectXY(Offset.zero & (size / 2.0), 50.0, 50.0));
-  ///   canvas.drawPaint(Paint()..color = Colors.white);
-  ///   canvas.restore();
-  ///   canvas.save();
-  ///   canvas.clipRRect(RRect.fromRectXY(size.center(Offset.zero) & (size / 2.0), 50.0, 50.0));
-  ///   canvas.drawPaint(Paint()..color = Colors.white);
-  ///   canvas.restore();
-  /// }
-  /// ```
-  ///
-  /// (Incidentally, rather than using [clipRRect] and [drawPaint] to draw
-  /// rounded rectangles like this, prefer the [drawRRect] method. These
-  /// examples are using [drawPaint] as a proxy for "complicated draw operations
-  /// that will get clipped", to illustrate the point.)
-  ///
-  /// ## Performance considerations
-  ///
-  /// Generally speaking, [saveLayer] is relatively expensive.
-  ///
-  /// There are a several different hardware architectures for GPUs (graphics
-  /// processing units, the hardware that handles graphics), but most of them
-  /// involve batching commands and reordering them for performance. When layers
-  /// are used, they cause the rendering pipeline to have to switch render
-  /// target (from one layer to another). Render target switches can flush the
-  /// GPU's command buffer, which typically means that optimizations that one
-  /// could get with larger batching are lost. Render target switches also
-  /// generate a lot of memory churn because the GPU needs to copy out the
-  /// current frame buffer contents from the part of memory that's optimized for
-  /// writing, and then needs to copy it back in once the previous render target
-  /// (layer) is restored.
-  ///
-  /// See also:
-  ///
-  ///  * [save], which saves the current state, but does not create a new layer
-  ///    for subsequent commands.
-  ///  * [BlendMode], which discusses the use of [Paint.blendMode] with
-  ///    [saveLayer].
-  void saveLayer(Rect? bounds, Paint paint);
-
-  /// Pops the current save stack, if there is anything to pop.
-  /// Otherwise, does nothing.
-  ///
-  /// Use [save] and [saveLayer] to push state onto the stack.
-  ///
-  /// If the state was pushed with [saveLayer], then this call will also
-  /// cause the new layer to be composited into the previous layer.
-  void restore();
-
-  /// Restores the save stack to a previous level as might be obtained from [getSaveCount].
-  /// If [count] is less than 1, the stack is restored to its initial state.
-  /// If [count] is greater than the current [getSaveCount] then nothing happens.
-  ///
-  /// Use [save] and [saveLayer] to push state onto the stack.
-  ///
-  /// If any of the state stack levels restored by this call were pushed with
-  /// [saveLayer], then this call will also cause those layers to be composited
-  /// into their previous layers.
-  void restoreToCount(int count);
-
-  /// Returns the number of items on the save stack, including the
-  /// initial state. This means it returns 1 for a clean canvas, and
-  /// that each call to [save] and [saveLayer] increments it, and that
-  /// each matching call to [restore] decrements it.
-  ///
-  /// This number cannot go below 1.
-  int getSaveCount();
-
-  /// Add a translation to the current transform, shifting the coordinate space
-  /// horizontally by the first argument and vertically by the second argument.
-  void translate(double dx, double dy);
-
-  /// Add an axis-aligned scale to the current transform, scaling by the first
-  /// argument in the horizontal direction and the second in the vertical
-  /// direction.
-  ///
-  /// If [sy] is unspecified, [sx] will be used for the scale in both
-  /// directions.
-  void scale(double sx, [double? sy]);
-
-  /// Add a rotation to the current transform. The argument is in radians clockwise.
-  void rotate(double radians);
-
-  /// Add an axis-aligned skew to the current transform, with the first argument
-  /// being the horizontal skew in rise over run units clockwise around the
-  /// origin, and the second argument being the vertical skew in rise over run
-  /// units clockwise around the origin.
-  void skew(double sx, double sy);
-
-  /// Multiply the current transform by the specified 4⨉4 transformation matrix
-  /// specified as a list of values in column-major order.
-  void transform(Float64List matrix4);
-
-  /// Returns the current transform including the combined result of all transform
-  /// methods executed since the creation of this [Canvas] object, and respecting the
-  /// save/restore history.
-  ///
-  /// Methods that can change the current transform include [translate], [scale],
-  /// [rotate], [skew], and [transform]. The [restore] method can also modify
-  /// the current transform by restoring it to the same value it had before its
-  /// associated [save] or [saveLayer] call.
-  Float64List getTransform();
-
-  /// Reduces the clip region to the intersection of the current clip and the
-  /// given rectangle.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_rect.png)
-  ///
-  /// If [doAntiAlias] is true, then the clip will be anti-aliased.
-  ///
-  /// If multiple draw commands intersect with the clip boundary, this can result
-  /// in incorrect blending at the clip boundary. See [saveLayer] for a
-  /// discussion of how to address that.
-  ///
-  /// Use [ClipOp.difference] to subtract the provided rectangle from the
-  /// current clip.
-  void clipRect(Rect rect, {ClipOp clipOp = ClipOp.intersect, bool doAntiAlias = true});
-
-  /// Reduces the clip region to the intersection of the current clip and the
-  /// given rounded rectangle.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_rrect.png)
-  ///
-  /// If [doAntiAlias] is true, then the clip will be anti-aliased.
-  ///
-  /// If multiple draw commands intersect with the clip boundary, this can result
-  /// in incorrect blending at the clip boundary. See [saveLayer] for a
-  /// discussion of how to address that and some examples of using [clipRRect].
-  void clipRRect(RRect rrect, {bool doAntiAlias = true});
-
-  /// Reduces the clip region to the intersection of the current clip and the
-  /// given rounded superellipse.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_rsuperellipse.png)
-  ///
-  /// If [doAntiAlias] is true, then the clip will be anti-aliased.
-  ///
-  /// If multiple draw commands intersect with the clip boundary, this can result
-  /// in incorrect blending at the clip boundary. See [saveLayer] for a
-  /// discussion of how to address that and some examples of using [clipRSuperellipse].
-  void clipRSuperellipse(RSuperellipse rsuperellipse, {bool doAntiAlias = true});
-
-  /// Reduces the clip region to the intersection of the current clip and the
-  /// given [Path].
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/clip_path.png)
-  ///
-  /// If [doAntiAlias] is true, then the clip will be anti-aliased.
-  ///
-  /// If multiple draw commands intersect with the clip boundary, this can result
-  /// in incorrect blending at the clip boundary. See [saveLayer] for a
-  /// discussion of how to address that.
-  void clipPath(Path path, {bool doAntiAlias = true});
-
-  /// Returns the conservative bounds of the combined result of all clip methods
-  /// executed within the current save stack of this [Canvas] object, as measured
-  /// in the local coordinate space under which rendering operations are currently
-  /// performed.
-  ///
-  /// The combined clip results are rounded out to an integer pixel boundary before
-  /// they are transformed back into the local coordinate space which accounts for
-  /// the pixel roundoff in rendering operations, particularly when antialiasing.
-  /// Because the [Picture] may eventually be rendered into a scene within the
-  /// context of transforming widgets or layers, the result may thus be overly
-  /// conservative due to premature rounding. Using the [getDestinationClipBounds]
-  /// method combined with the external transforms and rounding in the true device
-  /// coordinate system will produce more accurate results, but this value may
-  /// provide a more convenient approximation to compare rendering operations to
-  /// the established clip.
-  ///
-  /// {@template dart.ui.canvas.conservativeClipBounds}
-  /// The conservative estimate of the bounds is based on intersecting the bounds
-  /// of each clip method that was executed with [ClipOp.intersect] and potentially
-  /// ignoring any clip method that was executed with [ClipOp.difference]. The
-  /// [ClipOp] argument is only present on the [clipRect] method.
-  ///
-  /// To understand how the bounds estimate can be conservative, consider the
-  /// following two clip method calls:
-  ///
-  /// ```dart
-  /// void draw(Canvas canvas) {
-  ///   canvas.clipPath(Path()
-  ///     ..addRect(const Rect.fromLTRB(10, 10, 20, 20))
-  ///     ..addRect(const Rect.fromLTRB(80, 80, 100, 100)));
-  ///   canvas.clipPath(Path()
-  ///     ..addRect(const Rect.fromLTRB(80, 10, 100, 20))
-  ///     ..addRect(const Rect.fromLTRB(10, 80, 20, 100)));
-  ///   // ...
-  /// }
-  /// ```
-  ///
-  /// After executing both of those calls there is no area left in which to draw
-  /// because the two paths have no overlapping regions. But, in this case,
-  /// [getLocalClipBounds] would return a rectangle from `10, 10` to `100, 100` because it
-  /// only intersects the bounds of the two path objects to obtain its conservative
-  /// estimate.
-  ///
-  /// The clip bounds are not affected by the bounds of any enclosing
-  /// [saveLayer] call as the engine does not currently guarantee the strict
-  /// enforcement of those bounds during rendering.
-  ///
-  /// Methods that can change the current clip include [clipRect], [clipRRect],
-  /// and [clipPath]. The [restore] method can also modify the current clip by
-  /// restoring it to the same value it had before its associated [save] or
-  /// [saveLayer] call.
-  /// {@endtemplate}
-  Rect getLocalClipBounds();
-
-  /// Returns the conservative bounds of the combined result of all clip methods
-  /// executed within the current save stack of this [Canvas] object, as measured
-  /// in the destination coordinate space in which the [Picture] will be rendered.
-  ///
-  /// Unlike [getLocalClipBounds], the bounds are not rounded out to an integer
-  /// pixel boundary as the Destination coordinate space may not represent pixels
-  /// if the [Picture] being constructed will be further transformed when it is
-  /// rendered or added to a scene. In order to determine the true pixels being
-  /// affected, those external transforms should be applied first before rounding
-  /// out the result to integer pixel boundaries. Most typically, [Picture] objects
-  /// are rendered in a scene with a scale transform representing the Device Pixel
-  /// Ratio.
-  ///
-  /// {@macro dart.ui.canvas.conservativeClipBounds}
-  Rect getDestinationClipBounds();
-
-  /// Paints the given [Color] onto the canvas, applying the given
-  /// [BlendMode], with the given color being the source and the background
-  /// being the destination.
-  void drawColor(Color color, BlendMode blendMode);
-
-  /// Draws a line between the given points using the given paint. The line is
-  /// stroked, the value of the [Paint.style] is ignored for this call.
-  ///
-  /// The `p1` and `p2` arguments are interpreted as offsets from the origin.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_line.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_line_dark.png#gh-dark-mode-only)
-  void drawLine(Offset p1, Offset p2, Paint paint);
-
-  /// Fills the canvas with the given [Paint].
-  ///
-  /// To fill the canvas with a solid color and blend mode, consider
-  /// [drawColor] instead.
-  void drawPaint(Paint paint);
-
-  /// Draws a rectangle with the given [Paint]. Whether the rectangle is filled
-  /// or stroked (or both) is controlled by [Paint.style].
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rect.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rect_dark.png#gh-dark-mode-only)
-  void drawRect(Rect rect, Paint paint);
-
-  /// Draws a rounded rectangle with the given [Paint]. Whether the rectangle is
-  /// filled or stroked (or both) is controlled by [Paint.style].
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rrect.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rrect_dark.png#gh-dark-mode-only)
-  void drawRRect(RRect rrect, Paint paint);
-
-  /// Draws a shape consisting of the difference between two rounded rectangles
-  /// with the given [Paint]. Whether this shape is filled or stroked (or both)
-  /// is controlled by [Paint.style].
-  ///
-  /// This shape is almost but not quite entirely unlike an annulus.
-  void drawDRRect(RRect outer, RRect inner, Paint paint);
-
-  /// Draws a rounded superellipse with the given [Paint]. The shape is filled,
-  /// and the value of the [Paint.style] is ignored for this call.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rsuperellipse.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_rsuperellipse.png#gh-dark-mode-only)
-  void drawRSuperellipse(RSuperellipse rsuperellipse, Paint paint);
-
-  /// Draws an axis-aligned oval that fills the given axis-aligned rectangle
-  /// with the given [Paint]. Whether the oval is filled or stroked (or both) is
-  /// controlled by [Paint.style].
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_oval.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_oval_dark.png#gh-dark-mode-only)
-  void drawOval(Rect rect, Paint paint);
-
-  /// Draws a circle centered at the point given by the first argument and
-  /// that has the radius given by the second argument, with the [Paint] given in
-  /// the third argument. Whether the circle is filled or stroked (or both) is
-  /// controlled by [Paint.style].
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_circle.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_circle_dark.png#gh-dark-mode-only)
-  void drawCircle(Offset c, double radius, Paint paint);
-
-  /// Draw an arc scaled to fit inside the given rectangle.
-  ///
-  /// It starts from `startAngle` radians around the oval up to
-  /// `startAngle` + `sweepAngle` radians around the oval, with zero radians
-  /// being the point on the right hand side of the oval that crosses the
-  /// horizontal line that intersects the center of the rectangle and with positive
-  /// angles going clockwise around the oval. If `useCenter` is true, the arc is
-  /// closed back to the center, forming a circle sector. Otherwise, the arc is
-  /// not closed, forming a circle segment.
-  ///
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_draw_arc.png#gh-light-mode-only)
-  /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/canvas_draw_arc_dark.png#gh-dark-mode-only)
-  ///
-  /// This method is optimized for drawing arcs and should be faster than [Path.arcTo].
-  void drawArc(Rect rect, double startAngle, double sweepAngle, bool useCenter, Paint paint);
-
-  /// Draws the given [Path] with the given [Paint].
-  ///
-  /// Whether this shape is filled or stroked (or both) is controlled by
-  /// [Paint.style]. If the path is filled, then sub-paths within it are
-  /// implicitly closed (see [Path.close]).
-  void drawPath(Path path, Paint paint);
-
-  /// Draws the given [Image] into the canvas with its top-left corner at the
-  /// given [Offset]. The image is composited into the canvas using the given [Paint].
-  void drawImage(Image image, Offset offset, Paint paint);
-
-  /// Draws the subset of the given image described by the `src` argument into
-  /// the canvas in the axis-aligned rectangle given by the `dst` argument.
-  ///
-  /// This might sample from outside the `src` rect by up to half the width of
-  /// an applied filter.
-  ///
-  /// Multiple calls to this method with different arguments (from the same
-  /// image) can be batched into a single call to [drawAtlas] to improve
-  /// performance.
-  void drawImageRect(Image image, Rect src, Rect dst, Paint paint);
-
-  /// Draws the given [Image] into the canvas using the given [Paint].
-  ///
-  /// The image is drawn in nine portions described by splitting the image by
-  /// drawing two horizontal lines and two vertical lines, where the `center`
-  /// argument describes the rectangle formed by the four points where these
-  /// four lines intersect each other. (This forms a 3-by-3 grid of regions,
-  /// the center region being described by the `center` argument.)
-  ///
-  /// The four regions in the corners are drawn, without scaling, in the four
-  /// corners of the destination rectangle described by `dst`. The remaining
-  /// five regions are drawn by stretching them to fit such that they exactly
-  /// cover the destination rectangle while maintaining their relative
-  /// positions.
-  void drawImageNine(Image image, Rect center, Rect dst, Paint paint);
-
-  /// Draw the given picture onto the canvas. To create a picture, see
-  /// [PictureRecorder].
-  void drawPicture(Picture picture);
-
-  /// Draws the text in the given [Paragraph] into this canvas at the given
-  /// [Offset].
-  ///
-  /// The [Paragraph] object must have had [Paragraph.layout] called on it
-  /// first.
-  ///
-  /// To align the text, set the `textAlign` on the [ParagraphStyle] object
-  /// passed to the [ParagraphBuilder.new] constructor. For more details see
-  /// [TextAlign] and the discussion at [ParagraphStyle.new].
-  ///
-  /// If the text is left aligned or justified, the left margin will be at the
-  /// position specified by the `offset` argument's [Offset.dx] coordinate.
-  ///
-  /// If the text is right aligned or justified, the right margin will be at the
-  /// position described by adding the [ParagraphConstraints.width] given to
-  /// [Paragraph.layout], to the `offset` argument's [Offset.dx] coordinate.
-  ///
-  /// If the text is centered, the centering axis will be at the position
-  /// described by adding half of the [ParagraphConstraints.width] given to
-  /// [Paragraph.layout], to the `offset` argument's [Offset.dx] coordinate.
-  void drawParagraph(Paragraph paragraph, Offset offset);
-
-  /// Draws a sequence of points according to the given [PointMode].
-  ///
-  /// The `points` argument is interpreted as offsets from the origin.
-  ///
-  /// The `paint` is used for each point ([PointMode.points]) or line
-  /// ([PointMode.lines] or [PointMode.polygon]), ignoring [Paint.style].
-  ///
-  /// See also:
-  ///
-  ///  * [drawRawPoints], which takes `points` as a [Float32List] rather than a
-  ///    [List<Offset>].
-  void drawPoints(PointMode pointMode, List<Offset> points, Paint paint);
-
-  /// Draws a sequence of points according to the given [PointMode].
-  ///
-  /// The `points` argument is interpreted as a list of pairs of floating point
-  /// numbers, where each pair represents an x and y offset from the origin.
-  ///
-  /// The `paint` is used for each point ([PointMode.points]) or line
-  /// ([PointMode.lines] or [PointMode.polygon]), ignoring [Paint.style].
-  ///
-  /// See also:
-  ///
-  ///  * [drawPoints], which takes `points` as a [List<Offset>] rather than a
-  ///    [List<Float32List>].
-  void drawRawPoints(PointMode pointMode, Float32List points, Paint paint);
-
-  /// Draws a set of [Vertices] onto the canvas as one or more triangles.
-  ///
-  /// The [Paint.color] property specifies the default color to use for the
-  /// triangles.
-  ///
-  /// The [Paint.shader] property, if set, overrides the color entirely,
-  /// replacing it with the colors from the specified [ImageShader], [Gradient],
-  /// or other shader.
-  ///
-  /// The `blendMode` parameter is used to control how the colors in the
-  /// `vertices` are combined with the colors in the `paint`. If there are no
-  /// colors specified in `vertices` then the `blendMode` has no effect. If
-  /// there are colors in the `vertices`, then the color taken from the
-  /// [Paint.shader] or [Paint.color] in the `paint` is blended with the colors
-  /// specified in the `vertices` using the `blendMode` parameter. For the
-  /// purposes of this blending, the colors from the `paint` parameter are
-  /// considered the source, and the colors from the `vertices` are considered
-  /// the destination. [BlendMode.dst] ignores the `paint` and uses only the
-  /// colors of the `vertices`; [BlendMode.src] ignores the colors of the
-  /// `vertices` and uses only the colors in the `paint`.
-  ///
-  /// All parameters must not be null.
-  ///
-  /// See also:
-  ///   * [Vertices.new], which creates a set of vertices to draw on the canvas.
-  ///   * [Vertices.raw], which creates the vertices using typed data lists
-  ///     rather than unencoded lists.
-  ///   * [paint], Image shaders can be used to draw images on a triangular mesh.
-  void drawVertices(Vertices vertices, BlendMode blendMode, Paint paint);
-
-  /// Draws many parts of an image - the [atlas] - onto the canvas.
-  ///
-  /// This method allows for optimization when you want to draw many parts of an
-  /// image onto the canvas, such as when using sprites or zooming. It is more efficient
-  /// than using multiple calls to [drawImageRect] and provides more functionality
-  /// to individually transform each image part by a separate rotation or scale and
-  /// blend or modulate those parts with a solid color.
-  ///
-  /// The method takes a list of [Rect] objects that each define a piece of the
-  /// [atlas] image to be drawn independently. Each [Rect] is associated with an
-  /// [RSTransform] entry in the [transforms] list which defines the location,
-  /// rotation, and (uniform) scale with which to draw that portion of the image.
-  /// Each [Rect] can also be associated with an optional [Color] which will be
-  /// composed with the associated image part using the [blendMode] before blending
-  /// the result onto the canvas. The full operation can be broken down as:
-  ///
-  /// - Blend each rectangular portion of the image specified by an entry in the
-  /// [rects] argument with its associated entry in the [colors] list using the
-  /// [blendMode] argument (if a color is specified). In this part of the operation,
-  /// the image part will be considered the source of the operation and the associated
-  /// color will be considered the destination.
-  /// - Blend the result from the first step onto the canvas using the translation,
-  /// rotation, and scale properties expressed in the associated entry in the
-  /// [transforms] list using the properties of the [Paint] object.
-  ///
-  /// If the first stage of the operation which blends each part of the image with
-  /// a color is needed, then both the [colors] and [blendMode] arguments must
-  /// not be null and there must be an entry in the [colors] list for each
-  /// image part. If that stage is not needed, then the [colors] argument can
-  /// be either null or an empty list and the [blendMode] argument may also be null.
-  ///
-  /// The optional [cullRect] argument can provide an estimate of the bounds of the
-  /// coordinates rendered by all components of the atlas to be compared against
-  /// the clip to quickly reject the operation if it does not intersect.
-  ///
-  /// An example usage to render many sprites from a single sprite atlas with no
-  /// rotations or scales:
-  ///
-  /// ```dart
-  /// class Sprite {
-  ///   Sprite(this.index, this.center);
-  ///   int index;
-  ///   Offset center;
-  /// }
-  ///
-  /// class MyPainter extends CustomPainter {
-  ///   MyPainter(this.spriteAtlas, this.allSprites);
-  ///
-  ///   // assume spriteAtlas contains N 10x10 sprites side by side in a (N*10)x10 image
-  ///   ui.Image spriteAtlas;
-  ///   List<Sprite> allSprites;
-  ///
-  ///   @override
-  ///   void paint(Canvas canvas, Size size) {
-  ///     Paint paint = Paint();
-  ///     canvas.drawAtlas(spriteAtlas, <RSTransform>[
-  ///       for (final Sprite sprite in allSprites)
-  ///         RSTransform.fromComponents(
-  ///           rotation: 0.0,
-  ///           scale: 1.0,
-  ///           // Center of the sprite relative to its rect
-  ///           anchorX: 5.0,
-  ///           anchorY: 5.0,
-  ///           // Location at which to draw the center of the sprite
-  ///           translateX: sprite.center.dx,
-  ///           translateY: sprite.center.dy,
-  ///         ),
-  ///     ], <Rect>[
-  ///       for (final Sprite sprite in allSprites)
-  ///         Rect.fromLTWH(sprite.index * 10.0, 0.0, 10.0, 10.0),
-  ///     ], null, null, null, paint);
-  ///   }
-  ///
-  ///   // ...
-  /// }
-  /// ```
-  ///
-  /// Another example usage which renders sprites with an optional opacity and rotation:
-  ///
-  /// ```dart
-  /// class Sprite {
-  ///   Sprite(this.index, this.center, this.alpha, this.rotation);
-  ///   int index;
-  ///   Offset center;
-  ///   int alpha;
-  ///   double rotation;
-  /// }
-  ///
-  /// class MyPainter extends CustomPainter {
-  ///   MyPainter(this.spriteAtlas, this.allSprites);
-  ///
-  ///   // assume spriteAtlas contains N 10x10 sprites side by side in a (N*10)x10 image
-  ///   ui.Image spriteAtlas;
-  ///   List<Sprite> allSprites;
-  ///
-  ///   @override
-  ///   void paint(Canvas canvas, Size size) {
-  ///     Paint paint = Paint();
-  ///     canvas.drawAtlas(spriteAtlas, <RSTransform>[
-  ///       for (final Sprite sprite in allSprites)
-  ///         RSTransform.fromComponents(
-  ///           rotation: sprite.rotation,
-  ///           scale: 1.0,
-  ///           // Center of the sprite relative to its rect
-  ///           anchorX: 5.0,
-  ///           anchorY: 5.0,
-  ///           // Location at which to draw the center of the sprite
-  ///           translateX: sprite.center.dx,
-  ///           translateY: sprite.center.dy,
-  ///         ),
-  ///     ], <Rect>[
-  ///       for (final Sprite sprite in allSprites)
-  ///         Rect.fromLTWH(sprite.index * 10.0, 0.0, 10.0, 10.0),
-  ///     ], <Color>[
-  ///       for (final Sprite sprite in allSprites)
-  ///         Colors.white.withAlpha(sprite.alpha),
-  ///     ], BlendMode.srcIn, null, paint);
-  ///   }
-  ///
-  ///   // ...
-  /// }
-  /// ```
-  ///
-  /// The length of the [transforms] and [rects] lists must be equal and
-  /// if the [colors] argument is not null then it must either be empty or
-  /// have the same length as the other two lists.
-  ///
-  /// See also:
-  ///
-  ///  * [drawRawAtlas], which takes its arguments as typed data lists rather
-  ///    than objects.
-  void drawAtlas(
-    Image atlas,
-    List<RSTransform> transforms,
-    List<Rect> rects,
-    List<Color>? colors,
-    BlendMode? blendMode,
-    Rect? cullRect,
-    Paint paint,
-  );
-
-  /// Draws many parts of an image - the [atlas] - onto the canvas.
-  ///
-  /// This method allows for optimization when you want to draw many parts of an
-  /// image onto the canvas, such as when using sprites or zooming. It is more efficient
-  /// than using multiple calls to [drawImageRect] and provides more functionality
-  /// to individually transform each image part by a separate rotation or scale and
-  /// blend or modulate those parts with a solid color. It is also more efficient
-  /// than [drawAtlas] as the data in the arguments is already packed in a format
-  /// that can be directly used by the rendering code.
-  ///
-  /// A full description of how this method uses its arguments to draw onto the
-  /// canvas can be found in the description of the [drawAtlas] method.
-  ///
-  /// The [rstTransforms] argument is interpreted as a list of four-tuples, with
-  /// each tuple being ([RSTransform.scos], [RSTransform.ssin],
-  /// [RSTransform.tx], [RSTransform.ty]).
-  ///
-  /// The [rects] argument is interpreted as a list of four-tuples, with each
-  /// tuple being ([Rect.left], [Rect.top], [Rect.right], [Rect.bottom]).
-  ///
-  /// The [colors] argument, which can be null, is interpreted as a list of
-  /// 32-bit colors, with the same packing as [Color.value]. If the [colors]
-  /// argument is not null then the [blendMode] argument must also not be null.
-  ///
-  /// An example usage to render many sprites from a single sprite atlas with no rotations
-  /// or scales:
-  ///
-  /// ```dart
-  /// class Sprite {
-  ///   Sprite(this.index, this.center);
-  ///   int index;
-  ///   Offset center;
-  /// }
-  ///
-  /// class MyPainter extends CustomPainter {
-  ///   MyPainter(this.spriteAtlas, this.allSprites);
-  ///
-  ///   // assume spriteAtlas contains N 10x10 sprites side by side in a (N*10)x10 image
-  ///   ui.Image spriteAtlas;
-  ///   List<Sprite> allSprites;
-  ///
-  ///   @override
-  ///   void paint(Canvas canvas, Size size) {
-  ///     // For best advantage, these lists should be cached and only specific
-  ///     // entries updated when the sprite information changes. This code is
-  ///     // illustrative of how to set up the data and not a recommendation for
-  ///     // optimal usage.
-  ///     Float32List rectList = Float32List(allSprites.length * 4);
-  ///     Float32List transformList = Float32List(allSprites.length * 4);
-  ///     for (int i = 0; i < allSprites.length; i++) {
-  ///       Sprite sprite = allSprites[i];
-  ///       final double rectX = sprite.index * 10.0;
-  ///       rectList[i * 4 + 0] = rectX;
-  ///       rectList[i * 4 + 1] = 0.0;
-  ///       rectList[i * 4 + 2] = rectX + 10.0;
-  ///       rectList[i * 4 + 3] = 10.0;
-  ///
-  ///       // This example sets the RSTransform values directly for a common case of no
-  ///       // rotations or scales and just a translation to position the atlas entry. For
-  ///       // more complicated transforms one could use the RSTransform class to compute
-  ///       // the necessary values or do the same math directly.
-  ///       transformList[i * 4 + 0] = 1.0;
-  ///       transformList[i * 4 + 1] = 0.0;
-  ///       transformList[i * 4 + 2] = sprite.center.dx - 5.0;
-  ///       transformList[i * 4 + 3] = sprite.center.dy - 5.0;
-  ///     }
-  ///     Paint paint = Paint();
-  ///     canvas.drawRawAtlas(spriteAtlas, transformList, rectList, null, null, null, paint);
-  ///   }
-  ///
-  ///   // ...
-  /// }
-  /// ```
-  ///
-  /// Another example usage which renders sprites with an optional opacity and rotation:
-  ///
-  /// ```dart
-  /// class Sprite {
-  ///   Sprite(this.index, this.center, this.alpha, this.rotation);
-  ///   int index;
-  ///   Offset center;
-  ///   int alpha;
-  ///   double rotation;
-  /// }
-  ///
-  /// class MyPainter extends CustomPainter {
-  ///   MyPainter(this.spriteAtlas, this.allSprites);
-  ///
-  ///   // assume spriteAtlas contains N 10x10 sprites side by side in a (N*10)x10 image
-  ///   ui.Image spriteAtlas;
-  ///   List<Sprite> allSprites;
-  ///
-  ///   @override
-  ///   void paint(Canvas canvas, Size size) {
-  ///     // For best advantage, these lists should be cached and only specific
-  ///     // entries updated when the sprite information changes. This code is
-  ///     // illustrative of how to set up the data and not a recommendation for
-  ///     // optimal usage.
-  ///     Float32List rectList = Float32List(allSprites.length * 4);
-  ///     Float32List transformList = Float32List(allSprites.length * 4);
-  ///     Int32List colorList = Int32List(allSprites.length);
-  ///     for (int i = 0; i < allSprites.length; i++) {
-  ///       Sprite sprite = allSprites[i];
-  ///       final double rectX = sprite.index * 10.0;
-  ///       rectList[i * 4 + 0] = rectX;
-  ///       rectList[i * 4 + 1] = 0.0;
-  ///       rectList[i * 4 + 2] = rectX + 10.0;
-  ///       rectList[i * 4 + 3] = 10.0;
-  ///
-  ///       // This example uses an RSTransform object to compute the necessary values for
-  ///       // the transform using a factory helper method because the sprites contain
-  ///       // rotation values which are not trivial to work with. But if the math for the
-  ///       // values falls out from other calculations on the sprites then the values could
-  ///       // possibly be generated directly from the sprite update code.
-  ///       final RSTransform transform = RSTransform.fromComponents(
-  ///         rotation: sprite.rotation,
-  ///         scale: 1.0,
-  ///         // Center of the sprite relative to its rect
-  ///         anchorX: 5.0,
-  ///         anchorY: 5.0,
-  ///         // Location at which to draw the center of the sprite
-  ///         translateX: sprite.center.dx,
-  ///         translateY: sprite.center.dy,
-  ///       );
-  ///       transformList[i * 4 + 0] = transform.scos;
-  ///       transformList[i * 4 + 1] = transform.ssin;
-  ///       transformList[i * 4 + 2] = transform.tx;
-  ///       transformList[i * 4 + 3] = transform.ty;
-  ///
-  ///       // This example computes the color value directly, but one could also compute
-  ///       // an actual Color object and use its Color.value getter for the same result.
-  ///       // Since we are using BlendMode.srcIn, only the alpha component matters for
-  ///       // these colors which makes this a simple shift operation.
-  ///       colorList[i] = sprite.alpha << 24;
-  ///     }
-  ///     Paint paint = Paint();
-  ///     canvas.drawRawAtlas(spriteAtlas, transformList, rectList, colorList, BlendMode.srcIn, null, paint);
-  ///   }
-  ///
-  ///   // ...
-  /// }
-  /// ```
-  ///
-  /// See also:
-  ///
-  ///  * [drawAtlas], which takes its arguments as objects rather than typed
-  ///    data lists.
-  void drawRawAtlas(
-    Image atlas,
-    Float32List rstTransforms,
-    Float32List rects,
-    Int32List? colors,
-    BlendMode? blendMode,
-    Rect? cullRect,
-    Paint paint,
-  );
-
-  /// Draws a shadow for a [Path] representing the given material elevation.
-  ///
-  /// The `transparentOccluder` argument should be true if the occluding object
-  /// is not opaque.
-  ///
-  /// The arguments must not be null.
-  void drawShadow(Path path, Color color, double elevation, bool transparentOccluder);
-}
-
-base class _NativeCanvas extends NativeFieldWrapperClass1 implements Canvas {
-  _NativeCanvas(PictureRecorder recorder, [Rect? cullRect]) {
-    if (recorder.isRecording) {
-      throw ArgumentError('"recorder" must not already be associated with another Canvas.');
-    }
-    _recorder = recorder as _NativePictureRecorder;
-    _recorder!._canvas = this;
-    cullRect ??= Rect.largest;
-    _constructor(_recorder!, cullRect.left, cullRect.top, cullRect.right, cullRect.bottom);
-  }
-
-  @Native<Void Function(Handle, Pointer<Void>, Double, Double, Double, Double)>(
-    symbol: 'Canvas::Create',
-  )
-  external void _constructor(
-    _NativePictureRecorder recorder,
-    double left,
-    double top,
-    double right,
-    double bottom,
-  );
-
-  // The underlying DlCanvas is owned by the DisplayListBuilder used to create this Canvas.
-  // The Canvas holds a reference to the PictureRecorder to prevent the recorder from being
-  // garbage collected until PictureRecorder.endRecording is called.
-  _NativePictureRecorder? _recorder;
-
-  @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Canvas::save', isLeaf: true)
-  external void save();
-
-  static Rect _sorted(Rect rect) {
-    if (rect.isEmpty) {
-      rect = Rect.fromLTRB(
-        math.min(rect.left, rect.right),
-        math.min(rect.top, rect.bottom),
-        math.max(rect.left, rect.right),
-        math.max(rect.top, rect.bottom),
-      );
-    }
-    return rect;
-  }
-
-  @override
-  void saveLayer(Rect? bounds, Paint paint) {
-    if (bounds == null) {
-      _saveLayerWithoutBounds(paint._objects, paint._data);
-    } else {
-      assert(_rectIsValid(bounds));
-      _saveLayer(bounds.left, bounds.top, bounds.right, bounds.bottom, paint._objects, paint._data);
-    }
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle)>(symbol: 'Canvas::saveLayerWithoutBounds')
-  external void _saveLayerWithoutBounds(List<Object?>? paintObjects, ByteData paintData);
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Handle, Handle)>(
-    symbol: 'Canvas::saveLayer',
-  )
-  external void _saveLayer(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Canvas::restore', isLeaf: true)
-  external void restore();
-
-  @override
-  @Native<Void Function(Pointer<Void>, Int32)>(symbol: 'Canvas::restoreToCount', isLeaf: true)
-  external void restoreToCount(int count);
-
-  @override
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'Canvas::getSaveCount', isLeaf: true)
-  external int getSaveCount();
-
-  @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(symbol: 'Canvas::translate', isLeaf: true)
-  external void translate(double dx, double dy);
-
-  @override
-  void scale(double sx, [double? sy]) => _scale(sx, sy ?? sx);
-
-  @Native<Void Function(Pointer<Void>, Double, Double)>(symbol: 'Canvas::scale', isLeaf: true)
-  external void _scale(double sx, double sy);
-
-  @override
-  @Native<Void Function(Pointer<Void>, Double)>(symbol: 'Canvas::rotate', isLeaf: true)
-  external void rotate(double radians);
-
-  @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(symbol: 'Canvas::skew', isLeaf: true)
-  external void skew(double sx, double sy);
-
-  @override
-  void transform(Float64List matrix4) {
-    if (matrix4.length != 16) {
-      throw ArgumentError('"matrix4" must have 16 entries.');
-    }
-    _transform(matrix4);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Canvas::transform')
-  external void _transform(Float64List matrix4);
-
-  @override
-  Float64List getTransform() {
-    final matrix4 = Float64List(16);
-    _getTransform(matrix4);
-    return matrix4;
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Canvas::getTransform')
-  external void _getTransform(Float64List matrix4);
-
-  @override
-  void clipRect(Rect rect, {ClipOp clipOp = ClipOp.intersect, bool doAntiAlias = true}) {
-    assert(_rectIsValid(rect));
-    rect = _sorted(rect);
-    // Even if rect is still empty - which implies it has a zero dimension -
-    // we still need to perform the clipRect operation as it will effectively
-    // nullify any further rendering until the next restore call.
-    _clipRect(rect.left, rect.top, rect.right, rect.bottom, clipOp.index, doAntiAlias);
-  }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Int32, Bool)>(
-    symbol: 'Canvas::clipRect',
-    isLeaf: true,
-  )
-  external void _clipRect(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    int clipOp,
-    bool doAntiAlias,
-  );
-
-  @override
-  void clipRRect(RRect rrect, {bool doAntiAlias = true}) {
-    assert(_rrectIsValid(rrect));
-    _clipRRect(rrect._getValue32(), doAntiAlias);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Bool)>(symbol: 'Canvas::clipRRect')
-  external void _clipRRect(Float32List rrect, bool doAntiAlias);
-
-  @override
-  void clipRSuperellipse(RSuperellipse rsuperellipse, {bool doAntiAlias = true}) {
-    assert(_rsuperellipseIsValid(rsuperellipse));
-    _clipRSuperellipse(rsuperellipse._native(), doAntiAlias);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Bool)>(symbol: 'Canvas::clipRSuperellipse')
-  external void _clipRSuperellipse(_NativeRSuperellipse rsuperellipse, bool doAntiAlias);
-
-  @override
-  void clipPath(Path path, {bool doAntiAlias = true}) {
-    _clipPath(path as _NativePath, doAntiAlias);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Bool)>(symbol: 'Canvas::clipPath')
-  external void _clipPath(_NativePath path, bool doAntiAlias);
-
-  @override
-  Rect getLocalClipBounds() {
-    final bounds = Float64List(4);
-    _getLocalClipBounds(bounds);
-    return Rect.fromLTRB(bounds[0], bounds[1], bounds[2], bounds[3]);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Canvas::getLocalClipBounds')
-  external void _getLocalClipBounds(Float64List bounds);
-
-  @override
-  Rect getDestinationClipBounds() {
-    final bounds = Float64List(4);
-    _getDestinationClipBounds(bounds);
-    return Rect.fromLTRB(bounds[0], bounds[1], bounds[2], bounds[3]);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Canvas::getDestinationClipBounds')
-  external void _getDestinationClipBounds(Float64List bounds);
-
-  @override
-  void drawColor(Color color, BlendMode blendMode) {
-    _drawColor(color.value, blendMode.index);
-  }
-
-  @Native<Void Function(Pointer<Void>, Uint32, Int32)>(symbol: 'Canvas::drawColor', isLeaf: true)
-  external void _drawColor(int color, int blendMode);
-
-  @override
-  void drawLine(Offset p1, Offset p2, Paint paint) {
-    assert(_offsetIsValid(p1));
-    assert(_offsetIsValid(p2));
-    _drawLine(p1.dx, p1.dy, p2.dx, p2.dy, paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Handle, Handle)>(
-    symbol: 'Canvas::drawLine',
-  )
-  external void _drawLine(
-    double x1,
-    double y1,
-    double x2,
-    double y2,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawPaint(Paint paint) {
-    _drawPaint(paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle)>(symbol: 'Canvas::drawPaint')
-  external void _drawPaint(List<Object?>? paintObjects, ByteData paintData);
-
-  @override
-  void drawRect(Rect rect, Paint paint) {
-    assert(_rectIsValid(rect));
-    rect = _sorted(rect);
-    if (paint.style != PaintingStyle.fill || !rect.isEmpty) {
-      _drawRect(rect.left, rect.top, rect.right, rect.bottom, paint._objects, paint._data);
-    }
-  }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Handle, Handle)>(
-    symbol: 'Canvas::drawRect',
-  )
-  external void _drawRect(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawRRect(RRect rrect, Paint paint) {
-    assert(_rrectIsValid(rrect));
-    _drawRRect(rrect._getValue32(), paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle, Handle)>(symbol: 'Canvas::drawRRect')
-  external void _drawRRect(Float32List rrect, List<Object?>? paintObjects, ByteData paintData);
-
-  @override
-  void drawDRRect(RRect outer, RRect inner, Paint paint) {
-    assert(_rrectIsValid(outer));
-    assert(_rrectIsValid(inner));
-    _drawDRRect(outer._getValue32(), inner._getValue32(), paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle, Handle, Handle)>(
-    symbol: 'Canvas::drawDRRect',
-  )
-  external void _drawDRRect(
-    Float32List outer,
-    Float32List inner,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawRSuperellipse(RSuperellipse rsuperellipse, Paint paint) {
-    assert(_rsuperellipseIsValid(rsuperellipse));
-    _drawRSuperellipse(rsuperellipse._native(), paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Handle, Handle)>(
-    symbol: 'Canvas::drawRSuperellipse',
-  )
-  external void _drawRSuperellipse(
-    _NativeRSuperellipse rsuperellipse,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawOval(Rect rect, Paint paint) {
-    assert(_rectIsValid(rect));
-    rect = _sorted(rect);
-    if (paint.style != PaintingStyle.fill || !rect.isEmpty) {
-      _drawOval(rect.left, rect.top, rect.right, rect.bottom, paint._objects, paint._data);
-    }
-  }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Handle, Handle)>(
-    symbol: 'Canvas::drawOval',
-  )
-  external void _drawOval(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawCircle(Offset c, double radius, Paint paint) {
-    assert(_offsetIsValid(c));
-    _drawCircle(c.dx, c.dy, radius, paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Handle, Handle)>(
-    symbol: 'Canvas::drawCircle',
-  )
-  external void _drawCircle(
-    double x,
-    double y,
-    double radius,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawArc(Rect rect, double startAngle, double sweepAngle, bool useCenter, Paint paint) {
-    assert(_rectIsValid(rect));
-    _drawArc(
-      rect.left,
-      rect.top,
-      rect.right,
-      rect.bottom,
-      startAngle,
-      sweepAngle,
-      useCenter,
-      paint._objects,
-      paint._data,
-    );
-  }
-
-  @Native<
-    Void Function(
-      Pointer<Void>,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Bool,
-      Handle,
-      Handle,
-    )
-  >(symbol: 'Canvas::drawArc')
-  external void _drawArc(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    double startAngle,
-    double sweepAngle,
-    bool useCenter,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawPath(Path path, Paint paint) {
-    _drawPath(path as _NativePath, paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Handle, Handle)>(symbol: 'Canvas::drawPath')
-  external void _drawPath(_NativePath path, List<Object?>? paintObjects, ByteData paintData);
-
-  @override
-  void drawImage(Image image, Offset offset, Paint paint) {
-    assert(!image.debugDisposed);
-    assert(_offsetIsValid(offset));
-    final String? error = _drawImage(
-      image._image,
-      offset.dx,
-      offset.dy,
-      paint._objects,
-      paint._data,
-      paint.filterQuality.index,
-    );
-    if (error != null) {
-      throw PictureRasterizationException._(error, stack: image._debugStack);
-    }
-  }
-
-  @Native<Handle Function(Pointer<Void>, Pointer<Void>, Double, Double, Handle, Handle, Int32)>(
-    symbol: 'Canvas::drawImage',
-  )
-  external String? _drawImage(
-    _Image image,
-    double x,
-    double y,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-    int filterQualityIndex,
-  );
-
-  @override
-  void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
-    assert(!image.debugDisposed);
-    assert(_rectIsValid(src));
-    assert(_rectIsValid(dst));
-    final String? error = _drawImageRect(
-      image._image,
-      src.left,
-      src.top,
-      src.right,
-      src.bottom,
-      dst.left,
-      dst.top,
-      dst.right,
-      dst.bottom,
-      paint._objects,
-      paint._data,
-      paint.filterQuality.index,
-    );
-    if (error != null) {
-      throw PictureRasterizationException._(error, stack: image._debugStack);
-    }
-  }
-
-  @Native<
-    Handle Function(
-      Pointer<Void>,
-      Pointer<Void>,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Handle,
-      Handle,
-      Int32,
-    )
-  >(symbol: 'Canvas::drawImageRect')
-  external String? _drawImageRect(
-    _Image image,
-    double srcLeft,
-    double srcTop,
-    double srcRight,
-    double srcBottom,
-    double dstLeft,
-    double dstTop,
-    double dstRight,
-    double dstBottom,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-    int filterQualityIndex,
-  );
-
-  @override
-  void drawImageNine(Image image, Rect center, Rect dst, Paint paint) {
-    assert(!image.debugDisposed);
-    assert(_rectIsValid(center));
-    assert(_rectIsValid(dst));
-    final String? error = _drawImageNine(
-      image._image,
-      center.left,
-      center.top,
-      center.right,
-      center.bottom,
-      dst.left,
-      dst.top,
-      dst.right,
-      dst.bottom,
-      paint._objects,
-      paint._data,
-      paint.filterQuality.index,
-    );
-    if (error != null) {
-      throw PictureRasterizationException._(error, stack: image._debugStack);
-    }
-  }
-
-  @Native<
-    Handle Function(
-      Pointer<Void>,
-      Pointer<Void>,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Handle,
-      Handle,
-      Int32,
-    )
-  >(symbol: 'Canvas::drawImageNine')
-  external String? _drawImageNine(
-    _Image image,
-    double centerLeft,
-    double centerTop,
-    double centerRight,
-    double centerBottom,
-    double dstLeft,
-    double dstTop,
-    double dstRight,
-    double dstBottom,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-    int filterQualityIndex,
-  );
-
-  @override
-  void drawPicture(Picture picture) {
-    assert(!picture.debugDisposed);
-    _drawPicture(picture as _NativePicture);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>)>(symbol: 'Canvas::drawPicture')
-  external void _drawPicture(_NativePicture picture);
-
-  @override
-  void drawParagraph(Paragraph paragraph, Offset offset) {
-    final nativeParagraph = paragraph as _NativeParagraph;
-    assert(!nativeParagraph.debugDisposed);
-    assert(_offsetIsValid(offset));
-    assert(!nativeParagraph._needsLayout);
-    nativeParagraph._paint(this, offset.dx, offset.dy);
-  }
-
-  @override
-  void drawPoints(PointMode pointMode, List<Offset> points, Paint paint) {
-    _drawPoints(paint._objects, paint._data, pointMode.index, _encodePointList(points));
-  }
-
-  @override
-  void drawRawPoints(PointMode pointMode, Float32List points, Paint paint) {
-    if (points.length % 2 != 0) {
-      throw ArgumentError('"points" must have an even number of values.');
-    }
-    _drawPoints(paint._objects, paint._data, pointMode.index, points);
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle, Int32, Handle)>(symbol: 'Canvas::drawPoints')
-  external void _drawPoints(
-    List<Object?>? paintObjects,
-    ByteData paintData,
-    int pointMode,
-    Float32List points,
-  );
-
-  @override
-  void drawVertices(Vertices vertices, BlendMode blendMode, Paint paint) {
-    assert(!vertices.debugDisposed);
-    _drawVertices(vertices, blendMode.index, paint._objects, paint._data);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Int32, Handle, Handle)>(
-    symbol: 'Canvas::drawVertices',
-  )
-  external void _drawVertices(
-    Vertices vertices,
-    int blendMode,
-    List<Object?>? paintObjects,
-    ByteData paintData,
-  );
-
-  @override
-  void drawAtlas(
-    Image atlas,
-    List<RSTransform> transforms,
-    List<Rect> rects,
-    List<Color>? colors,
-    BlendMode? blendMode,
-    Rect? cullRect,
-    Paint paint,
-  ) {
-    assert(!atlas.debugDisposed);
-    assert(colors == null || colors.isEmpty || blendMode != null);
-
-    final int rectCount = rects.length;
-    if (transforms.length != rectCount) {
-      throw ArgumentError('"transforms" and "rects" lengths must match.');
-    }
-    if (colors != null && colors.isNotEmpty && colors.length != rectCount) {
-      throw ArgumentError(
-        'If non-null, "colors" length must match that of "transforms" and "rects".',
-      );
-    }
-
-    final rstTransformBuffer = Float32List(rectCount * 4);
-    final rectBuffer = Float32List(rectCount * 4);
-
-    for (var i = 0; i < rectCount; i++) {
-      final int index0 = i * 4;
-      final int index1 = index0 + 1;
-      final int index2 = index0 + 2;
-      final int index3 = index0 + 3;
-      final RSTransform rstTransform = transforms[i];
-      final Rect rect = rects[i];
-      assert(_rectIsValid(rect));
-      rstTransformBuffer[index0] = rstTransform.scos;
-      rstTransformBuffer[index1] = rstTransform.ssin;
-      rstTransformBuffer[index2] = rstTransform.tx;
-      rstTransformBuffer[index3] = rstTransform.ty;
-      rectBuffer[index0] = rect.left;
-      rectBuffer[index1] = rect.top;
-      rectBuffer[index2] = rect.right;
-      rectBuffer[index3] = rect.bottom;
-    }
-
-    final Int32List? colorBuffer = (colors == null || colors.isEmpty)
-        ? null
-        : _encodeColorList(colors);
-    final Float32List? cullRectBuffer = cullRect?._getValue32();
-    final int qualityIndex = paint.filterQuality.index;
-
-    final String? error = _drawAtlas(
-      paint._objects,
-      paint._data,
-      qualityIndex,
-      atlas._image,
-      rstTransformBuffer,
-      rectBuffer,
-      colorBuffer,
-      (blendMode ?? BlendMode.src).index,
-      cullRectBuffer,
-    );
-
-    if (error != null) {
-      throw PictureRasterizationException._(error, stack: atlas._debugStack);
-    }
-  }
-
-  @override
-  void drawRawAtlas(
-    Image atlas,
-    Float32List rstTransforms,
-    Float32List rects,
-    Int32List? colors,
-    BlendMode? blendMode,
-    Rect? cullRect,
-    Paint paint,
-  ) {
-    assert(colors == null || blendMode != null);
-
-    final int rectCount = rects.length;
-    if (rstTransforms.length != rectCount) {
-      throw ArgumentError('"rstTransforms" and "rects" lengths must match.');
-    }
-    if (rectCount % 4 != 0) {
-      throw ArgumentError('"rstTransforms" and "rects" lengths must be a multiple of four.');
-    }
-    if (colors != null && colors.length * 4 != rectCount) {
-      throw ArgumentError(
-        'If non-null, "colors" length must be one fourth the length of "rstTransforms" and "rects".',
-      );
-    }
-    final int qualityIndex = paint.filterQuality.index;
-
-    final String? error = _drawAtlas(
-      paint._objects,
-      paint._data,
-      qualityIndex,
-      atlas._image,
-      rstTransforms,
-      rects,
-      colors,
-      (blendMode ?? BlendMode.src).index,
-      cullRect?._getValue32(),
-    );
-
-    if (error != null) {
-      throw PictureRasterizationException._(error, stack: atlas._debugStack);
-    }
-  }
-
-  @Native<
-    Handle Function(
-      Pointer<Void>,
-      Handle,
-      Handle,
-      Int32,
-      Pointer<Void>,
-      Handle,
-      Handle,
-      Handle,
-      Int32,
-      Handle,
-    )
-  >(symbol: 'Canvas::drawAtlas')
-  external String? _drawAtlas(
-    List<Object?>? paintObjects,
-    ByteData paintData,
-    int filterQualityIndex,
-    _Image atlas,
-    Float32List rstTransforms,
-    Float32List rects,
-    Int32List? colors,
-    int blendMode,
-    Float32List? cullRect,
-  );
-
-  @override
-  void drawShadow(Path path, Color color, double elevation, bool transparentOccluder) {
-    _drawShadow(path as _NativePath, color.value, elevation, transparentOccluder);
-  }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Uint32, Double, Bool)>(
-    symbol: 'Canvas::drawShadow',
-  )
-  external void _drawShadow(
-    _NativePath path,
-    int color,
-    double elevation,
-    bool transparentOccluder,
-  );
-
-  @override
-  String toString() => 'Canvas(recording: ${_recorder != null})';
-}
-
+/*
 /// Signature for [Picture] lifecycle events.
 typedef PictureEventCallback = void Function(Picture picture);
 
@@ -8271,7 +6621,7 @@ base class _NativePictureRecorder extends NativeFieldWrapperClass1 implements Pi
   @override
   String toString() => 'PictureRecorder(recording: $isRecording)';
 }
-
+*/
 /// A single shadow.
 ///
 /// Multiple shadows are stacked together in a [TextStyle].
@@ -8468,107 +6818,7 @@ class Shadow {
   String toString() => 'TextShadow($color, $offset, $blurRadius)';
 }
 
-/// A handle to a read-only byte buffer that is managed by the engine.
-///
-/// The creator of this object is responsible for calling [dispose] when it is
-/// no longer needed.
-base class ImmutableBuffer extends NativeFieldWrapperClass1 {
-  ImmutableBuffer._(this._length);
-
-  /// Creates a copy of the data from a [Uint8List] suitable for internal use
-  /// in the engine.
-  static Future<ImmutableBuffer> fromUint8List(Uint8List list) {
-    final instance = ImmutableBuffer._(list.length);
-    return _futurize((_Callback<void> callback) {
-      return instance._init(list, callback);
-    }).then((_) => instance);
-  }
-
-  /// Create a buffer from the asset with key [assetKey].
-  ///
-  /// Throws an [Exception] if the asset does not exist.
-  static Future<ImmutableBuffer> fromAsset(String assetKey) {
-    // The flutter tool converts all asset keys with spaces into URI
-    // encoded paths (replacing ' ' with '%20', for example). We perform
-    // the same encoding here so that users can load assets with the same
-    // key they have written in the pubspec.
-    final String encodedKey = Uri(path: Uri.encodeFull(assetKey)).path;
-    final instance = ImmutableBuffer._(0);
-    return _futurize((_Callback<int> callback) {
-      return instance._initFromAsset(encodedKey, callback);
-    }).then((int length) {
-      if (length == -1) {
-        throw Exception('Asset not found');
-      }
-      return instance.._length = length;
-    });
-  }
-
-  /// Create a buffer from the file with [path].
-  ///
-  /// Throws an [Exception] if the asset does not exist.
-  static Future<ImmutableBuffer> fromFilePath(String path) {
-    final instance = ImmutableBuffer._(0);
-    return _futurize((_Callback<int> callback) {
-      return instance._initFromFile(path, callback);
-    }).then((int length) {
-      if (length == -1) {
-        throw Exception('Could not load file at $path.');
-      }
-      return instance.._length = length;
-    });
-  }
-
-  @Native<Handle Function(Handle, Handle, Handle)>(symbol: 'ImmutableBuffer::init')
-  external String? _init(Uint8List list, _Callback<void> callback);
-
-  @Native<Handle Function(Handle, Handle, Handle)>(symbol: 'ImmutableBuffer::initFromAsset')
-  external String? _initFromAsset(String assetKey, _Callback<int> callback);
-
-  @Native<Handle Function(Handle, Handle, Handle)>(symbol: 'ImmutableBuffer::initFromFile')
-  external String? _initFromFile(String assetKey, _Callback<int> callback);
-
-  /// The length, in bytes, of the underlying data.
-  int get length => _length;
-  int _length;
-
-  bool _debugDisposed = false;
-
-  /// Whether [dispose] has been called.
-  ///
-  /// This must only be used when asserts are enabled. Otherwise, it will throw.
-  bool get debugDisposed {
-    late bool disposed;
-    assert(() {
-      disposed = _debugDisposed;
-      return true;
-    }());
-    return disposed;
-  }
-
-  /// Release the resources used by this object. The object is no longer usable
-  /// after this method is called.
-  ///
-  /// The underlying memory allocated by this object will be retained beyond
-  /// this call if it is still needed by another object that has not been
-  /// disposed. For example, an [ImageDescriptor] that has not been disposed
-  /// may still retain a reference to the memory from this buffer even if it
-  /// has been disposed. Freeing that memory requires disposing all resources
-  /// that may still hold it.
-  void dispose() {
-    assert(() {
-      assert(!_debugDisposed);
-      _debugDisposed = true;
-      return true;
-    }());
-    _dispose();
-  }
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ImmutableBuffer::dispose')
-  external void _dispose();
-}
+/// ImmutableBuffer is removed because im very well sure if it's ever been used on the Dart side then it probably don't have to here, we can just let the engine to do works involving it.
 
 /// A descriptor of data that can be turned into an [Image] via a [Codec].
 ///
@@ -8586,7 +6836,7 @@ abstract class ImageDescriptor {
   /// by the number of bytes per pixel in the provided `format`.
   // Not async because there's no expensive work to do here.
   factory ImageDescriptor.raw(
-    ImmutableBuffer buffer, {
+    Uint8List buffer, {
     required int width,
     required int height,
     int? rowBytes,
@@ -8594,12 +6844,7 @@ abstract class ImageDescriptor {
   }) = _NativeImageDescriptor.raw;
 
   /// Creates an image descriptor from encoded data in a supported format.
-  static Future<ImageDescriptor> encoded(ImmutableBuffer buffer) {
-    final descriptor = _NativeImageDescriptor._();
-    return _futurize((_Callback<void> callback) {
-      return descriptor._initEncoded(buffer, callback);
-    }).then((_) => descriptor);
-  }
+  factory ImageDescriptor.encoded(Uint8List buffer) = _NativeImageDescriptor.encoded; 
 
   /// The width, in pixels, of the image.
   ///
@@ -8632,14 +6877,14 @@ abstract class ImageDescriptor {
   ///
   /// If either targetWidth or targetHeight is less than or equal to zero, it
   /// will be treated as if it is null.
-  Future<Codec> instantiateCodec({
+  Codec instantiateCodec({
     int? targetWidth,
     int? targetHeight,
     TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
   });
 }
 
-base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements ImageDescriptor {
+base class _NativeImageDescriptor implements ImageDescriptor {
   _NativeImageDescriptor._();
 
   /// Creates an image descriptor from raw image pixels.
@@ -8653,7 +6898,7 @@ base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements Im
   /// by the number of bytes per pixel in the provided `format`.
   // Not async because there's no expensive work to do here.
   _NativeImageDescriptor.raw(
-    ImmutableBuffer buffer, {
+    Uint8List buffer, {
     required int width,
     required int height,
     int? rowBytes,
@@ -8663,58 +6908,64 @@ base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements Im
     _height = height;
     // We only support 4 byte pixel formats in the PixelFormat enum.
     _bytesPerPixel = 4;
-    _initRaw(this, buffer, width, height, rowBytes ?? -1, pixelFormat.index);
+    //_initRaw(this, buffer, width, height, rowBytes ?? -1, pixelFormat.index);
+    _buffer = _createNativeBuffer(buffer);
+    _nativePtr = tennoji_idesc_from_raw(
+      _buffer.$1,
+      width,
+      height,
+      rowBytes ?? -1,
+      pixelFormat.index,
+    );
   }
 
-  @Native<Handle Function(Handle, Pointer<Void>, Handle)>(symbol: 'ImageDescriptor::initEncoded')
-  external String? _initEncoded(ImmutableBuffer buffer, _Callback<void> callback);
+  _NativeImageDescriptor.encoded(Uint8List buffer) { 
+    _buffer = _createNativeBuffer(buffer);
+    _nativePtr = tennoji_idesc_from_encoded(_buffer.$1, _buffer.$2);
+  }
 
-  @Native<Void Function(Handle, Handle, Int32, Int32, Int32, Int32)>(
-    symbol: 'ImageDescriptor::initRaw',
-  )
-  external static void _initRaw(
-    ImageDescriptor outDescriptor,
-    ImmutableBuffer buffer,
-    int width,
-    int height,
-    int rowBytes,
-    int pixelFormat,
-  );
+  (Pointer<Uint8>, int) _createNativeBuffer(Uint8List buffer) {
+    var p = calloc<Uint8>(buffer.lengthInBytes);
+    final nativeBuffer = p.asTypedList(buffer.lengthInBytes);
+    nativeBuffer.setAll(0, buffer);
+    return (p, buffer.lengthInBytes);
+  }
+
+  late (Pointer<Uint8>, int) _buffer;
+  late Pointer<TennojiImageDescriptor> _nativePtr;
 
   int? _width;
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'ImageDescriptor::width', isLeaf: true)
-  external int _getWidth();
+  int _getWidth() => tennoji_idesc_get_width(_nativePtr);
 
   @override
   int get width => _width ??= _getWidth();
 
   int? _height;
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'ImageDescriptor::height', isLeaf: true)
-  external int _getHeight();
+  int _getHeight() => tennoji_idesc_get_height(_nativePtr);
 
   @override
   int get height => _height ??= _getHeight();
 
   int? _bytesPerPixel;
 
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'ImageDescriptor::bytesPerPixel', isLeaf: true)
-  external int _getBytesPerPixel();
+  int _getBytesPerPixel() => 4;
 
   @override
   int get bytesPerPixel => _bytesPerPixel ??= _getBytesPerPixel();
 
   @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ImageDescriptor::dispose')
-  external void dispose();
+  void dispose() {
+    tennoji_idesc_destroy(_nativePtr);
+  }
 
   @override
-  Future<Codec> instantiateCodec({
+  Codec instantiateCodec({
     int? targetWidth,
     int? targetHeight,
     TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
-  }) async {
+  }) {
     if (targetWidth != null && targetWidth <= 0) {
       targetWidth = null;
     }
@@ -8733,26 +6984,17 @@ base class _NativeImageDescriptor extends NativeFieldWrapperClass1 implements Im
     assert(targetWidth != null);
     assert(targetHeight != null);
 
-    final Codec codec = _NativeCodec._();
-    _instantiateCodec(codec, targetWidth!, targetHeight!, targetFormat.index);
+    final Codec codec = _NativeCodec._(
+      tennoji_idesc_instantiate_codec(_nativePtr, targetWidth!, targetHeight!, targetFormat.index)
+    );
     return codec;
   }
-
-  @Native<Void Function(Pointer<Void>, Handle, Int32, Int32, Int32)>(
-    symbol: 'ImageDescriptor::instantiateCodec',
-  )
-  external void _instantiateCodec(
-    Codec outCodec,
-    int targetWidth,
-    int targetHeight,
-    int targetFormat,
-  );
 
   @override
   String toString() =>
       'ImageDescriptor(width: ${_width ?? '?'}, height: ${_height ?? '?'}, bytes per pixel: ${_bytesPerPixel ?? '?'})';
 }
-
+/*
 /// Generic callback signature, used by [_futurize].
 typedef _Callback<T> = void Function(T result);
 
@@ -8844,7 +7086,7 @@ Future<T> _futurizeWithError<T>(_CallbackerWithError<T> callbacker) {
   }
   return completer.future;
 }
-
+*/
 /// An exception thrown by [Canvas.drawImage] and related methods when drawing
 /// an [Image] created via [Picture.toImageSync] that is in an invalid state.
 ///

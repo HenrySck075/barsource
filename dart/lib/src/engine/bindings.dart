@@ -12,12 +12,12 @@ import 'dart:ffi' as ffi;
 
 @ffi.Native<
   ffi.Pointer<TennojiEngine> Function(ffi.Pointer<TennojiEngineConfig>)
->()
+>(isLeaf: true)
 external ffi.Pointer<TennojiEngine> tennoji_engine_create(
   ffi.Pointer<TennojiEngineConfig> config,
 );
 
-@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiEngine>)>()
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiEngine>)>(isLeaf: true)
 external void tennoji_engine_destroy(ffi.Pointer<TennojiEngine> engine);
 
 @ffi.Native<
@@ -26,7 +26,7 @@ external void tennoji_engine_destroy(ffi.Pointer<TennojiEngine> engine);
     ffi.Pointer<ffi.Char>,
     ffi.UnsignedInt,
   )
->(symbol: 'tennoji_decoder_open')
+>(symbol: 'tennoji_decoder_open', isLeaf: true)
 external ffi.Pointer<TennojiDecoder> _tennoji_decoder_open(
   ffi.Pointer<TennojiEngine> engine,
   ffi.Pointer<ffi.Char> uri,
@@ -39,10 +39,12 @@ ffi.Pointer<TennojiDecoder> tennoji_decoder_open(
   TennojiHWAccel accel,
 ) => _tennoji_decoder_open(engine, uri, accel.value);
 
-@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiDecoder>)>()
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiDecoder>)>(isLeaf: true)
 external void tennoji_decoder_close(ffi.Pointer<TennojiDecoder> decoder);
 
-@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiDecoder>, ffi.Int64)>()
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiDecoder>, ffi.Int64)>(
+  isLeaf: true,
+)
 external int tennoji_decoder_seek(
   ffi.Pointer<TennojiDecoder> decoder,
   int timestamp_us,
@@ -62,7 +64,9 @@ external ffi.Pointer<TennojiCanvasImage> tennoji_decoder_get_texture(
 @ffi.Native<ffi.Int64 Function(ffi.Pointer<TennojiDecoder>)>(isLeaf: true)
 external int tennoji_decoder_duration(ffi.Pointer<TennojiDecoder> decoder);
 
-@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiDecoder>, ffi.Int64)>()
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiDecoder>, ffi.Int64)>(
+  isLeaf: true,
+)
 external int tennoji_decoder_read_audio(
   ffi.Pointer<TennojiDecoder> decoder,
   int timestamp_us,
@@ -181,15 +185,135 @@ external int tennoji_canvas_save_layer(
   int alpha,
 );
 
-@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>()
-external void tennoji_texture_release(ffi.Pointer<TennojiCanvasImage> texture);
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
+external void tennoji_texture_destroy(ffi.Pointer<TennojiCanvasImage> texture);
+
+@ffi.Native<
+  ffi.Pointer<TennojiCodec> Function(ffi.Pointer<ffi.Uint8>, ffi.Uint32)
+>(isLeaf: true)
+external ffi.Pointer<TennojiCodec> tennoji_codec_from_encoded(
+  ffi.Pointer<ffi.Uint8> data,
+  int length,
+);
+
+@ffi.Native<ffi.Pointer<TennojiCodec> Function(ffi.Pointer<ffi.Char>)>(
+  isLeaf: true,
+)
+external ffi.Pointer<TennojiCodec> tennoji_codec_from_file(
+  ffi.Pointer<ffi.Char> path,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCodec>)>(isLeaf: true)
+external void tennoji_codec_destroy(ffi.Pointer<TennojiCodec> codec);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCodec>)>(isLeaf: true)
+external int tennoji_codec_get_frame_count(ffi.Pointer<TennojiCodec> codec);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCodec>)>(isLeaf: true)
+external int tennoji_codec_get_repetition_count(
+  ffi.Pointer<TennojiCodec> codec,
+);
+
+@ffi.Native<
+  ffi.Pointer<TennojiFrameInfo> Function(ffi.Pointer<TennojiCodec>, ffi.Int)
+>(isLeaf: true)
+external ffi.Pointer<TennojiFrameInfo> tennoji_codec_get_frame_info(
+  ffi.Pointer<TennojiCodec> codec,
+  int index,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiFrameInfo>)>(isLeaf: true)
+external void tennoji_frame_info_destroy(ffi.Pointer<TennojiFrameInfo> info);
+
+@ffi.Native<
+  ffi.Pointer<TennojiImageDescriptor> Function(
+    ffi.Pointer<ffi.Uint8>,
+    ffi.Uint32,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiImageDescriptor> tennoji_idesc_from_encoded(
+  ffi.Pointer<ffi.Uint8> data,
+  int length,
+);
+
+@ffi.Native<
+  ffi.Pointer<TennojiImageDescriptor> Function(
+    ffi.Pointer<ffi.Uint8>,
+    ffi.Uint32,
+    ffi.Uint32,
+    ffi.Int8,
+    ffi.Int8,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiImageDescriptor> tennoji_idesc_from_raw(
+  ffi.Pointer<ffi.Uint8> data,
+  int width,
+  int height,
+  int rowBytes,
+  int pixelFormat,
+);
+
+@ffi.Native<ffi.Uint32 Function(ffi.Pointer<TennojiImageDescriptor>)>(
+  isLeaf: true,
+)
+external int tennoji_idesc_get_width(
+  ffi.Pointer<TennojiImageDescriptor> descriptor,
+);
+
+@ffi.Native<ffi.Uint32 Function(ffi.Pointer<TennojiImageDescriptor>)>(
+  isLeaf: true,
+)
+external int tennoji_idesc_get_height(
+  ffi.Pointer<TennojiImageDescriptor> descriptor,
+);
+
+@ffi.Native<
+  ffi.Pointer<TennojiCodec> Function(
+    ffi.Pointer<TennojiImageDescriptor>,
+    ffi.Uint32,
+    ffi.Uint32,
+    ffi.Uint8,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiCodec> tennoji_idesc_instantiate_codec(
+  ffi.Pointer<TennojiImageDescriptor> descriptor,
+  int targetWidth,
+  int targetHeight,
+  int targetPixelFormat,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiImageDescriptor>)>(
+  isLeaf: true,
+)
+external void tennoji_idesc_destroy(
+  ffi.Pointer<TennojiImageDescriptor> descriptor,
+);
+
+@ffi.Native<
+  ffi.Bool Function(
+    ffi.Pointer<TennojiCanvasImage>,
+    ffi.Pointer<TennojiCanvasImage>,
+  )
+>(isLeaf: true)
+external bool tennoji_texture_equals(
+  ffi.Pointer<TennojiCanvasImage> tex1,
+  ffi.Pointer<TennojiCanvasImage> tex2,
+);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
+external int tennoji_texture_get_width(ffi.Pointer<TennojiCanvasImage> texture);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
+external int tennoji_texture_get_height(
+  ffi.Pointer<TennojiCanvasImage> texture,
+);
 
 @ffi.Native<
   ffi.Pointer<TennojiEncoder> Function(
     ffi.Pointer<TennojiEngine>,
     ffi.Pointer<TennojiEncoderConfig>,
   )
->()
+>(isLeaf: true)
 external ffi.Pointer<TennojiEncoder> tennoji_encoder_create(
   ffi.Pointer<TennojiEngine> engine,
   ffi.Pointer<TennojiEncoderConfig> config,
@@ -197,7 +321,7 @@ external ffi.Pointer<TennojiEncoder> tennoji_encoder_create(
 
 @ffi.Native<
   ffi.Int Function(ffi.Pointer<TennojiEncoder>, ffi.Pointer<TennojiCanvas>)
->()
+>(isLeaf: true)
 external int tennoji_encoder_write_frame(
   ffi.Pointer<TennojiEncoder> encoder,
   ffi.Pointer<TennojiCanvas> canvas,
@@ -209,7 +333,7 @@ external int tennoji_encoder_write_frame(
     ffi.Pointer<TennojiDecoder>,
     ffi.Int64,
   )
->()
+>(isLeaf: true)
 external int tennoji_encoder_write_audio(
   ffi.Pointer<TennojiEncoder> encoder,
   ffi.Pointer<TennojiDecoder> audio_decoder,
@@ -218,16 +342,16 @@ external int tennoji_encoder_write_audio(
 
 @ffi.Native<
   ffi.Int Function(ffi.Pointer<TennojiEncoder>, ffi.Pointer<TennojiDecoder>)
->()
+>(isLeaf: true)
 external int tennoji_encoder_drain_audio_queue(
   ffi.Pointer<TennojiEncoder> encoder,
   ffi.Pointer<TennojiDecoder> decoder,
 );
 
-@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiEncoder>)>()
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiEncoder>)>(isLeaf: true)
 external int tennoji_encoder_finalize(ffi.Pointer<TennojiEncoder> encoder);
 
-@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiEncoder>)>()
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiEncoder>)>(isLeaf: true)
 external void tennoji_encoder_destroy(ffi.Pointer<TennojiEncoder> encoder);
 
 @ffi.Native<
@@ -244,7 +368,7 @@ external void tennoji_encoder_destroy(ffi.Pointer<TennojiEncoder> encoder);
     ffi.Pointer<ffi.Uint16>,
     ffi.Pointer<ffi.Char>,
   )
->()
+>(isLeaf: true)
 external ffi.Pointer<TennojiParagraphBuilder> tennoji_paragraph_builder_create(
   ffi.Pointer<ffi.Int32> encodedStyle,
   int esLength,
@@ -294,6 +418,47 @@ external bool tennoji_rsuperellipse_contains(
   double brRy,
 );
 
+@ffi.Native<
+  ffi.Pointer<TennojiCanvasVertices> Function(
+    ffi.Uint8,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Float>,
+    ffi.Pointer<ffi.Float>,
+    ffi.Pointer<ffi.Int32>,
+    ffi.Pointer<ffi.Uint16>,
+    ffi.Uint64,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiCanvasVertices> tennoji_vertices_init(
+  int mode,
+  int length,
+  ffi.Pointer<ffi.Float> positions,
+  ffi.Pointer<ffi.Float> textureCoordinates,
+  ffi.Pointer<ffi.Int32> colors,
+  ffi.Pointer<ffi.Uint16> indices,
+  int iLength,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasVertices>)>(isLeaf: true)
+external void tennoji_vertices_destroy(
+  ffi.Pointer<TennojiCanvasVertices> vertices,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Pointer<TennojiCanvasVertices>,
+    ffi.Uint32,
+    ffi.Uint32,
+  )
+>(isLeaf: true)
+external void tennoji_canvas_draw_vertices(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiCanvasVertices> vertices,
+  int blendMode,
+  int color,
+);
+
 final class TennojiEngine extends ffi.Opaque {}
 
 final class TennojiDecoder extends ffi.Opaque {}
@@ -307,6 +472,21 @@ final class TennojiCanvas extends ffi.Opaque {}
 final class TennojiParagraphBuilder extends ffi.Opaque {}
 
 final class TennojiCanvasImage extends ffi.Opaque {}
+
+final class TennojiCodec extends ffi.Opaque {}
+
+final class TennojiImageDescriptor extends ffi.Opaque {}
+
+final class TennojiCanvasVertices extends ffi.Opaque {}
+
+final class TennojiShader extends ffi.Opaque {}
+
+final class TennojiFrameInfo extends ffi.Struct {
+  @ffi.Int64()
+  external int durationMs;
+
+  external ffi.Pointer<TennojiCanvasImage> image;
+}
 
 enum TennojiHWAccel {
   TENNOJI_HW_ACCEL_AUTO(0),
