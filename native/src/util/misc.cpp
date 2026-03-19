@@ -3,7 +3,7 @@
 
 
 extern "C" {
-bool tennoji_rsuperellipse_contains(
+bool rina_rsuperellipse_contains(
     double px, double py,            // The point to test
     double left, double top, 
     double right, double bottom,

@@ -42,7 +42,7 @@ bool _offsetIsValid(Offset offset) {
   return true;
 }
 
-bool _matrix4IsValid(Float64List matrix4) {
+bool _matrix4IsValid(Float32List matrix4) {
   assert(matrix4.length == 16, 'Matrix4 must have 16 entries.');
   assert(matrix4.every((double value) => value.isFinite), 'Matrix4 entries must be finite.');
   return true;
@@ -55,6 +55,26 @@ bool _radiusIsValid(Radius radius) {
 
 Color _scaleAlpha(Color x, double factor) {
   return x.withValues(alpha: clampDouble(x.a * factor, 0, 1));
+}
+
+// ????
+bool _listEquals<T>(List<T>? a, List<T>? b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a == null || b == null) {
+    return false;
+  }
+  final int length = a.length;
+  if (b.length != length) {
+    return false;
+  }
+  for (int index = 0; index < length; index++) {
+    if (a[index] != b[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// An immutable color value in ARGB format.
@@ -1618,6 +1638,7 @@ final class Paint {
       assert(value == null || !value.debugDisposed, 'Attempted to set a disposed shader to $this');
       return true;
     }());
+    /*
     assert(() {
       if (value is FragmentShader) {
         if (!value._validateSamplers()) {
@@ -1626,9 +1647,9 @@ final class Paint {
       }
       return true;
     }());
+    */
     _ensureObjectsInitialized()[_kShaderIndex] = value;
   }
-
   /// A color filter to apply when a shape is drawn or when a layer is
   /// composited.
   ///
@@ -1636,19 +1657,21 @@ final class Paint {
   ///
   /// When a shape is being drawn, [colorFilter] overrides [color] and [shader].
   ColorFilter? get colorFilter {
-    final nativeFilter = _objects?[_kColorFilterIndex] as _ColorFilter?;
-    return nativeFilter?.creator;
+    final nativeFilter = _objects?[_kColorFilterIndex] as ColorFilter?;
+    return nativeFilter;
   }
 
   set colorFilter(ColorFilter? value) {
-    final _ColorFilter? nativeFilter = value?._toNativeColorFilter();
-    if (nativeFilter == null) {
+    /*
+    final nativePtr = value?._toNativeColorFilter() ?? nullptr.cast<TennojiColorFilterMetadata>();
+    if (nativePtr == nullptr) {
       if (_objects != null) {
         _objects![_kColorFilterIndex] = null;
       }
     } else {
-      _ensureObjectsInitialized()[_kColorFilterIndex] = nativeFilter;
-    }
+      */
+      _ensureObjectsInitialized()[_kColorFilterIndex] = /*nativePtr*/value;
+    //}
   }
 
   /// The [ImageFilter] to use when drawing raster images.
@@ -1673,7 +1696,6 @@ final class Paint {
     final nativeFilter = _objects?[_kImageFilterIndex] as _ImageFilter?;
     return nativeFilter?.creator;
   }
-
   set imageFilter(ImageFilter? value) {
     if (value == null) {
       if (_objects != null) {
@@ -1699,6 +1721,25 @@ final class Paint {
 
   set invertColors(bool value) {
     _data.setInt32(_kInvertColorOffset, value ? 1 : 0, _kFakeHostEndian);
+  }
+
+  Pointer<TennojiCanvasPaintMetadata> _createPaintMetadata(Arena arena) {
+    final ret = arena<TennojiCanvasPaintMetadata>();
+    final encodedData = _data.buffer.asUint32List();
+    final len = (_kDataByteCount/4).toInt();
+    final encodedDataPtr = arena<Uint32>(len);
+    encodedDataPtr.asTypedList(len).setAll(0, encodedData);
+    ret.ref.encodedData = encodedDataPtr;
+
+    final sh = shader;
+    if (sh != null) {
+      ret.ref.shader = sh._nativePtr;
+    } else {
+      // default allocator for arena is calloc so this should be nullptr by default
+      ret.ref.shader = nullptr;
+    }
+
+    return ret;
   }
 
   @override
@@ -2201,9 +2242,9 @@ base class _Image {
 
   final Pointer<TennojiCanvasImage> _nativePtr;
 
-  int get width => tennoji_texture_get_width(_nativePtr);
+  int get width => rina_texture_get_width(_nativePtr);
 
-  int get height => tennoji_texture_get_height(_nativePtr);
+  int get height => rina_texture_get_height(_nativePtr);
 
 // usually you dont have to do this. until the demand is high then.
 // but even then, its probably going to be synchronous
@@ -2237,7 +2278,7 @@ base class _Image {
       'e', //todo: url
     );
     _disposed = true;
-    tennoji_texture_destroy(_nativePtr);
+    rina_texture_destroy(_nativePtr);
   }
 
   final Set<Image> _handles = <Image>{};
@@ -2368,14 +2409,14 @@ base class _NativeCodec implements Codec {
   @override
   int get frameCount => _cachedFrameCount ??= _frameCount;
 
-  int get _frameCount => tennoji_codec_get_frame_count(_nativePtr);
+  int get _frameCount => rina_codec_get_frame_count(_nativePtr);
 
   int? _cachedRepetitionCount;
 
   @override
   int get repetitionCount => _cachedRepetitionCount ??= _repetitionCount;
 
-  int get _repetitionCount => tennoji_codec_get_repetition_count(_nativePtr);
+  int get _repetitionCount => rina_codec_get_repetition_count(_nativePtr);
 
   int _currentFrameIndex = 0;
 
@@ -2407,7 +2448,7 @@ base class _NativeCodec implements Codec {
     }
     return completer.future;
     */
-    var bart = tennoji_codec_get_frame_info(_nativePtr, _currentFrameIndex);
+    var bart = rina_codec_get_frame_info(_nativePtr, _currentFrameIndex);
 
     if (bart == nullptr) return null;
 
@@ -2416,7 +2457,7 @@ base class _NativeCodec implements Codec {
     final img = _Image._(bart.ref.image);
     final duration = bart.ref.durationMs;
     // todo: ?
-    tennoji_frame_info_destroy(bart);
+    rina_frame_info_destroy(bart);
     return FrameInfo._(
       duration: Duration(milliseconds: duration), 
       image: Image._(img, img.width, img.height)
@@ -2424,7 +2465,7 @@ base class _NativeCodec implements Codec {
   }
 
   @override
-  void dispose() => tennoji_codec_destroy(_nativePtr);
+  void dispose() => rina_codec_destroy(_nativePtr);
 
   @override
   String toString() => 'Codec(${_cachedFrameCount == null ? "" : "$_cachedFrameCount frames"})';
@@ -2982,7 +3023,7 @@ abstract class Path {
   /// If `matrix4` is specified, the path will be transformed by this matrix
   /// after the matrix is translated by the given offset. The matrix is a 4x4
   /// matrix stored in column major order.
-  void addPath(Path path, Offset offset, {Float64List? matrix4});
+  void addPath(Path path, Offset offset, {Float32List? matrix4});
 
   /// Adds the sub-paths of `path`, offset by `offset`, to this path.
   /// The current sub-path is extended with the first sub-path
@@ -2991,7 +3032,7 @@ abstract class Path {
   /// If `matrix4` is specified, the path will be transformed by this matrix
   /// after the matrix is translated by the given `offset`.  The matrix is a 4x4
   /// matrix stored in column major order.
-  void extendWithPath(Path path, Offset offset, {Float64List? matrix4});
+  void extendWithPath(Path path, Offset offset, {Float32List? matrix4});
 
   /// Closes the last sub-path, as if a straight line had been drawn
   /// from the current point to the first point of the sub-path.
@@ -3017,7 +3058,7 @@ abstract class Path {
 
   /// Returns a copy of the path with all the segments of every
   /// sub-path transformed by the given matrix.
-  Path transform(Float64List matrix4);
+  Path transform(Float32List matrix4);
 
   /// Computes the bounding rectangle for this path.
   ///
@@ -3086,117 +3127,85 @@ abstract class Path {
   PathMetrics computeMetrics({bool forceClosed = false});
 }
 
-base class _NativePath extends NativeFieldWrapperClass1 implements Path {
+base class _NativePath implements Path, Finalizable {
+  static final NativeFinalizer _finalizer = NativeFinalizer(
+    Native.addressOf<
+      NativeFunction<Void Function(Pointer<TennojiCanvasPath>)>
+    >(rina_path_destroy).cast<NativeFinalizerFunction>()
+  );
   /// Create a new empty [Path] object.
   _NativePath() {
-    _constructor();
+    _nativePtr = rina_path_create();
+    _finalizer.attach(this, _nativePtr.cast(), detach: this);
+  }
+
+  // cloning
+  void _clone(_NativePath target) {
+    target._nativePtr = rina_path_clone(_nativePtr);
+    _finalizer.attach(target, target._nativePtr.cast(), detach: target);
   }
 
   /// Avoids creating a new native backing for the path for methods that will
   /// create it later, such as [Path.from], [shift] and [transform].
   _NativePath._();
 
-  @Native<Void Function(Handle)>(symbol: 'Path::Create')
-  external void _constructor();
+  /// Or take from existing pointer
+  _NativePath.fromPointer(Pointer<TennojiCanvasPath> ptr) {
+    _nativePtr = ptr;
+    _finalizer.attach(this, _nativePtr.cast(), detach: this);
+  }
 
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Path::clone')
-  external void _clone(Path outPath);
-
-  @override
-  PathFillType get fillType => PathFillType.values[_getFillType()];
-  @override
-  set fillType(PathFillType value) => _setFillType(value.index);
-
-  @Native<Int32 Function(Pointer<Void>)>(symbol: 'Path::getFillType', isLeaf: true)
-  external int _getFillType();
-
-  @Native<Void Function(Pointer<Void>, Int32)>(symbol: 'Path::setFillType', isLeaf: true)
-  external void _setFillType(int fillType);
+  late final Pointer<TennojiCanvasPath> _nativePtr;
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(symbol: 'Path::moveTo', isLeaf: true)
-  external void moveTo(double x, double y);
+  PathFillType get fillType => PathFillType.values[rina_path_get_fill_type(_nativePtr)];
+  @override
+  set fillType(PathFillType value) => rina_path_set_fill_type(_nativePtr, value.index);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(
-    symbol: 'Path::relativeMoveTo',
-    isLeaf: true,
-  )
-  external void relativeMoveTo(double dx, double dy);
+  void moveTo(double x, double y) => rina_path_move_to(_nativePtr, x, y);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(symbol: 'Path::lineTo', isLeaf: true)
-  external void lineTo(double x, double y);
+  void relativeMoveTo(double dx, double dy) => rina_path_relative_move_to(_nativePtr, dx, dy);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double)>(
-    symbol: 'Path::relativeLineTo',
-    isLeaf: true,
-  )
-  external void relativeLineTo(double dx, double dy);
+  void lineTo(double x, double y) => rina_path_line_to(_nativePtr, x ,y);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double)>(
-    symbol: 'Path::quadraticBezierTo',
-    isLeaf: true,
-  )
-  external void quadraticBezierTo(double x1, double y1, double x2, double y2);
+  void relativeLineTo(double dx, double dy) => rina_path_relative_line_to(_nativePtr, dx, dy);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double)>(
-    symbol: 'Path::relativeQuadraticBezierTo',
-    isLeaf: true,
-  )
-  external void relativeQuadraticBezierTo(double x1, double y1, double x2, double y2);
+  void quadraticBezierTo(double x1, double y1, double x2, double y2) 
+    => rina_path_quadratic_to(_nativePtr, x1,y1,x2,y2);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Double)>(
-    symbol: 'Path::cubicTo',
-    isLeaf: true,
-  )
-  external void cubicTo(double x1, double y1, double x2, double y2, double x3, double y3);
+  void relativeQuadraticBezierTo(double x1, double y1, double x2, double y2)
+    => rina_path_relative_quadratic_to(_nativePtr, x1,y1,x2,y2);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Double)>(
-    symbol: 'Path::relativeCubicTo',
-    isLeaf: true,
-  )
-  external void relativeCubicTo(double x1, double y1, double x2, double y2, double x3, double y3);
+  void cubicTo(double x1, double y1, double x2, double y2, double x3, double y3)
+    => rina_path_cubic_to(_nativePtr, x1,y1,x2,y2,x3,y3);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double)>(
-    symbol: 'Path::conicTo',
-    isLeaf: true,
-  )
-  external void conicTo(double x1, double y1, double x2, double y2, double w);
+  void relativeCubicTo(double x1, double y1, double x2, double y2, double x3, double y3)
+    => rina_path_relative_cubic_to(_nativePtr, x1,y1,x2,y2,x3,y3);
 
   @override
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double)>(
-    symbol: 'Path::relativeConicTo',
-    isLeaf: true,
-  )
-  external void relativeConicTo(double x1, double y1, double x2, double y2, double w);
+  void conicTo(double x1, double y1, double x2, double y2, double w)
+    => rina_path_conic_to(_nativePtr, x1,y1,x2,y2,w);
+
+  @override
+  void relativeConicTo(double x1, double y1, double x2, double y2, double w)
+    => rina_path_relative_conic_to(_nativePtr, x1,y1,x2,y2,w);
 
   @override
   void arcTo(Rect rect, double startAngle, double sweepAngle, bool forceMoveTo) {
     assert(_rectIsValid(rect));
-    _arcTo(rect.left, rect.top, rect.right, rect.bottom, startAngle, sweepAngle, forceMoveTo);
+    rina_path_arc_to_rect(
+      _nativePtr,
+      rect.left, rect.top, rect.right, rect.bottom, startAngle, sweepAngle, forceMoveTo
+    );
   }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Double, Bool)>(
-    symbol: 'Path::arcTo',
-    isLeaf: true,
-  )
-  external void _arcTo(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    double startAngle,
-    double sweepAngle,
-    bool forceMoveTo,
-  );
-
   @override
   void arcToPoint(
     Offset arcEnd, {
@@ -3207,22 +3216,12 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
   }) {
     assert(_offsetIsValid(arcEnd));
     assert(_radiusIsValid(radius));
-    _arcToPoint(arcEnd.dx, arcEnd.dy, radius.x, radius.y, rotation, largeArc, clockwise);
+    rina_path_arc_to_point(
+      _nativePtr,
+      arcEnd.dx, arcEnd.dy, radius.x, radius.y, rotation, largeArc, clockwise
+    );
   }
 
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Bool, Bool)>(
-    symbol: 'Path::arcToPoint',
-    isLeaf: true,
-  )
-  external void _arcToPoint(
-    double arcEndX,
-    double arcEndY,
-    double radiusX,
-    double radiusY,
-    double rotation,
-    bool largeArc,
-    bool clockwise,
-  );
 
   @override
   void relativeArcToPoint(
@@ -3234,7 +3233,8 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
   }) {
     assert(_offsetIsValid(arcEndDelta));
     assert(_radiusIsValid(radius));
-    _relativeArcToPoint(
+    rina_path_relative_arc_to_point(
+      _nativePtr,
       arcEndDelta.dx,
       arcEndDelta.dy,
       radius.x,
@@ -3245,184 +3245,111 @@ base class _NativePath extends NativeFieldWrapperClass1 implements Path {
     );
   }
 
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Bool, Bool)>(
-    symbol: 'Path::relativeArcToPoint',
-    isLeaf: true,
-  )
-  external void _relativeArcToPoint(
-    double arcEndX,
-    double arcEndY,
-    double radiusX,
-    double radiusY,
-    double rotation,
-    bool largeArc,
-    bool clockwise,
-  );
-
   @override
   void addRect(Rect rect) {
     assert(_rectIsValid(rect));
-    _addRect(rect.left, rect.top, rect.right, rect.bottom);
+    rina_path_add_rect(_nativePtr, rect.left, rect.top, rect.right, rect.bottom);
   }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double)>(
-    symbol: 'Path::addRect',
-    isLeaf: true,
-  )
-  external void _addRect(double left, double top, double right, double bottom);
-
   @override
   void addOval(Rect oval) {
     assert(_rectIsValid(oval));
-    _addOval(oval.left, oval.top, oval.right, oval.bottom);
+    rina_path_add_oval(_nativePtr, oval.left, oval.top, oval.right, oval.bottom);
   }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double)>(
-    symbol: 'Path::addOval',
-    isLeaf: true,
-  )
-  external void _addOval(double left, double top, double right, double bottom);
-
   @override
   void addArc(Rect oval, double startAngle, double sweepAngle) {
     assert(_rectIsValid(oval));
-    _addArc(oval.left, oval.top, oval.right, oval.bottom, startAngle, sweepAngle);
+    rina_path_add_arc(_nativePtr, oval.left, oval.top, oval.right, oval.bottom, startAngle, sweepAngle);
   }
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Double, Double, Double)>(
-    symbol: 'Path::addArc',
-    isLeaf: true,
-  )
-  external void _addArc(
-    double left,
-    double top,
-    double right,
-    double bottom,
-    double startAngle,
-    double sweepAngle,
-  );
-
   @override
   void addPolygon(List<Offset> points, bool close) {
-    _addPolygon(_encodePointList(points), close);
+    final encoded = _encodePointList(points);
+    rina_path_add_polygon(_nativePtr, encoded.$1, points.length, close);
+    malloc.free(encoded.$1);
   }
-
-  @Native<Void Function(Pointer<Void>, Handle, Bool)>(symbol: 'Path::addPolygon')
-  external void _addPolygon(Float32List points, bool close);
-
   @override
   void addRRect(RRect rrect) {
     assert(_rrectIsValid(rrect));
-    _addRRect(rrect._getValue32());
+    rina_path_add_rrect(_nativePtr, rrect._getValue32().address);
   }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'Path::addRRect')
-  external void _addRRect(Float32List rrect);
-
   @override
   void addRSuperellipse(RSuperellipse rsuperellipse) {
     assert(_rsuperellipseIsValid(rsuperellipse));
-    _addRSuperellipse(rsuperellipse._native());
+    final data = Float32List(12);
+    // pack the superellipse like a rrect
+    data[0] = rsuperellipse.left;
+    data[1] = rsuperellipse.top;
+    data[2] = rsuperellipse.right;
+    data[3] = rsuperellipse.bottom;
+    data[4] = rsuperellipse.tlRadiusX;
+    data[5] = rsuperellipse.tlRadiusY;
+    data[6] = rsuperellipse.trRadiusX;
+    data[7] = rsuperellipse.trRadiusY;
+    data[8] = rsuperellipse.brRadiusX;
+    data[9] = rsuperellipse.brRadiusY;
+    data[10] = rsuperellipse.blRadiusX;
+    data[11] = rsuperellipse.blRadiusY;
+
+    rina_path_add_rsuperellipse(_nativePtr, data.address);
   }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>)>(symbol: 'Path::addRSuperellipse')
-  external void _addRSuperellipse(_NativeRSuperellipse rsuperellipse);
-
   @override
-  void addPath(Path path, Offset offset, {Float64List? matrix4}) {
+  void addPath(Path path, Offset offset, {Float32List? matrix4}) {
     assert(_offsetIsValid(offset));
     if (matrix4 != null) {
       assert(_matrix4IsValid(matrix4));
-      _addPathWithMatrix(path as _NativePath, offset.dx, offset.dy, matrix4);
+      rina_path_add_path_with_matrix(_nativePtr, (path as _NativePath)._nativePtr, false, offset.dx, offset.dy, matrix4.address);
     } else {
-      _addPath(path as _NativePath, offset.dx, offset.dy);
+      rina_path_add_path(_nativePtr, (path as _NativePath)._nativePtr, false, offset.dx, offset.dy);
     }
   }
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Double, Double)>(symbol: 'Path::addPath')
-  external void _addPath(_NativePath path, double dx, double dy);
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Double, Double, Handle)>(
-    symbol: 'Path::addPathWithMatrix',
-  )
-  external void _addPathWithMatrix(_NativePath path, double dx, double dy, Float64List matrix);
-
   @override
-  void extendWithPath(Path path, Offset offset, {Float64List? matrix4}) {
+  void extendWithPath(Path path, Offset offset, {Float32List? matrix4}) {
     assert(_offsetIsValid(offset));
     if (matrix4 != null) {
       assert(_matrix4IsValid(matrix4));
-      _extendWithPathAndMatrix(path as _NativePath, offset.dx, offset.dy, matrix4);
+      rina_path_add_path_with_matrix(_nativePtr, (path as _NativePath)._nativePtr, true, offset.dx, offset.dy, matrix4.address);
     } else {
-      _extendWithPath(path as _NativePath, offset.dx, offset.dy);
+      rina_path_add_path(_nativePtr, (path as _NativePath)._nativePtr, true, offset.dx, offset.dy);
     }
   }
 
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Double, Double)>(
-    symbol: 'Path::extendWithPath',
-  )
-  external void _extendWithPath(_NativePath path, double dx, double dy);
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Double, Double, Handle)>(
-    symbol: 'Path::extendWithPathAndMatrix',
-  )
-  external void _extendWithPathAndMatrix(
-    _NativePath path,
-    double dx,
-    double dy,
-    Float64List matrix,
-  );
+  @override
+  void close() => rina_path_close(_nativePtr);
 
   @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Path::close', isLeaf: true)
-  external void close();
-
-  @override
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Path::reset', isLeaf: true)
-  external void reset();
+  void reset() => rina_path_reset(_nativePtr);
 
   @override
   bool contains(Offset point) {
     assert(_offsetIsValid(point));
-    return _contains(point.dx, point.dy);
+    return rina_path_contains(_nativePtr, point.dx, point.dy);
   }
-
-  @Native<Bool Function(Pointer<Void>, Double, Double)>(symbol: 'Path::contains', isLeaf: true)
-  external bool _contains(double x, double y);
 
   @override
   Path shift(Offset offset) {
     assert(_offsetIsValid(offset));
     final path = _NativePath._();
-    _shift(path, offset.dx, offset.dy);
+    _clone(path);
+    rina_path_shift(path._nativePtr, offset.dx, offset.dy);
     return path;
   }
-
-  @Native<Void Function(Pointer<Void>, Handle, Double, Double)>(symbol: 'Path::shift')
-  external void _shift(Path outPath, double dx, double dy);
-
   @override
-  Path transform(Float64List matrix4) {
+  Path transform(Float32List matrix4) {
     assert(_matrix4IsValid(matrix4));
     final path = _NativePath._();
-    _transform(path, matrix4);
+    _clone(path);
+    rina_path_transform(path._nativePtr, matrix4.address);
     return path;
   }
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle)>(symbol: 'Path::transform')
-  external void _transform(Path outPath, Float64List matrix4);
-
   @override
   Rect getBounds() {
-    final Float32List rect = _getBounds();
-    return Rect.fromLTRB(rect[0], rect[1], rect[2], rect[3]);
+    final Pointer<Float> rect = rina_path_get_bounds(_nativePtr);
+    final ret = Rect.fromLTRB(rect[0], rect[1], rect[2], rect[3]);
+    calloc.free(rect);
+    return ret;
   }
 
-  @Native<Handle Function(Pointer<Void>)>(symbol: 'Path::getBounds')
-  external Float32List _getBounds();
-
-  @Native<Bool Function(Pointer<Void>, Pointer<Void>, Pointer<Void>, Int32)>(symbol: 'Path::op')
-  external bool _op(_NativePath path1, _NativePath path2, int operation);
+  bool _op(_NativePath path1, _NativePath path2, int operation) 
+    => rina_path_combine_op(_nativePtr, path1._nativePtr, path2._nativePtr, operation);
 
   @override
   PathMetrics computeMetrics({bool forceClosed = false}) {
@@ -3613,89 +3540,66 @@ class PathMetric {
       'PathMetric(length: $length, isClosed: $isClosed, contourIndex: $contourIndex)';
 }
 
-base class _PathMeasure extends NativeFieldWrapperClass1 {
+base class _PathMeasure implements Finalizable {
+  static final NativeFinalizer _finalizer = NativeFinalizer(
+    Native.addressOf<
+      NativeFunction<Void Function(Pointer<TennojiCanvasPathMeasure>)>
+    >(rina_path_measure_destroy).cast<NativeFinalizerFunction>()
+  ); 
   _PathMeasure(_NativePath path, bool forceClosed) {
-    _constructor(path, forceClosed);
+    _nativePtr = rina_path_measure_create(path._nativePtr, forceClosed);
+    _finalizer.attach(this, _nativePtr.cast(), detach: this);
   }
 
-  @Native<Void Function(Handle, Pointer<Void>, Bool)>(symbol: 'PathMeasure::Create')
-  external void _constructor(_NativePath path, bool forceClosed);
+  late final Pointer<TennojiCanvasPathMeasure> _nativePtr;
 
   double length(int contourIndex) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    return _length(contourIndex);
+    return rina_path_measure_length(_nativePtr, contourIndex);
   }
 
-  @Native<Double Function(Pointer<Void>, Int32)>(symbol: 'PathMeasure::getLength', isLeaf: true)
-  external double _length(int contourIndex);
 
   Tangent? getTangentForOffset(int contourIndex, double distance) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    final Float32List posTan = _getPosTan(contourIndex, distance);
-    // first entry == 0 indicates that Skia returned false
-    if (posTan[0] == 0.0) {
+    final Pointer<Float> posTan = rina_path_measure_tangent_for_offset(_nativePtr, contourIndex, distance);
+    if (posTan == nullptr) {
       return null;
     } else {
       return Tangent(Offset(posTan[1], posTan[2]), Offset(posTan[3], posTan[4]));
     }
   }
-
-  @Native<Handle Function(Pointer<Void>, Int32, Double)>(symbol: 'PathMeasure::getPosTan')
-  external Float32List _getPosTan(int contourIndex, double distance);
-
   Path extractPath(int contourIndex, double start, double end, {bool startWithMoveTo = true}) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    final path = _NativePath._();
-    _extractPath(path, contourIndex, start, end, startWithMoveTo);
+    final path = _NativePath.fromPointer(rina_path_measure_extract(_nativePtr, contourIndex, start, end, startWithMoveTo));
     return path;
   }
-
-  @Native<Void Function(Pointer<Void>, Handle, Int32, Double, Double, Bool)>(
-    symbol: 'PathMeasure::getSegment',
-  )
-  external void _extractPath(
-    Path outPath,
-    int contourIndex,
-    double start,
-    double end,
-    bool startWithMoveTo,
-  );
-
   bool isClosed(int contourIndex) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    return _isClosed(contourIndex);
+    return rina_path_measure_closed(_nativePtr, contourIndex);
   }
-
-  @Native<Bool Function(Pointer<Void>, Int32)>(symbol: 'PathMeasure::isClosed', isLeaf: true)
-  external bool _isClosed(int contourIndex);
-
   // Move to the next contour in the path.
   //
   // A path can have a next contour if [Path.moveTo] was called after drawing began.
   // Return true if one exists, or false.
   bool _nextContour() {
-    final bool next = _nativeNextContour();
+    final bool next = rina_path_measure_next_contour(_nativePtr);
     if (next) {
       currentContourIndex++;
     }
     return next;
   }
-
-  @Native<Bool Function(Pointer<Void>)>(symbol: 'PathMeasure::nextContour', isLeaf: true)
-  external bool _nativeNextContour();
-
   /// The index of the current contour in the list of contours in the path.
   ///
   /// [nextContour] will increment this to the zero based index.
@@ -4081,7 +3985,6 @@ class ColorFilter implements ImageFilter {
   // DlColorImageFilter
   @override
   _ImageFilter _toNativeImageFilter() => _ImageFilter.fromColorFilter(this);
-
   _ColorFilter? _toNativeColorFilter() {
     switch (_type) {
       case _kTypeMode:
@@ -4162,48 +4065,45 @@ class ColorFilter implements ImageFilter {
 /// ColorFilter, because we want ColorFilter to be const constructible and
 /// efficiently comparable, so that widgets can check for ColorFilter equality to
 /// avoid repainting.
-base class _ColorFilter extends NativeFieldWrapperClass1 {
+base class _ColorFilter implements Finalizable {
+  late final Pointer<TennojiColorFilter> _nativePtr;
+  static final NativeFinalizer _finalizer = NativeFinalizer(
+    Native.addressOf<
+      NativeFunction<Void Function(Pointer<TennojiColorFilter>)>
+    >(rina_color_filter_destroy).cast<NativeFinalizerFunction>()
+  );
+  void _postSetup() {
+    if (_nativePtr == nullptr) {
+      throw StateError('Failed to create native ColorFilter for $creator.');
+    }
+    _finalizer.attach(this, _nativePtr.cast(), detach: this);
+  }
   _ColorFilter.mode(this.creator) : assert(creator._type == ColorFilter._kTypeMode) {
-    _constructor();
-    _initMode(creator._color!.value, creator._blendMode!.index);
+    _nativePtr = rina_color_filter_create_mode(creator._color!.value, creator._blendMode!.index);
+    _postSetup();
   }
 
   _ColorFilter.matrix(this.creator) : assert(creator._type == ColorFilter._kTypeMatrix) {
-    _constructor();
-    _initMatrix(Float32List.fromList(creator._matrix!));
+    _nativePtr = rina_color_filter_create_matrix(Float32List.fromList(creator._matrix!).address);
+    _postSetup();
   }
   _ColorFilter.linearToSrgbGamma(this.creator)
     : assert(creator._type == ColorFilter._kTypeLinearToSrgbGamma) {
-    _constructor();
-    _initLinearToSrgbGamma();
+    _nativePtr = rina_color_filter_create_linear2srgb_gamma();
+    _postSetup();
   }
 
   _ColorFilter.srgbToLinearGamma(this.creator)
     : assert(creator._type == ColorFilter._kTypeSrgbToLinearGamma) {
-    _constructor();
-    _initSrgbToLinearGamma();
+    _nativePtr = rina_color_filter_create_srgb2linear_gamma();
+    _postSetup();
   }
+
 
   /// The original Dart object that created the native wrapper, which retains
   /// the values used for the filter.
   final ColorFilter creator;
-
-  @Native<Void Function(Handle)>(symbol: 'ColorFilter::Create')
-  external void _constructor();
-
-  @Native<Void Function(Pointer<Void>, Int32, Int32)>(symbol: 'ColorFilter::initMode', isLeaf: true)
-  external void _initMode(int color, int blendMode);
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'ColorFilter::initMatrix')
-  external void _initMatrix(Float32List matrix);
-
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ColorFilter::initLinearToSrgbGamma', isLeaf: true)
-  external void _initLinearToSrgbGamma();
-
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ColorFilter::initSrgbToLinearGamma', isLeaf: true)
-  external void _initSrgbToLinearGamma();
 }
-
 /// A filter operation to apply to a raster image.
 ///
 /// See also:
@@ -4273,13 +4173,13 @@ abstract class ImageFilter {
   /// For example, applying a positive scale matrix (see [Matrix4.diagonal3])
   /// when used with [BackdropFilter] would magnify the background image.
   factory ImageFilter.matrix(
-    Float64List matrix4, {
+    Float32List matrix4, {
     FilterQuality filterQuality = FilterQuality.medium,
   }) {
     if (matrix4.length != 16) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
-    return _MatrixImageFilter(data: Float64List.fromList(matrix4), filterQuality: filterQuality);
+    return _MatrixImageFilter(data: Float32List.fromList(matrix4), filterQuality: filterQuality);
   }
 
   /// Composes the `inner` filter with `outer`, to combine their effects.
@@ -4342,6 +4242,9 @@ abstract class ImageFilter {
   /// }
   ///
   /// ```
+  ///
+  /// Obviously because we're using Skia as the backend, no Shader as image filter for ya
+  /*
   factory ImageFilter.shader(FragmentShader shader) {
     if (!_impellerEnabled) {
       throw UnsupportedError('ImageFilter.shader only supported with Impeller rendering engine.');
@@ -4370,6 +4273,7 @@ abstract class ImageFilter {
   /// > This property will only return true when the Impeller rendering engine is enabled.
   /// > Attempting to create an [ImageFilter.shader] when this property is `false` will throw an [UnsupportedError].
   static bool get isShaderFilterSupported => _impellerEnabled;
+  */
 
   // Converts this to a native DlImageFilter. See the comments of this method in
   // subclasses for the exact type of DlImageFilter this method converts to.
@@ -4383,7 +4287,7 @@ abstract class ImageFilter {
 class _MatrixImageFilter implements ImageFilter {
   _MatrixImageFilter({required this.data, required this.filterQuality});
 
-  final Float64List data;
+  final Float32List data;
   final FilterQuality filterQuality;
 
   // MakeMatrixFilterRowMajor255
@@ -4555,7 +4459,7 @@ class _ComposeImageFilter implements ImageFilter {
   @override
   int get hashCode => Object.hash(innerFilter, outerFilter);
 }
-
+/*
 class _FragmentShaderImageFilter implements ImageFilter {
   _FragmentShaderImageFilter(this.shader);
 
@@ -4588,18 +4492,28 @@ class _FragmentShaderImageFilter implements ImageFilter {
   @override
   int get hashCode => shader.hashCode;
 }
-
+*/
 /// An [ImageFilter] that is backed by a native DlImageFilter.
 ///
 /// This is a private class, rather than being the implementation of the public
 /// ImageFilter, because we want ImageFilter to be efficiently comparable, so that
 /// widgets can check for ImageFilter equality to avoid repainting.
-base class _ImageFilter extends NativeFieldWrapperClass1 {
+base class _ImageFilter implements Finalizable {
+  late final Pointer<TennojiImageFilter> _nativePtr;
+  static final NativeFinalizer _finalizer = NativeFinalizer(
+    Native.addressOf<NativeFunction<Void Function(Pointer<TennojiImageFilter>)>>(rina_image_filter_destroy)
+    .cast<NativeFinalizerFunction>()
+  );
+  void _postSetup() {
+    if (_nativePtr == nullptr) {
+      throw StateError('Failed to create native image filter.');
+    }
+    _finalizer.attach(this, _nativePtr.cast<Void>(), detach: this);
+  }
   /// Creates an image filter that applies a Gaussian blur.
   _ImageFilter.blur(_GaussianBlurImageFilter filter) : creator = filter {
-    _constructor();
     final Rect bounds = filter.bounds ?? Rect.zero;
-    _initBlur(
+    _nativePtr = rina_image_filter_create_blur(
       filter.sigmaX,
       filter.sigmaY,
       filter.tileMode?.index ?? -1,
@@ -4609,20 +4523,21 @@ base class _ImageFilter extends NativeFieldWrapperClass1 {
       bounds.right,
       bounds.bottom,
     );
+    _postSetup();
   }
 
   /// Creates an image filter that dilates each input pixel's channel values
   /// to the max value within the given radii along the x and y axes.
   _ImageFilter.dilate(_DilateImageFilter filter) : creator = filter {
-    _constructor();
-    _initDilate(filter.radiusX, filter.radiusY);
+    _nativePtr = rina_image_filter_create_dilate(filter.radiusX, filter.radiusY);
+    _postSetup();
   }
 
   /// Create a filter that erodes each input pixel's channel values
   /// to the minimum channel value within the given radii along the x and y axes.
   _ImageFilter.erode(_ErodeImageFilter filter) : creator = filter {
-    _constructor();
-    _initErode(filter.radiusX, filter.radiusY);
+    _nativePtr = rina_image_filter_create_erode(filter.radiusX, filter.radiusY);
+    _postSetup();
   }
 
   /// Creates an image filter that applies a matrix transformation.
@@ -4633,72 +4548,28 @@ base class _ImageFilter extends NativeFieldWrapperClass1 {
     if (filter.data.length != 16) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
-    _constructor();
-    _initMatrix(filter.data, filter.filterQuality.index);
+    _nativePtr = rina_image_filter_create_matrix(filter.data.address, filter.filterQuality.index);
+    _postSetup();
   }
 
   /// Converts a color filter to an image filter.
   _ImageFilter.fromColorFilter(ColorFilter filter) : creator = filter {
-    _constructor();
-    final _ColorFilter? nativeFilter = filter._toNativeColorFilter();
-    _initColorFilter(nativeFilter);
+    final nativeFilter = filter._toNativeColorFilter();
+    _nativePtr = rina_image_filter_create_from_cf(nativeFilter?._nativePtr ?? nullptr);
   }
 
   /// Composes `_innerFilter` with `_outerFilter`.
   _ImageFilter.composed(_ComposeImageFilter filter) : creator = filter {
-    _constructor();
     final _ImageFilter nativeFilterInner = filter.innerFilter._toNativeImageFilter();
     final _ImageFilter nativeFilterOuter = filter.outerFilter._toNativeImageFilter();
-    _initComposed(nativeFilterOuter, nativeFilterInner);
+    _nativePtr = rina_image_filter_create_composed(nativeFilterOuter._nativePtr, nativeFilterInner._nativePtr);
   }
-
+/*
   _ImageFilter.shader(_FragmentShaderImageFilter filter) : creator = filter {
     _constructor();
     _initShader(filter.shader);
   }
-
-  @Native<Void Function(Handle)>(symbol: 'ImageFilter::Create')
-  external void _constructor();
-
-  @Native<
-    Void Function(Pointer<Void>, Double, Double, Int32, Bool, Double, Double, Double, Double)
-  >(symbol: 'ImageFilter::initBlur', isLeaf: true)
-  external void _initBlur(
-    double sigmaX,
-    double sigmaY,
-    int tileMode,
-    bool bounded,
-    double boundsLeft,
-    double boundsTop,
-    double boundsRight,
-    double boundsBottom,
-  );
-
-  @Native<Void Function(Pointer<Void>, Double, Double)>(
-    symbol: 'ImageFilter::initDilate',
-    isLeaf: true,
-  )
-  external void _initDilate(double radiusX, double radiusY);
-
-  @Native<Void Function(Pointer<Void>, Double, Double)>(
-    symbol: 'ImageFilter::initErode',
-    isLeaf: true,
-  )
-  external void _initErode(double radiusX, double radiusY);
-
-  @Native<Void Function(Pointer<Void>, Handle, Int32)>(symbol: 'ImageFilter::initMatrix')
-  external void _initMatrix(Float64List matrix4, int filterQuality);
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>)>(symbol: 'ImageFilter::initColorFilter')
-  external void _initColorFilter(_ColorFilter? colorFilter);
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>, Pointer<Void>)>(
-    symbol: 'ImageFilter::initComposeFilter',
-  )
-  external void _initComposed(_ImageFilter outerFilter, _ImageFilter innerFilter);
-
-  @Native<Void Function(Pointer<Void>, Pointer<Void>)>(symbol: 'ImageFilter::initShader')
-  external void _initShader(FragmentShader shader);
+*/
 
   /// The original Dart object that created the native wrapper, which retains
   /// the values used for the filter.
@@ -4711,8 +4582,9 @@ base class Shader {
   /// This class is created by the engine, and should not be instantiated
   /// or extended directly.
   @pragma('vm:entry-point')
-  Shader._(this._nativePtr);
+  Shader._() : _nativePtr = nullptr;
 
+  @pragma('vm:entry-point')
   Pointer<TennojiShader> _nativePtr;
 
   bool _debugDisposed = false;
@@ -4744,6 +4616,9 @@ base class Shader {
       _debugDisposed = true;
       return true;
     }());
+    /// Consumer of this pointer should rina_shader_copy before disposing. 
+    // It's lightwieght since the actual SkShader is not copied, only its pointer is.
+    //rina_shader_destroy(_nativePtr);
   }
 }
 
@@ -4786,7 +4661,7 @@ base class Shader {
 ///  * [dart:ui.ImageFilter.blur], an ImageFilter that may sometimes need to
 ///    read samples from outside an image to combine with the pixels near the
 ///    edge of the image.
-// These enum values must be kept in sync with DlTileMode.
+// These enum values must be kept in sync with SkTileMode.
 enum TileMode {
   /// Samples beyond the edge are clamped to the nearest color in the defined inner area.
   ///
@@ -4859,9 +4734,9 @@ enum TileMode {
   decal,
 }
 
-Float32List _encodeWideColorList(List<Color> colors) {
+Pointer<Float>  _encodeWideColorList(List<Color> colors) {
   final int colorCount = colors.length;
-  final result = Float32List(colorCount * 4);
+  final result = malloc<Float>(colorCount * 4);
   for (var i = 0; i < colorCount; i++) {
     final Color colorXr = colors[i].withValues(colorSpace: ColorSpace.extendedSRGB);
     result[i * 4 + 0] = colorXr.a;
@@ -4895,17 +4770,20 @@ Float32List _encodeWideColorList(List<Color> colors) {
   return (result, pointCount*2);
 }
 
-Float32List _encodeTwoPoints(Offset pointA, Offset pointB) {
-  assert(_offsetIsValid(pointA));
-  assert(_offsetIsValid(pointB));
-  final result = Float32List(4);
-  result[0] = pointA.dx;
-  result[1] = pointA.dy;
-  result[2] = pointB.dx;
-  result[3] = pointB.dy;
+
+Pointer<Float> _createArrayFromList(List<double>? l) {
+  if (l==null) return nullptr;
+  final Pointer<Float> result = malloc<Float>(l.length);
+  result.asTypedList(l.length).setAll(0, l);
   return result;
 }
-
+/// PLEASE just let me pin the addresses
+Pointer<Float> _createArrayFromTypedList(Float32List? l) {
+  if (l==null) return nullptr;
+  final Pointer<Float> result = malloc<Float>(l.length);
+  result.asTypedList(l.length).setAll(0, l);
+  return result;
+}
 /// A shader (as used by [Paint.shader]) that renders a color gradient.
 ///
 /// There are several types of gradients, represented by the various constructors
@@ -4948,20 +4826,24 @@ base class Gradient extends Shader {
     List<Color> colors, [
     List<double>? colorStops,
     TileMode tileMode = TileMode.clamp,
-    Float64List? matrix4,
+    Float32List? matrix4,
   ]) : assert(_offsetIsValid(from)),
        assert(_offsetIsValid(to)),
        assert(matrix4 == null || _matrix4IsValid(matrix4)),
        super._() {
     _validateColorStops(colors, colorStops);
-    final Float32List endPointsBuffer = _encodeTwoPoints(from, to);
-    final Float32List colorsBuffer = _encodeWideColorList(colors);
-    final Float32List? colorStopsBuffer = colorStops == null
-        ? null
-        : Float32List.fromList(colorStops);
-    _constructor();
-    _initLinear(endPointsBuffer, colorsBuffer, colorStopsBuffer, tileMode.index, matrix4);
+    final colorsBuffer = _encodeWideColorList(colors);
+    final Pointer<Float> colorStopsBuffer = _createArrayFromList(colorStops);
+    final matrix = _createArrayFromTypedList(matrix4);
+    _nativePtr = rina_gradient_create_linear(
+      from.dx, from.dy, to.dx, to.dy, 
+      colorsBuffer, colorStopsBuffer, colors.length,
+      tileMode.index, 
+      matrix
+    );
+    malloc.free(matrix);
   }
+
 
   /// Creates a radial gradient centered at `center` that ends at `radius`
   /// distance from the center.
@@ -5003,37 +4885,34 @@ base class Gradient extends Shader {
     List<Color> colors, [
     List<double>? colorStops,
     TileMode tileMode = TileMode.clamp,
-    Float64List? matrix4,
+    Float32List? matrix4,
     Offset? focal,
     double focalRadius = 0.0,
   ]) : assert(_offsetIsValid(center)),
        assert(matrix4 == null || _matrix4IsValid(matrix4)),
        super._() {
     _validateColorStops(colors, colorStops);
-    final Float32List? colorStopsBuffer = colorStops == null
-        ? null
-        : Float32List.fromList(colorStops);
-    final Float32List colorsBuffer = _encodeWideColorList(colors);
-
+    final colorStopsBuffer = _createArrayFromList(colorStops);
+    final colorsBuffer = _encodeWideColorList(colors);
+    final matrix = _createArrayFromTypedList(matrix4);
     // If focal is null or focal radius is null, this should be treated as a regular radial gradient
     // If focal == center and the focal radius is 0.0, it's still a regular radial gradient
     if (focal == null || (focal == center && focalRadius == 0.0)) {
-      _constructor();
-      _initRadial(
+      _nativePtr = rina_gradient_create_radial(
         center.dx,
         center.dy,
         radius,
         colorsBuffer,
         colorStopsBuffer,
+        colors.length,
         tileMode.index,
-        matrix4,
+        matrix,
       );
     } else {
       assert(
         center != Offset.zero || focal != Offset.zero,
       ); // will result in exception(s) in Skia side
-      _constructor();
-      _initConical(
+      _nativePtr = rina_gradient_create_conical(
         focal.dx,
         focal.dy,
         focalRadius,
@@ -5042,10 +4921,12 @@ base class Gradient extends Shader {
         radius,
         colorsBuffer,
         colorStopsBuffer,
+        colors.length,
         tileMode.index,
-        matrix4,
+        matrix,
       );
     }
+    malloc.free(matrix);
   }
 
   /// Creates a sweep gradient centered at `center` that starts at `startAngle`
@@ -5108,97 +4989,27 @@ base class Gradient extends Shader {
     TileMode tileMode = TileMode.clamp,
     double startAngle = 0.0,
     double endAngle = math.pi * 2,
-    Float64List? matrix4,
+    Float32List? matrix4,
   ]) : assert(_offsetIsValid(center)),
        assert(startAngle < endAngle),
        assert(matrix4 == null || _matrix4IsValid(matrix4)),
        super._() {
     _validateColorStops(colors, colorStops);
-    final Float32List colorsBuffer = _encodeWideColorList(colors);
-    final Float32List? colorStopsBuffer = colorStops == null
-        ? null
-        : Float32List.fromList(colorStops);
-    _constructor();
-    _initSweep(
+    final colorsBuffer = _encodeWideColorList(colors);
+    final colorStopsBuffer = _createArrayFromList(colorStops);
+    final matrix = _createArrayFromTypedList(matrix4);
+    _nativePtr = rina_gradient_create_sweep(
       center.dx,
       center.dy,
-      colorsBuffer,
-      colorStopsBuffer,
-      tileMode.index,
       startAngle,
       endAngle,
-      matrix4,
+      colorsBuffer,
+      colorStopsBuffer,
+      colors.length,
+      tileMode.index,
+      matrix,
     );
   }
-
-  @Native<Void Function(Handle)>(symbol: 'Gradient::Create')
-  external void _constructor();
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle, Handle, Int32, Handle)>(
-    symbol: 'Gradient::initLinear',
-  )
-  external void _initLinear(
-    Float32List endPoints,
-    Float32List colors,
-    Float32List? colorStops,
-    int tileMode,
-    Float64List? matrix4,
-  );
-
-  @Native<Void Function(Pointer<Void>, Double, Double, Double, Handle, Handle, Int32, Handle)>(
-    symbol: 'Gradient::initRadial',
-  )
-  external void _initRadial(
-    double centerX,
-    double centerY,
-    double radius,
-    Float32List colors,
-    Float32List? colorStops,
-    int tileMode,
-    Float64List? matrix4,
-  );
-
-  @Native<
-    Void Function(
-      Pointer<Void>,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Double,
-      Handle,
-      Handle,
-      Int32,
-      Handle,
-    )
-  >(symbol: 'Gradient::initTwoPointConical')
-  external void _initConical(
-    double startX,
-    double startY,
-    double startRadius,
-    double endX,
-    double endY,
-    double endRadius,
-    Float32List colors,
-    Float32List? colorStops,
-    int tileMode,
-    Float64List? matrix4,
-  );
-
-  @Native<
-    Void Function(Pointer<Void>, Double, Double, Handle, Handle, Int32, Double, Double, Handle)
-  >(symbol: 'Gradient::initSweep')
-  external void _initSweep(
-    double centerX,
-    double centerY,
-    Float32List colors,
-    Float32List? colorStops,
-    int tileMode,
-    double startAngle,
-    double endAngle,
-    Float64List? matrix,
-  );
 
   static void _validateColorStops(List<Color> colors, List<double>? colorStops) {
     if (colorStops == null) {
@@ -5239,50 +5050,21 @@ base class ImageShader extends Shader {
     Image image,
     TileMode tmx,
     TileMode tmy,
-    Float64List matrix4, {
+    Float32List matrix4, {
     FilterQuality? filterQuality,
   }) : assert(!image.debugDisposed),
        super._() {
-    if (matrix4.length != 16) {
+    if (_matrix4IsValid(matrix4)) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
-    _constructor();
-    final String? error = _initWithImage(
-      image._image,
+    _nativePtr = rina_image_shader_create(
+      image._image._nativePtr,
       tmx.index,
       tmy.index,
       filterQuality?.index ?? -1,
-      matrix4,
+      _createArrayFromTypedList(matrix4),
     );
-    if (error != null) {
-      throw Exception(error);
-    }
   }
-
-  @override
-  void dispose() {
-    super.dispose();
-    _dispose();
-  }
-
-  @Native<Void Function(Handle)>(symbol: 'ImageShader::Create')
-  external void _constructor();
-
-  @Native<Handle Function(Pointer<Void>, Pointer<Void>, Int32, Int32, Int32, Handle)>(
-    symbol: 'ImageShader::initWithImage',
-  )
-  external String? _initWithImage(
-    _Image image,
-    int tmx,
-    int tmy,
-    int filterQualityIndex,
-    Float64List matrix4,
-  );
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ImageShader::dispose')
-  external void _dispose();
 }
 
 typedef _UniformFloatInfo = ({int index, int size});
@@ -5292,46 +5074,39 @@ typedef _UniformFloatInfo = ({int index, int size});
 ///
 /// For more information, see the website
 /// [documentation]( https://docs.flutter.dev/development/ui/advanced/shaders).
-base class FragmentProgram extends NativeFieldWrapperClass1 {
+base class FragmentProgram {
   @pragma('vm:entry-point')
-  FragmentProgram._fromAsset(String assetKey) {
-    _constructor();
-    final String result = _initFromAsset(assetKey);
-    if (result.isNotEmpty) {
-      throw Exception(result);
+  FragmentProgram._fromFile(String filePath) {
+    final ret = rina_fragment_create(filePath.asNativePointer().cast<Char>());
+    _nativePtr = ret.result;
+    if (_nativePtr == nullptr) {
+      throw Exception(ret.errorDetails.toString());
     }
     assert(() {
-      _debugName = assetKey;
+      _debugName = filePath;
       return true;
     }());
   }
 
+  late final Pointer<TennojiFragmentProgram> _nativePtr;
+
   String? _debugName;
   final List<WeakReference<FragmentShader>> _shaders = <WeakReference<FragmentShader>>[];
-
-  /// Creates a fragment program from the asset with key [assetKey].
+  /// Creates a fragment program from the asset with key [filePath].
   ///
   /// The asset must be a file produced as the output of the `impellerc`
   /// compiler. The constructed object should then be reused via the
   /// [fragmentShader] method to create [Shader] objects that can be used by
   /// [Paint.shader].
-  static Future<FragmentProgram> fromAsset(String assetKey) {
-    // The flutter tool converts all asset keys with spaces into URI
-    // encoded paths (replacing ' ' with '%20', for example). We perform
-    // the same encoding here so that users can load assets with the same
-    // key they have written in the pubspec.
-    final String encodedKey = Uri(path: Uri.encodeFull(assetKey)).path;
-    final FragmentProgram? program = _shaderRegistry[encodedKey];
-    if (program != null) {
-      return Future<FragmentProgram>.value(program);
-    }
-    return Future<FragmentProgram>.microtask(() {
-      final program = FragmentProgram._fromAsset(encodedKey);
+  static FragmentProgram fromFile(String filePath) {
+    final String encodedKey = filePath;
+    FragmentProgram? program = _shaderRegistry[encodedKey];
+    if (program == null) {
+      program = FragmentProgram._fromFile(encodedKey);
       _shaderRegistry[encodedKey] = program;
-      return program;
-    });
+    }
+    return program;
   }
-
   // This is a cache of shaders that have been loaded by
   // FragmentProgram.fromAsset. It holds a strong reference to theFragmentPrograms
   // The native engine will retain the resources associated with this shader
@@ -5339,68 +5114,6 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
   // here ensures we do not perform extra work if the dart object is continually
   // re-initialized.
   static final Map<String, FragmentProgram> _shaderRegistry = <String, FragmentProgram>{};
-
-  // This is called on hot reload when a shader has changed.
-  static void _reinitializeShader(String assetKey) {
-    // If a shader for the asset isn't already registered, then there's no
-    // need to reinitialize it. The new shader will be loaded and initialized
-    // the next time the program access it.
-    final FragmentProgram? program = _shaderRegistry[assetKey];
-    if (program == null) {
-      return;
-    }
-
-    final String result = program._initFromAsset(assetKey);
-    if (result.isNotEmpty) {
-      throw result; // ignore: only_throw_errors
-    }
-
-    // Update all the named tennoji_
-    program._shaders.removeWhere((WeakReference<FragmentShader> shaderReference) {
-      final FragmentShader? shader = shaderReference.target;
-      if (shader == null) {
-        return true;
-      }
-
-      shader._reinitialize();
-      shader._slots.removeWhere((WeakReference<UniformFloatSlot> slotReference) {
-        final UniformFloatSlot? slot = slotReference.target;
-        if (slot == null) {
-          return true;
-        }
-
-        if (!program._hasUniform(slot.name)) {
-          return true;
-        }
-
-        final _UniformFloatInfo info = program._getUniformFloatInfo(slot.name);
-        slot._shaderIndex = info.index + slot.index;
-
-        return false;
-      });
-
-      shader._samplers.removeWhere((WeakReference<ImageSamplerSlot> ref) {
-        final ImageSamplerSlot? slot = ref.target;
-        if (slot == null) {
-          return true;
-        }
-
-        slot._shaderIndex = program._getImageSamplerIndex(slot.name);
-        return false;
-      });
-
-      return false;
-    });
-  }
-
-  bool _hasUniform(String name) {
-    return _uniformInfo.any((dynamic entryDynamic) {
-      final entry = entryDynamic! as Map<String, Object>;
-      return entry['name'] == name ||
-          (entry['type'] == 'Struct' &&
-              (entry['struct_field_names']! as List<dynamic>).contains(name));
-    });
-  }
 
   int _getImageSamplerIndex(String name) {
     var index = 0;
@@ -5474,12 +5187,6 @@ base class FragmentProgram extends NativeFieldWrapperClass1 {
 
   @pragma('vm:entry-point')
   late List<dynamic> _uniformInfo;
-
-  @Native<Void Function(Handle)>(symbol: 'FragmentProgram::Create')
-  external void _constructor();
-
-  @Native<Handle Function(Pointer<Void>, Handle)>(symbol: 'FragmentProgram::initFromAsset')
-  external String _initFromAsset(String assetKey);
 
   /// Returns a fresh instance of [FragmentShader].
   FragmentShader fragmentShader() {
@@ -5679,8 +5386,14 @@ base class ImageSamplerSlot {
 /// different calls to [FragmentProgram.fragmentShader].
 base class FragmentShader extends Shader {
   FragmentShader._(this._program, {String? debugName}) : _debugName = debugName, super._() {
-    _floats = _constructor(_program, _program._uniformFloatCount, _program._samplerCount);
+    _nativePtr = rina_fragment_create_shader(
+      _program._nativePtr, 
+      _program._uniformFloatCount, _program._samplerCount
+    ).cast<TennojiShader>();
+    _floats = rina_fragment_shader_get_uniform_buffer(_nativePtrCasted).asTypedList(_program._uniformFloatCount);
   }
+
+  late final Pointer<TennojiFragmentShader> _nativePtrCasted = _nativePtr.cast<TennojiFragmentShader>();
 
   final FragmentProgram _program;
 
@@ -5690,10 +5403,6 @@ base class FragmentShader extends Shader {
   Float32List _floats = _kEmptyFloat32List;
   final List<WeakReference<UniformFloatSlot>> _slots = <WeakReference<UniformFloatSlot>>[];
   final List<WeakReference<ImageSamplerSlot>> _samplers = <WeakReference<ImageSamplerSlot>>[];
-
-  void _reinitialize() {
-    _floats = _constructor(_program, _program._uniformFloatCount, _program._samplerCount);
-  }
 
   List<UniformFloatSlot> _getSlotsForUniform(String name, int size) {
     final _UniformFloatInfo info = _program._getUniformFloatInfo(name);
@@ -5998,10 +5707,17 @@ base class FragmentShader extends Shader {
   ///
   /// All the sampler uniforms that a shader expects must be provided or the
   /// results will be undefined.
+  ///
+  /// TODO(henrysck): Currently, if the index is out of bounds, this does nothing.
   void setImageSampler(int index, Image image, {FilterQuality filterQuality = FilterQuality.none}) {
     assert(!debugDisposed, 'Tried to access uniforms on a disposed Shader: $this');
     assert(!image.debugDisposed, 'Image has been disposed');
-    _setImageSampler(index, image._image, filterQuality.index);
+    rina_fragment_shader_set_image_sampler(
+      _nativePtr.cast<TennojiFragmentShader>(),
+      index, 
+      image._image._nativePtr, 
+      filterQuality.index
+    );
   }
 
   /// Releases the native resources held by the [FragmentShader].
@@ -6013,29 +5729,8 @@ base class FragmentShader extends Shader {
   void dispose() {
     super.dispose();
     _floats = _kEmptyFloat32List;
-    _dispose();
+    //_dispose();
   }
-
-  @Native<Handle Function(Handle, Handle, Handle, Handle)>(symbol: 'ReusableFragmentShader::Create')
-  external Float32List _constructor(
-    FragmentProgram program,
-    int floatUniforms,
-    int samplerUniforms,
-  );
-
-  @Native<Void Function(Pointer<Void>, Handle, Handle, Int32)>(
-    symbol: 'ReusableFragmentShader::SetImageSampler',
-  )
-  external void _setImageSampler(int index, _Image sampler, int filterQualityIndex);
-
-  @Native<Bool Function(Pointer<Void>)>(symbol: 'ReusableFragmentShader::ValidateSamplers')
-  external bool _validateSamplers();
-
-  @Native<Bool Function(Pointer<Void>)>(symbol: 'ReusableFragmentShader::ValidateImageFilter')
-  external bool _validateImageFilter();
-
-  @Native<Void Function(Pointer<Void>)>(symbol: 'ReusableFragmentShader::Dispose')
-  external void _dispose();
 }
 
 /// Defines how a list of points is interpreted when drawing a set of triangles.
@@ -6175,7 +5870,7 @@ base class Vertices {
         ? _encodeIndicesList(indices)
         : (nullptr.cast<Uint16>(),0);
 
-    _nativePtr = tennoji_vertices_init(
+    _nativePtr = rina_vertices_init(
       mode.index,
       encodedPositions.$2,
       encodedPositions.$1,
@@ -6290,7 +5985,7 @@ base class Vertices {
       iPtr.asTypedList(indices.length).setAll(0, indices);
     }
     
-    _nativePtr = tennoji_vertices_init(
+    _nativePtr = rina_vertices_init(
       mode.index, 
       positions.length,
       positions.address, 
@@ -6323,7 +6018,7 @@ base class Vertices {
       _disposed = true;
       return true;
     }());
-    tennoji_vertices_destroy(_nativePtr);
+    rina_vertices_destroy(_nativePtr);
   }
   bool _disposed = false;
 
@@ -6910,7 +6605,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
     _bytesPerPixel = 4;
     //_initRaw(this, buffer, width, height, rowBytes ?? -1, pixelFormat.index);
     _buffer = _createNativeBuffer(buffer);
-    _nativePtr = tennoji_idesc_from_raw(
+    _nativePtr = rina_idesc_from_raw(
       _buffer.$1,
       width,
       height,
@@ -6921,7 +6616,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
 
   _NativeImageDescriptor.encoded(Uint8List buffer) { 
     _buffer = _createNativeBuffer(buffer);
-    _nativePtr = tennoji_idesc_from_encoded(_buffer.$1, _buffer.$2);
+    _nativePtr = rina_idesc_from_encoded(_buffer.$1, _buffer.$2);
   }
 
   (Pointer<Uint8>, int) _createNativeBuffer(Uint8List buffer) {
@@ -6936,14 +6631,14 @@ base class _NativeImageDescriptor implements ImageDescriptor {
 
   int? _width;
 
-  int _getWidth() => tennoji_idesc_get_width(_nativePtr);
+  int _getWidth() => rina_idesc_get_width(_nativePtr);
 
   @override
   int get width => _width ??= _getWidth();
 
   int? _height;
 
-  int _getHeight() => tennoji_idesc_get_height(_nativePtr);
+  int _getHeight() => rina_idesc_get_height(_nativePtr);
 
   @override
   int get height => _height ??= _getHeight();
@@ -6957,7 +6652,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
 
   @override
   void dispose() {
-    tennoji_idesc_destroy(_nativePtr);
+    rina_idesc_destroy(_nativePtr);
   }
 
   @override
@@ -6985,7 +6680,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
     assert(targetHeight != null);
 
     final Codec codec = _NativeCodec._(
-      tennoji_idesc_instantiate_codec(_nativePtr, targetWidth!, targetHeight!, targetFormat.index)
+      rina_idesc_instantiate_codec(_nativePtr, targetWidth!, targetHeight!, targetFormat.index)
     );
     return codec;
   }
@@ -7111,5 +6806,86 @@ class PictureRasterizationException implements Exception {
       buffer.writeln(stack!.toString());
     }
     return buffer.toString();
+  }
+}
+
+
+
+/// Wrapper around native canvas handle.
+class Canvas {
+  Canvas(this._nativePtr);
+  final Pointer<TennojiCanvas> _nativePtr;
+
+  Pointer<TennojiCanvas> get nativePtr => _nativePtr;
+
+  void drawPaint(Paint paint) {
+    using((arena)=>
+    rina_canvas_draw_paint(
+      _nativePtr, 
+      paint._createPaintMetadata(arena)
+    )
+    );
+  }
+
+  void drawRect(Rect rect, Paint paint) {
+    using((arena)=>
+    rina_canvas_draw_rect(
+      _nativePtr,
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height,
+      paint._createPaintMetadata(arena),
+    )
+    );
+  }
+
+  void drawImage(Pointer<TennojiCanvasImage> texture, Offset offset, Paint paint) {
+    using((arena)=>
+    rina_canvas_draw_image(
+      _nativePtr,
+      texture,
+      offset.dx,
+      offset.dy,
+      paint._createPaintMetadata(arena)
+    )
+    );
+  }
+
+  void save() {
+    rina_canvas_save(_nativePtr);
+  }
+
+  void restore() {
+    rina_canvas_restore(_nativePtr);
+  }
+
+  void translate(double dx, double dy) {
+    rina_canvas_translate(_nativePtr, dx, dy);
+  }
+
+  void scale(double sx, double sy) {
+    rina_canvas_scale(_nativePtr, sx, sy);
+  }
+
+  void rotate(double degrees) {
+    rina_canvas_rotate(_nativePtr, degrees);
+  }
+
+  void clipRect(Rect rect) {
+    rina_canvas_clip_rect(
+      _nativePtr,
+      rect.left,
+      rect.top,
+      rect.width,
+      rect.height,
+    );
+  }
+
+  /// Saves a new layer with the given [alpha] (0~255).
+  /// Everything painted until the matching [restore] will be
+  /// composited with that opacity.
+  void saveLayer(int alpha) {
+    rina_canvas_save_layer(_nativePtr, alpha);
   }
 }

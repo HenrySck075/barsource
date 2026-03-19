@@ -30,7 +30,7 @@ class RenderVideoClip extends RenderTimeBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = tennoji_decoder_open(
+    _decoder = rina_decoder_open(
       Engine.instance.nativePtr,
       uri.cast(),
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
@@ -42,11 +42,11 @@ class RenderVideoClip extends RenderTimeBox {
   void detach() {
     if (_texture != null) {
       // ask the lib to call delete
-      tennoji_texture_release(_texture!);
+      rina_texture_destroy(_texture!);
       _texture = null;
     }
     if (_decoder != null) {
-      tennoji_decoder_close(_decoder!);
+      rina_decoder_close(_decoder!);
       _decoder = null;
     }
     super.detach();
@@ -65,10 +65,10 @@ class RenderVideoClip extends RenderTimeBox {
 
     // Release previous texture before acquiring a new one
     if (_texture != null) {
-      tennoji_texture_release(_texture!);
+      rina_texture_destroy(_texture!);
     }
 
-    _texture = tennoji_decoder_get_texture(_decoder!, timeUs);
+    _texture = rina_decoder_get_texture(_decoder!, timeUs);
 
     if (_texture != nullptr) {
       context.canvas.drawImage(_texture!, offset, Paint());
@@ -99,7 +99,7 @@ class RenderAudioClip extends RenderTimeBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = tennoji_decoder_open(
+    _decoder = rina_decoder_open(
       Engine.instance.nativePtr,
       uri.cast(),
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
@@ -110,7 +110,7 @@ class RenderAudioClip extends RenderTimeBox {
   @override
   void detach() {
     if (_decoder != null) {
-      tennoji_decoder_close(_decoder!);
+      rina_decoder_close(_decoder!);
       _decoder = null;
     }
     super.detach();
@@ -123,7 +123,7 @@ class RenderAudioClip extends RenderTimeBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    // Audio is handled by the encoder via tennoji_encoder_write_audio,
+    // Audio is handled by the encoder via rina_encoder_write_audio,
     // not through the canvas paint path.
   }
 }

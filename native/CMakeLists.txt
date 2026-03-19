@@ -7,6 +7,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswresample)
 
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/third_party/skia" CACHE PATH "Skia path")
+set(TENNOJI_TOKIMEKI ON "Disables input checks. You should disable this option if you plan to use the native library outside of the package or you're uncertain about the users.")
 
 # Auto-download Skia if not present
 if(NOT EXISTS "${SKIA_DIR}/include")
@@ -90,6 +91,9 @@ add_library(tennoji SHARED
 )
 
 target_compile_definitions(tennoji PRIVATE TENNOJI_BUILD)
+if(TENNOJI_TOKIMEKI)
+  target_compile_definitions(tennoji PRIVATE TENNOJI_TOKIMEKI)
+endif()
 target_include_directories(tennoji PUBLIC include PRIVATE ${SKIA_DIR} ${FFMPEG_INCLUDE_DIRS})
 target_link_libraries(tennoji PRIVATE ${FFMPEG_LIBRARIES} ${SKIA_DIR}/out/Release/libskia.a)
 

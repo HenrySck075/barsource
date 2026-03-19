@@ -1,10 +1,12 @@
 import 'dart:ffi';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:collection' as collection;
 
 import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/engine/bindings.dart';
 import 'package:tennoji/src/engine/engine.dart';
+import 'package:tennoji/src/utils/native_data.dart';
 
 part 'geometry.dart';
 part 'lerp.dart';

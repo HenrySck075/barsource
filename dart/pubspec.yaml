@@ -34,7 +34,7 @@ ffigen:
   functions:
     leaf:
       include: 
-         - "tennoji_.*" 
+         - "rina_.*" 
   macros:
     include:
       - 'TENNOJI_*'

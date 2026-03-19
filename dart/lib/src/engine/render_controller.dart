@@ -72,10 +72,10 @@ void render(Widget root, RenderConfig config) {
     ..audio_sample_rate = 44100
     ..audio_channels = 2;
 
-  final encoder = tennoji_encoder_create(enginePtr, encConfig);
+  final encoder = rina_encoder_create(enginePtr, encConfig);
 
   // Create canvas
-  final nativeCanvas = tennoji_canvas_create(
+  final nativeCanvas = rina_canvas_create(
     enginePtr,
     config.resolution.width.toInt(),
     config.resolution.height.toInt(),
@@ -110,7 +110,7 @@ void render(Widget root, RenderConfig config) {
 
     // Paint (this calls decoder_get_texture on video clips, which
     // auto-queues audio packets from the same demuxer stream)
-    tennoji_canvas_clear(nativeCanvas, 0xFF000000);
+    rina_canvas_clear(nativeCanvas, 0xFF000000);
     final canvas = Canvas(nativeCanvas);
     final paintingContext = PaintingContext(canvas);
     pipelineOwner.flushLayout();
@@ -118,17 +118,17 @@ void render(Widget root, RenderConfig config) {
     renderRoot.paint(paintingContext, Offset.zero);
 
     // Encode video frame
-    tennoji_encoder_write_frame(encoder, nativeCanvas);
+    rina_encoder_write_frame(encoder, nativeCanvas);
 
     // For audio-only clips, explicitly read audio up to current time
     final timeUs = currentTime.inMicroseconds;
     for (final decoder in audioOnlyDecoders) {
-      tennoji_decoder_read_audio(decoder, timeUs);
+      rina_decoder_read_audio(decoder, timeUs);
     }
 
     // Drain all buffered audio packets into the encoder
     for (final decoder in allAudioDecoders) {
-      tennoji_encoder_drain_audio_queue(encoder, decoder);
+      rina_encoder_drain_audio_queue(encoder, decoder);
     }
 
     currentTime += frameDuration;
@@ -136,12 +136,12 @@ void render(Widget root, RenderConfig config) {
 
   // Final drain: pick up any remaining buffered audio packets
   for (final decoder in allAudioDecoders) {
-    tennoji_encoder_drain_audio_queue(encoder, decoder);
+    rina_encoder_drain_audio_queue(encoder, decoder);
   }
 
-  tennoji_encoder_finalize(encoder);
-  tennoji_encoder_destroy(encoder);
-  tennoji_canvas_destroy(nativeCanvas);
+  rina_encoder_finalize(encoder);
+  rina_encoder_destroy(encoder);
+  rina_canvas_destroy(nativeCanvas);
 
   calloc.free(outputPathUtf8);
   calloc.free(videoCodecUtf8);

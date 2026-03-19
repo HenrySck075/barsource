@@ -3,7 +3,7 @@
 #include "vertex_internal.h"
 
 extern "C" {
-TENNOJI_EXPORT TennojiCanvasVertices* tennoji_vertices_init(
+TENNOJI_EXPORT TennojiCanvasVertices* rina_vertices_init(
   uint8_t mode,
   uint64_t length, // used by positions, textureCoordinates, colors assuming they matches the length
   float* positions, 
@@ -48,5 +48,5 @@ TENNOJI_EXPORT TennojiCanvasVertices* tennoji_vertices_init(
     .vertices = p
   };
 };
-TENNOJI_EXPORT void tennoji_vertices_destroy(TennojiCanvasVertices* vertices);
+TENNOJI_EXPORT void rina_vertices_destroy(TennojiCanvasVertices* vertices);
 }

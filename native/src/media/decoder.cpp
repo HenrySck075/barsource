@@ -162,7 +162,7 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
 
 extern "C" {
 
-TENNOJI_EXPORT TennojiDecoder* tennoji_decoder_open(TennojiEngine* engine,
+TENNOJI_EXPORT TennojiDecoder* rina_decoder_open(TennojiEngine* engine,
                                                      const char* uri,
                                                      TennojiHWAccel accel) {
     if (!engine || !uri) return nullptr;
@@ -237,7 +237,7 @@ TENNOJI_EXPORT TennojiDecoder* tennoji_decoder_open(TennojiEngine* engine,
     return decoder;
 }
 
-TENNOJI_EXPORT void tennoji_decoder_close(TennojiDecoder* decoder) {
+TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder) {
     if (!decoder) return;
 
     decoder->flush_audio_queue();
@@ -251,7 +251,7 @@ TENNOJI_EXPORT void tennoji_decoder_close(TennojiDecoder* decoder) {
     delete decoder;
 }
 
-TENNOJI_EXPORT int tennoji_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_us) {
+TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_us) {
     if (!decoder || !decoder->fmtCtx) return -1;
 
     // Convert microseconds to stream timebase
@@ -283,7 +283,7 @@ TENNOJI_EXPORT int tennoji_decoder_seek(TennojiDecoder* decoder, int64_t timesta
     return 0;
 }
 
-TENNOJI_EXPORT TennojiCanvasImage* tennoji_decoder_get_texture(TennojiDecoder* decoder,
+TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* decoder,
                                                 int64_t timestamp_us) {
     if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return nullptr;
 
@@ -349,7 +349,7 @@ TENNOJI_EXPORT TennojiCanvasImage* tennoji_decoder_get_texture(TennojiDecoder* d
     return nullptr;
 }
 
-TENNOJI_EXPORT int64_t tennoji_decoder_duration(TennojiDecoder* decoder) {
+TENNOJI_EXPORT int64_t rina_decoder_duration(TennojiDecoder* decoder) {
     if (!decoder || !decoder->fmtCtx) return 0;
 
     // Return duration in microseconds
@@ -375,7 +375,7 @@ TENNOJI_EXPORT int64_t tennoji_decoder_duration(TennojiDecoder* decoder) {
     return 0;
 }
 
-TENNOJI_EXPORT int tennoji_decoder_read_audio(TennojiDecoder* decoder,
+TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
                                                int64_t timestamp_us) {
     if (!decoder || !decoder->fmtCtx || decoder->audioStreamIdx < 0) return -1;
 

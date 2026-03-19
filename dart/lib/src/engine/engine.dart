@@ -25,7 +25,7 @@ class Engine {
       ..fps = fps
       ..gpu_backend = gpuBackendUtf8.cast();
 
-    final ptr = tennoji_engine_create(config);
+    final ptr = rina_engine_create(config);
     calloc.free(gpuBackendUtf8);
     calloc.free(config);
     _instance = Engine._(ptr);
@@ -36,7 +36,7 @@ class Engine {
   Pointer<TennojiEngine> get nativePtr => _nativePtr;
 
   void shutdown() {
-    tennoji_engine_destroy(_nativePtr);
+    rina_engine_destroy(_nativePtr);
     _instance = null;
   }
 }

@@ -3,11 +3,18 @@
 
 #include <stdint.h>
 
+#define ConstructResult(type) \
+typedef struct { \
+  type* result; \
+  const char* errorDetails; \
+} type##Result
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+
 #define tstruct(name) typedef struct name name
+#define trstruct(name) typedef struct name name; ConstructResult(name)
 
 tstruct(TennojiEngine);
 tstruct(TennojiDecoder);
@@ -19,8 +26,14 @@ tstruct(TennojiCanvasImage); // for the most part it holds a skimage
 tstruct(TennojiCodec);
 tstruct(TennojiImageDescriptor);
 tstruct(TennojiCanvasVertices);
+// TODO: figure out how to give out Sk pointers directly
+tstruct(TennojiCanvasPath);
+tstruct(TennojiCanvasPathMeasure);
 tstruct(TennojiShader);
-tstruct(TennojiCanvasGradient); // yall job is to tell me how are these related
+trstruct(TennojiFragmentProgram);
+tstruct(TennojiFragmentShader);
+tstruct(TennojiColorFilter);
+tstruct(TennojiImageFilter);
 
 typedef struct {
   int64_t durationMs;
@@ -49,6 +62,12 @@ typedef struct {
   int32_t audio_sample_rate;
   int32_t audio_channels;
 } TennojiEncoderConfig;
+
+typedef struct {
+  uint32_t* encodedData;
+  TennojiShader* shader;
+} TennojiCanvasPaintMetadata;
+
 
 #ifdef __cplusplus
 }

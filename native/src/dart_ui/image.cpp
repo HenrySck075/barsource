@@ -8,19 +8,19 @@
 #include <map>
 
 
-TENNOJI_EXPORT void tennoji_texture_destroy(TennojiCanvasImage* texture) {
+TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture) {
     delete texture;
 }
 
-TENNOJI_EXPORT int tennoji_texture_get_width(TennojiCanvasImage* texture) {
+TENNOJI_EXPORT int rina_texture_get_width(TennojiCanvasImage* texture) {
     return texture->image->width();
 }
 
-TENNOJI_EXPORT int tennoji_texture_get_height(TennojiCanvasImage* texture) {
+TENNOJI_EXPORT int rina_texture_get_height(TennojiCanvasImage* texture) {
     return texture->image->height();
 }
 
-TennojiCodec* tennoji_codec_from_encoded_skdata(sk_sp<SkData>& d) {
+TennojiCodec* rina_codec_from_encoded_skdata(sk_sp<SkData>& d) {
   SkCodec::Result r;
   auto codec = SkCodec::MakeFromData(d);
   auto info = codec->getInfo();
@@ -33,29 +33,29 @@ TennojiCodec* tennoji_codec_from_encoded_skdata(sk_sp<SkData>& d) {
   };
 }
 
-TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_encoded(const uint8_t* data, const size_t length) {
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const size_t length) {
   auto d = SkData::MakeWithCopy(data, length);
-  return tennoji_codec_from_encoded_skdata(d);
+  return rina_codec_from_encoded_skdata(d);
 };
-TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_file(const char* path) {
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_file(const char* path) {
   if (!std::filesystem::exists(path)) return nullptr;
   auto d = SkData::MakeFromFileName(path);
   if (!d) return nullptr;
-  return tennoji_codec_from_encoded_skdata(d);
+  return rina_codec_from_encoded_skdata(d);
 };
 
-TENNOJI_EXPORT void tennoji_codec_destroy(TennojiCodec* codec) {
+TENNOJI_EXPORT void rina_codec_destroy(TennojiCodec* codec) {
   if (codec) delete codec;
 };
 
-TENNOJI_EXPORT int tennoji_codec_get_frame_count(TennojiCodec* codec) {
+TENNOJI_EXPORT int rina_codec_get_frame_count(TennojiCodec* codec) {
   return codec->fromRaw ? 1 : codec->codec->getFrameCount();
 };
-TENNOJI_EXPORT int tennoji_codec_get_repetition_count(TennojiCodec* codec) {
+TENNOJI_EXPORT int rina_codec_get_repetition_count(TennojiCodec* codec) {
   return codec->fromRaw ? 0 : codec->codec->getRepetitionCount();
 };
 
-TENNOJI_EXPORT TennojiFrameInfo* tennoji_codec_get_frame_info(TennojiCodec* codec, int index) {
+TENNOJI_EXPORT TennojiFrameInfo* rina_codec_get_frame_info(TennojiCodec* codec, int index) {
   if (codec->fromRaw) {
     // in this case, codec->codec is nullptr
 
@@ -104,16 +104,16 @@ TENNOJI_EXPORT TennojiFrameInfo* tennoji_codec_get_frame_info(TennojiCodec* code
   }
 }
 
-TENNOJI_EXPORT void tennoji_frame_info_destroy(TennojiFrameInfo* info) {
+TENNOJI_EXPORT void rina_frame_info_destroy(TennojiFrameInfo* info) {
   delete info;
 }
 
 // ImageDescriptor
-TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_encoded(const uint8_t* data, const uint32_t length) {
+TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_encoded(const uint8_t* data, const uint32_t length) {
   // to avoid copying we will let the dart side handles the data memory
   auto d = SkData::MakeWithoutCopy(data, length);
 
-  auto codec = tennoji_codec_from_encoded_skdata(d); 
+  auto codec = rina_codec_from_encoded_skdata(d); 
 
   auto ret = new TennojiImageDescriptor {
     .buffer = d,
@@ -127,10 +127,10 @@ TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_encoded(const uint8_t*
     .fromRaw = true
   };
   
-  tennoji_codec_destroy(codec);
+  rina_codec_destroy(codec);
   return ret;
 };
-TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_raw(
+TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_raw(
   const uint8_t* data, 
   const uint32_t width, const uint32_t height,
   int8_t rowBytes,
@@ -156,14 +156,14 @@ TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_raw(
   };
 };
 
-TENNOJI_EXPORT uint32_t tennoji_idesc_get_width(TennojiImageDescriptor* descriptor) {
+TENNOJI_EXPORT uint32_t rina_idesc_get_width(TennojiImageDescriptor* descriptor) {
   return descriptor->imageInfo.width;
 }
-TENNOJI_EXPORT uint32_t tennoji_idesc_get_height(TennojiImageDescriptor* descriptor) {
+TENNOJI_EXPORT uint32_t rina_idesc_get_height(TennojiImageDescriptor* descriptor) {
   return descriptor->imageInfo.height;
 }
 
-TENNOJI_EXPORT TennojiCodec* tennoji_idesc_instantiate_codec(TennojiImageDescriptor* descriptor) {
+TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(TennojiImageDescriptor* descriptor) {
   if (!descriptor->fromRaw) return nullptr;
 
   return new TennojiCodec{
@@ -175,11 +175,11 @@ TENNOJI_EXPORT TennojiCodec* tennoji_idesc_instantiate_codec(TennojiImageDescrip
     .format = descriptor->imageInfo.format
   };
 };
-TENNOJI_EXPORT void tennoji_idesc_destroy(TennojiImageDescriptor* descriptor) {
+TENNOJI_EXPORT void rina_idesc_destroy(TennojiImageDescriptor* descriptor) {
   delete descriptor;
 };
 
-TENNOJI_EXPORT bool tennoji_texture_equals(
+TENNOJI_EXPORT bool rina_texture_equals(
   TennojiCanvasImage* tex1,
   TennojiCanvasImage* tex2
 );

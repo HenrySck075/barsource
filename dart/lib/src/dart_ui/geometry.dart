@@ -2007,7 +2007,7 @@ class RSuperellipse extends _RRectLike<RSuperellipse> {
   /// Whether the point specified by the given offset (which is assumed to be
   /// relative to the origin) lies inside the rounded superellipse.
   bool contains(Offset point) {
-    return tennoji_rsuperellipse_contains(
+    return rina_rsuperellipse_contains(
       point.dx, point.dy,
       left, top, right, bottom,
       tlRadiusX, tlRadiusY, 

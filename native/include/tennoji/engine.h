@@ -20,72 +20,78 @@ extern "C" {
 #endif
 
 // Engine lifecycle
-TENNOJI_EXPORT TennojiEngine* tennoji_engine_create(const TennojiEngineConfig* config);
-TENNOJI_EXPORT void tennoji_engine_destroy(TennojiEngine* engine);
+TENNOJI_EXPORT TennojiEngine* rina_engine_create(const TennojiEngineConfig* config);
+TENNOJI_EXPORT void rina_engine_destroy(TennojiEngine* engine);
 
 // Decoder (video/audio)
-TENNOJI_EXPORT TennojiDecoder* tennoji_decoder_open(
+TENNOJI_EXPORT TennojiDecoder* rina_decoder_open(
   TennojiEngine* engine,
   const char* uri,
   TennojiHWAccel accel
 );
-TENNOJI_EXPORT void tennoji_decoder_close(TennojiDecoder* decoder);
-TENNOJI_EXPORT int tennoji_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_us);
-TENNOJI_EXPORT TennojiCanvasImage* tennoji_decoder_get_texture(
+TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder);
+TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_us);
+TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(
   TennojiDecoder* decoder,
   int64_t timestamp_us
 );
-TENNOJI_EXPORT int64_t tennoji_decoder_duration(TennojiDecoder* decoder);
-TENNOJI_EXPORT int tennoji_decoder_read_audio(
+TENNOJI_EXPORT int64_t rina_decoder_duration(TennojiDecoder* decoder);
+TENNOJI_EXPORT int rina_decoder_read_audio(
   TennojiDecoder* decoder,
   int64_t timestamp_us
 );
 
 // Canvas (Skia command recording)
-TENNOJI_EXPORT TennojiCanvas* tennoji_canvas_create(
+TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
   TennojiEngine* engine,
   int32_t width,
   int32_t height
 );
-TENNOJI_EXPORT void tennoji_canvas_destroy(TennojiCanvas* canvas);
-TENNOJI_EXPORT void tennoji_canvas_clear(TennojiCanvas* canvas, uint32_t color);
-TENNOJI_EXPORT void tennoji_canvas_draw_rect(
+TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas);
+TENNOJI_EXPORT void rina_canvas_draw_paint(
+  TennojiCanvas* canvas, 
+  TennojiCanvasPaintMetadata* paintData
+);
+
+TENNOJI_EXPORT void rina_canvas_draw_rect(
   TennojiCanvas* canvas,
   float left, float top,
   float width, float height,
-  uint32_t color
+  TennojiCanvasPaintMetadata* paintData
 );
-TENNOJI_EXPORT void tennoji_canvas_draw_image(
+TENNOJI_EXPORT void rina_canvas_draw_image(
   TennojiCanvas* canvas,
   TennojiCanvasImage* image,
-  float dx, float dy
+  float dx, float dy,
+  TennojiCanvasPaintMetadata* paintData
 );
-TENNOJI_EXPORT void tennoji_canvas_save(TennojiCanvas* canvas);
-TENNOJI_EXPORT void tennoji_canvas_restore(TennojiCanvas* canvas);
-TENNOJI_EXPORT void tennoji_canvas_translate(TennojiCanvas* canvas, float dx, float dy);
-TENNOJI_EXPORT void tennoji_canvas_scale(TennojiCanvas* canvas, float sx, float sy);
-TENNOJI_EXPORT void tennoji_canvas_rotate(TennojiCanvas* canvas, float degrees);
-TENNOJI_EXPORT void tennoji_canvas_clip_rect(
+
+TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas);
+TENNOJI_EXPORT void rina_canvas_restore(TennojiCanvas* canvas);
+TENNOJI_EXPORT void rina_canvas_translate(TennojiCanvas* canvas, float dx, float dy);
+TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy);
+TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees);
+TENNOJI_EXPORT void rina_canvas_clip_rect(
   TennojiCanvas* canvas,
   float left, float top,
   float width, float height
 );
-TENNOJI_EXPORT int tennoji_canvas_save_layer(TennojiCanvas* canvas, int alpha);
+TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha);
 
 // Texture (GPU texture handle, opaque int ID)
 // no longer true
-TENNOJI_EXPORT void tennoji_texture_destroy(TennojiCanvasImage* texture);
+TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture);
 
-TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_encoded(const uint8_t* data, const uint32_t length);
-TENNOJI_EXPORT TennojiCodec* tennoji_codec_from_file(const char* path);
-TENNOJI_EXPORT void tennoji_codec_destroy(TennojiCodec* codec);
-TENNOJI_EXPORT int tennoji_codec_get_frame_count(TennojiCodec* codec);
-TENNOJI_EXPORT int tennoji_codec_get_repetition_count(TennojiCodec* codec);
-TENNOJI_EXPORT TennojiFrameInfo* tennoji_codec_get_frame_info(TennojiCodec* codec, int index);
-TENNOJI_EXPORT void tennoji_frame_info_destroy(TennojiFrameInfo* info);
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const uint32_t length);
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_file(const char* path);
+TENNOJI_EXPORT void rina_codec_destroy(TennojiCodec* codec);
+TENNOJI_EXPORT int rina_codec_get_frame_count(TennojiCodec* codec);
+TENNOJI_EXPORT int rina_codec_get_repetition_count(TennojiCodec* codec);
+TENNOJI_EXPORT TennojiFrameInfo* rina_codec_get_frame_info(TennojiCodec* codec, int index);
+TENNOJI_EXPORT void rina_frame_info_destroy(TennojiFrameInfo* info);
 
-TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_encoded(const uint8_t* data, const uint32_t length);
-TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_raw(
+TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_encoded(const uint8_t* data, const uint32_t length);
+TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_raw(
   const uint8_t* data, 
   const uint32_t width, const uint32_t height,
   int8_t rowBytes,
@@ -93,44 +99,44 @@ TENNOJI_EXPORT TennojiImageDescriptor* tennoji_idesc_from_raw(
                                // on the bytes per pixel value where this matters
 );
 
-TENNOJI_EXPORT uint32_t tennoji_idesc_get_width(TennojiImageDescriptor* descriptor);
-TENNOJI_EXPORT uint32_t tennoji_idesc_get_height(TennojiImageDescriptor* descriptor);
+TENNOJI_EXPORT uint32_t rina_idesc_get_width(TennojiImageDescriptor* descriptor);
+TENNOJI_EXPORT uint32_t rina_idesc_get_height(TennojiImageDescriptor* descriptor);
 
-TENNOJI_EXPORT TennojiCodec* tennoji_idesc_instantiate_codec(TennojiImageDescriptor* descriptor, uint32_t targetWidth, uint32_t targetHeight, uint8_t targetPixelFormat);
-TENNOJI_EXPORT void tennoji_idesc_destroy(TennojiImageDescriptor* descriptor);
+TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(TennojiImageDescriptor* descriptor, uint32_t targetWidth, uint32_t targetHeight, uint8_t targetPixelFormat);
+TENNOJI_EXPORT void rina_idesc_destroy(TennojiImageDescriptor* descriptor);
 
-TENNOJI_EXPORT bool tennoji_texture_equals(
+TENNOJI_EXPORT bool rina_texture_equals(
   TennojiCanvasImage* tex1,
   TennojiCanvasImage* tex2
 );
 
-TENNOJI_EXPORT int tennoji_texture_get_width(TennojiCanvasImage* texture);
-TENNOJI_EXPORT int tennoji_texture_get_height(TennojiCanvasImage* texture);
+TENNOJI_EXPORT int rina_texture_get_width(TennojiCanvasImage* texture);
+TENNOJI_EXPORT int rina_texture_get_height(TennojiCanvasImage* texture);
 
 
 // Encoder (export)
-TENNOJI_EXPORT TennojiEncoder* tennoji_encoder_create(
+TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(
   TennojiEngine* engine,
   const TennojiEncoderConfig* config
 );
-TENNOJI_EXPORT int tennoji_encoder_write_frame(
+TENNOJI_EXPORT int rina_encoder_write_frame(
   TennojiEncoder* encoder,
   TennojiCanvas* canvas
 );
-TENNOJI_EXPORT int tennoji_encoder_write_audio(
+TENNOJI_EXPORT int rina_encoder_write_audio(
   TennojiEncoder* encoder,
   TennojiDecoder* audio_decoder,
   int64_t duration_us
 );
-TENNOJI_EXPORT int tennoji_encoder_drain_audio_queue(
+TENNOJI_EXPORT int rina_encoder_drain_audio_queue(
   TennojiEncoder* encoder,
   TennojiDecoder* decoder
 );
-TENNOJI_EXPORT int tennoji_encoder_finalize(TennojiEncoder* encoder);
-TENNOJI_EXPORT void tennoji_encoder_destroy(TennojiEncoder* encoder);
+TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder);
+TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder);
 
 // sure non-null terminated string exist but we'll just assume dart is the only one interfacing this
-TENNOJI_EXPORT TennojiParagraphBuilder* tennoji_paragraph_builder_create(
+TENNOJI_EXPORT TennojiParagraphBuilder* rina_paragraph_builder_create(
   int32_t* encodedStyle,
   uint8_t esLength,
   uint8_t* strutData,
@@ -138,26 +144,26 @@ TENNOJI_EXPORT TennojiParagraphBuilder* tennoji_paragraph_builder_create(
   /*const std::string&*/ const char* fontFamily,
   /*const std::vector<std::string>&*/ const char** strutFontFamilies,
   uint8_t sffLen,
-  double fontSize,
-  double height,
+  float fontSize,
+  float height,
   /*const std::u16string&*/ const uint16_t* ellipsis,
   /*const std::string&*/ const char* locale
 );
 
 
 // this fucker on rsuperellipse
-TENNOJI_EXPORT bool tennoji_rsuperellipse_contains(
-    double px, double py,            // The point to test
-    double left, double top, 
-    double right, double bottom,
-    double tlRx, double tlRy,        // Top-Left Radii
-    double trRx, double trRy,        // Top-Right Radii
-    double blRx, double blRy,        // Bottom-Left Radii
-    double brRx, double brRy         // Bottom-Right Radii
+TENNOJI_EXPORT bool rina_rsuperellipse_contains(
+    float px, float py,            // The point to test
+    float left, float top, 
+    float right, float bottom,
+    float tlRx, float tlRy,        // Top-Left Radii
+    float trRx, float trRy,        // Top-Right Radii
+    float blRx, float blRy,        // Bottom-Left Radii
+    float brRx, float brRy         // Bottom-Right Radii
 );
 
 // Vertices
-TENNOJI_EXPORT TennojiCanvasVertices* tennoji_vertices_init(
+TENNOJI_EXPORT TennojiCanvasVertices* rina_vertices_init(
   uint8_t mode,
   uint64_t length, // used by positions, textureCoordinates, colors assuming they matches the length
   float* positions, 
@@ -165,8 +171,8 @@ TENNOJI_EXPORT TennojiCanvasVertices* tennoji_vertices_init(
   int32_t* colors, // also nullable
   uint16_t* indices, uint64_t iLength
 );
-TENNOJI_EXPORT void tennoji_vertices_destroy(TennojiCanvasVertices* vertices);
-TENNOJI_EXPORT void tennoji_canvas_draw_vertices(
+TENNOJI_EXPORT void rina_vertices_destroy(TennojiCanvasVertices* vertices);
+TENNOJI_EXPORT void rina_canvas_draw_vertices(
   TennojiCanvas* canvas,
   TennojiCanvasVertices* vertices,
   uint32_t blendMode, // SkBlendMode
@@ -174,42 +180,237 @@ TENNOJI_EXPORT void tennoji_canvas_draw_vertices(
 );
 
 // shaders
-TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_linear(
+TENNOJI_EXPORT TennojiShader* rina_gradient_create_linear(
   float x0, float y0, float x1, float y1,
-  uint32_t* colors, // length must match stops
+  float* colors, // length must match stops
   float* stops, // nullable, if null then it will be evenly distributed
   uint64_t length,
   uint32_t tileMode, // SkTileMode
-  double* matrix4 // aka SkMatrix
+  float* matrix4 // aka SkMatrix
 );
-TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_radial(
+TENNOJI_EXPORT TennojiShader* rina_gradient_create_radial(
   float cx, float cy, float radius,
-  uint32_t* colors, // length must match stops
+  float* colors, // length must match stops
   float* stops, // nullable, if null then it will be evenly distributed
   uint64_t length,
   uint32_t tileMode, // SkTileMode
-  double* matrix4 
+  float* matrix4 
 );
-TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_sweep(
+TENNOJI_EXPORT TennojiShader* rina_gradient_create_sweep(
   float cx, float cy, 
   float startAngle, float endAngle,
-  uint32_t* colors, // length must match stops
+  float* colors, // length must match stops
   float* stops, // nullable, if null then it will be evenly distributed
   uint64_t length,
   uint32_t tileMode, // SkTileMode
-  double* matrix4 
+  float* matrix4 
 );
-TENNOJI_EXPORT TennojiCanvasGradient* tennoji_gradient_init_conical(
+TENNOJI_EXPORT TennojiShader* rina_gradient_create_conical(
   float startCx, float startCy, float startRadius,
   float endCx, float endCy, float endRadius,
-  uint32_t* colors, // length must match stops
+  float* colors, // length must match stops
   float* stops, // nullable, if null then it will be evenly distributed
   uint64_t length,
   uint32_t tileMode, // SkTileMode
-  double* matrix4 
+  float* matrix4 
 );
-TENNOJI_EXPORT void tennoji_gradient_destroy(TennojiCanvasGradient* gradient);
 
+TENNOJI_EXPORT TennojiShader* rina_image_shader_create(
+  TennojiCanvasImage* image,
+  uint8_t tileModeX, uint8_t tileModeY, // SkTileMode
+  uint8_t filterQuality,
+  float* matrix4
+);
+
+TENNOJI_EXPORT void rina_shader_destroy(TennojiShader* shader);
+//TENNOJI_EXPORT TennojiShader* rina_shader_copy(TennojiShader* shader);
+
+TENNOJI_EXPORT TennojiFragmentProgramResult rina_fragment_create(const char* filePath);
+TENNOJI_EXPORT TennojiFragmentShader* rina_fragment_create_shader(
+  TennojiFragmentProgram* prog,
+  uint64_t floatCount,
+  uint64_t samplerCount
+);
+TENNOJI_EXPORT float* rina_fragment_shader_get_uniform_buffer(TennojiFragmentShader* shader);
+TENNOJI_EXPORT void rina_fragment_shader_set_image_sampler(
+  TennojiFragmentShader* shader, 
+  uint64_t index,
+  TennojiCanvasImage* image, 
+  uint8_t filterQuality
+);
+
+// Path
+TENNOJI_EXPORT TennojiCanvasPath* rina_path_create();
+TENNOJI_EXPORT void rina_path_destroy(TennojiCanvasPath* path);
+
+TENNOJI_EXPORT uint8_t rina_path_get_fill_type(TennojiCanvasPath* path);
+TENNOJI_EXPORT void rina_path_set_fill_type(TennojiCanvasPath* path, uint8_t type);
+
+TENNOJI_EXPORT void rina_path_move_to(TennojiCanvasPath* path, float x, float y);
+TENNOJI_EXPORT void rina_path_relative_move_to(TennojiCanvasPath* path, float dx, float dy);
+
+TENNOJI_EXPORT void rina_path_line_to(TennojiCanvasPath* path, float x, float y);
+TENNOJI_EXPORT void rina_path_relative_line_to(TennojiCanvasPath* path, float dx, float dy);
+
+TENNOJI_EXPORT void rina_path_quadratic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2
+);
+TENNOJI_EXPORT void rina_path_relative_quadratic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2
+);
+
+TENNOJI_EXPORT void rina_path_cubic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2, float x3, float y3
+);
+TENNOJI_EXPORT void rina_path_relative_cubic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2, float x3, float y3
+);
+
+TENNOJI_EXPORT void rina_path_conic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2, float w
+);
+TENNOJI_EXPORT void rina_path_relative_conic_to(
+  TennojiCanvasPath* path, 
+  float x1, float y1, float x2, float y2, float w
+);
+
+TENNOJI_EXPORT void rina_path_arc_to_rect(
+  TennojiCanvasPath* path,
+  float left,
+  float top,
+  float right,
+  float bottom,
+  float startAngle,
+  float sweepAngle,
+  bool forceMoveTo
+);
+
+TENNOJI_EXPORT void rina_path_arc_to_point(
+  TennojiCanvasPath* path,
+  float arcEndX,
+  float arcEndY,
+  float radiusX,
+  float radiusY,
+  float rotation,
+  bool largeArc,
+  bool clockwise
+);
+TENNOJI_EXPORT void rina_path_relative_arc_to_point(
+  TennojiCanvasPath* path,
+  float arcEndDeltaX,
+  float arcEndDeltaY,
+  float radiusX,
+  float radiusY,
+  float rotation,
+  bool largeArc,
+  bool clockwise
+);
+
+TENNOJI_EXPORT TennojiCanvasPath* rina_path_clone(TennojiCanvasPath* path);
+TENNOJI_EXPORT void rina_path_add_rect(
+  TennojiCanvasPath* path,
+  float l, float t, float r, float b
+);
+TENNOJI_EXPORT void rina_path_add_oval(
+  TennojiCanvasPath* path,
+  float l, float t, float r, float b
+);
+TENNOJI_EXPORT void rina_path_add_arc(
+  TennojiCanvasPath* path,
+  float l, float t, float r, float b, float startAngle, float sweepAngle
+);
+TENNOJI_EXPORT void rina_path_add_polygon(
+  TennojiCanvasPath* path,
+  float* points, uint64_t unencoded_length, bool close
+);
+TENNOJI_EXPORT void rina_path_add_rrect(TennojiCanvasPath* path, float* rrectData);
+TENNOJI_EXPORT void rina_path_add_rsuperellipse(TennojiCanvasPath* path, float* rsuperellipseData);
+
+TENNOJI_EXPORT void rina_path_add_path(
+  TennojiCanvasPath* path, TennojiCanvasPath* otherPath, 
+  bool extend,
+  float dx, float dy
+);
+TENNOJI_EXPORT void rina_path_add_path_with_matrix(
+  TennojiCanvasPath* path, TennojiCanvasPath* otherPath, 
+  bool extend,
+  float dx, float dy,
+  float* matrix4
+);
+
+TENNOJI_EXPORT void rina_path_close(TennojiCanvasPath* path);
+TENNOJI_EXPORT void rina_path_reset(TennojiCanvasPath* path);
+
+TENNOJI_EXPORT bool rina_path_contains(TennojiCanvasPath* path, float x, float y);
+TENNOJI_EXPORT void rina_path_shift(TennojiCanvasPath* path, float x, float y);
+TENNOJI_EXPORT void rina_path_transform(TennojiCanvasPath* path, float* matrix4);
+
+TENNOJI_EXPORT bool rina_path_combine_op(
+  TennojiCanvasPath* resultPath,
+  TennojiCanvasPath* path1, TennojiCanvasPath* path2, 
+  int operationId
+); 
+
+TENNOJI_EXPORT float* rina_path_get_bounds(TennojiCanvasPath* path);
+
+TENNOJI_EXPORT TennojiCanvasPathMeasure* rina_path_measure_create(
+  TennojiCanvasPath* path, bool forceClose
+);
+TENNOJI_EXPORT void rina_path_measure_destroy(TennojiCanvasPathMeasure* measure);
+
+TENNOJI_EXPORT double rina_path_measure_length(TennojiCanvasPathMeasure* measure, int32_t contourIndex); 
+TENNOJI_EXPORT float* rina_path_measure_tangent_for_offset(TennojiCanvasPathMeasure* measure, int32_t contourIndex, double distance); 
+TENNOJI_EXPORT bool rina_path_measure_closed(TennojiCanvasPathMeasure* measure, int32_t contourIndex); 
+TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
+  TennojiCanvasPathMeasure* measure,
+  int32_t contourIndex,
+  double start,
+  double end,
+  bool startWithMoveTo
+);
+
+TENNOJI_EXPORT bool rina_path_measure_next_contour(TennojiCanvasPathMeasure* measure); 
+
+
+// Filters
+
+TENNOJI_EXPORT TennojiColorFilter* rina_color_filter_create_mode(
+  uint32_t color, 
+  uint8_t blendMode // SkBlendMode
+);
+TENNOJI_EXPORT TennojiColorFilter* rina_color_filter_create_matrix(float* matrix20);
+TENNOJI_EXPORT TennojiColorFilter* rina_color_filter_create_srgb2linear_gamma();
+TENNOJI_EXPORT TennojiColorFilter* rina_color_filter_create_linear2srgb_gamma();
+TENNOJI_EXPORT void rina_color_filter_destroy(TennojiColorFilter* color);
+
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_blur(
+  float sigmaX, float sigmaY,
+  uint8_t tileMode,
+  bool bounded,
+  float boundsLeft, float boundsTop, float boundsRight, float boundsBottom
+);
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_dilate(
+  float radiusX, float radiusY
+);
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_erode(
+  float radiusX, float radiusY
+);
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_matrix(
+  float* matrix4, uint8_t filterQuality
+);
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_from_cf(
+  TennojiColorFilter* filter
+);
+TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_composed(
+  TennojiImageFilter* outer,
+  TennojiImageFilter* inner
+);
+TENNOJI_EXPORT void rina_image_filter_destroy(TennojiImageFilter* filter);
 #ifdef __cplusplus
 }
 #endif

@@ -84,7 +84,7 @@ static const AVCodec* find_audio_encoder(const char* codec_name) {
 
 extern "C" {
 
-TENNOJI_EXPORT TennojiEncoder* tennoji_encoder_create(TennojiEngine* engine,
+TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                                                        const TennojiEncoderConfig* config) {
     if (!engine || !config || !config->output_path) return nullptr;
 
@@ -180,7 +180,7 @@ TENNOJI_EXPORT TennojiEncoder* tennoji_encoder_create(TennojiEngine* engine,
     if (!(enc->fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&enc->fmtCtx->pb, config->output_path, AVIO_FLAG_WRITE);
         if (ret < 0) {
-            tennoji_encoder_destroy(enc);
+            rina_encoder_destroy(enc);
             return nullptr;
         }
     }
@@ -188,14 +188,14 @@ TENNOJI_EXPORT TennojiEncoder* tennoji_encoder_create(TennojiEngine* engine,
     // Write file header
     ret = avformat_write_header(enc->fmtCtx, nullptr);
     if (ret < 0) {
-        tennoji_encoder_destroy(enc);
+        rina_encoder_destroy(enc);
         return nullptr;
     }
 
     return enc;
 }
 
-TENNOJI_EXPORT int tennoji_encoder_write_frame(TennojiEncoder* encoder,
+TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
                                                 TennojiCanvas* canvas) {
     if (!encoder || !encoder->videoCodecCtx || !canvas) return -1;
 
@@ -273,7 +273,7 @@ TENNOJI_EXPORT int tennoji_encoder_write_frame(TennojiEncoder* encoder,
     return 0;
 }
 
-TENNOJI_EXPORT int tennoji_encoder_write_audio(TennojiEncoder* encoder,
+TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
                                                 TennojiDecoder* audio_decoder,
                                                 int64_t duration_us) {
     if (!encoder || !encoder->audioCodecCtx || !audio_decoder) return -1;
@@ -357,7 +357,7 @@ done:
     return 0;
 }
 
-TENNOJI_EXPORT int tennoji_encoder_drain_audio_queue(TennojiEncoder* encoder,
+TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
                                                       TennojiDecoder* decoder) {
     if (!encoder || !encoder->audioCodecCtx || !decoder) return -1;
     if (!decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return 0;
@@ -430,7 +430,7 @@ TENNOJI_EXPORT int tennoji_encoder_drain_audio_queue(TennojiEncoder* encoder,
     return 0;
 }
 
-TENNOJI_EXPORT int tennoji_encoder_finalize(TennojiEncoder* encoder) {
+TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
     if (!encoder || !encoder->fmtCtx) return -1;
 
     // Flush video encoder
@@ -470,7 +470,7 @@ TENNOJI_EXPORT int tennoji_encoder_finalize(TennojiEncoder* encoder) {
     return av_write_trailer(encoder->fmtCtx);
 }
 
-TENNOJI_EXPORT void tennoji_encoder_destroy(TennojiEncoder* encoder) {
+TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
     if (!encoder) return;
 
     if (encoder->audioMixer) {

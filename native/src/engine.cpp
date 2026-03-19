@@ -9,7 +9,7 @@
 #include "include/codec/SkWebpDecoder.h"
 #include "src/shaders/gradients/SkGradientBaseShader.h"
 
-void setup_codecs() {
+void setup_skia() {
   static bool doned = false;
   if (doned) return;
   SkCodecs::Register(SkPngDecoder::Decoder());
@@ -25,10 +25,10 @@ void setup_codecs() {
 }
 extern "C" {
 
-TENNOJI_EXPORT TennojiEngine* tennoji_engine_create(const TennojiEngineConfig* config) {
+TENNOJI_EXPORT TennojiEngine* rina_engine_create(const TennojiEngineConfig* config) {
     if (!config) return nullptr;
 
-    setup_codecs();
+    setup_skia();
 
     auto* engine = new TennojiEngine();
     engine->width = config->width;
@@ -50,7 +50,7 @@ TENNOJI_EXPORT TennojiEngine* tennoji_engine_create(const TennojiEngineConfig* c
     return engine;
 }
 
-TENNOJI_EXPORT void tennoji_engine_destroy(TennojiEngine* engine) {
+TENNOJI_EXPORT void rina_engine_destroy(TennojiEngine* engine) {
     if (!engine) return;
 
     // Clear all textures before destroying GPU context
