@@ -22,6 +22,7 @@ tstruct(TennojiEncoder);
 tstruct(TennojiTexture);
 tstruct(TennojiCanvas);
 tstruct(TennojiParagraphBuilder);
+tstruct(TennojiParagraph);
 tstruct(TennojiCanvasImage); // for the most part it holds a skimage
 tstruct(TennojiCodec);
 tstruct(TennojiImageDescriptor);
@@ -66,6 +67,8 @@ typedef struct {
 typedef struct {
   uint32_t* encodedData;
   TennojiShader* shader;
+  TennojiColorFilter* colorFilter;
+  TennojiImageFilter* imageFilter;
 } TennojiCanvasPaintMetadata;
 
 

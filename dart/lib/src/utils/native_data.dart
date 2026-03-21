@@ -8,9 +8,8 @@ final _int32Finalizer = Finalizer<Pointer<Int32>>((p0) => calloc.free(p0));
 final _utf8Finalizer = Finalizer<Pointer<Utf8>>((p0) => calloc.free(p0));
 
 extension StringPtr on String {
-  Pointer<Utf8> asNativePointer() {
-    final Pointer<Utf8> nativeString = toNativeUtf8();
-    _utf8Finalizer.attach(this, nativeString, detach: this);
+  Pointer<Utf8> asNativePointer(Arena arena) {
+    final Pointer<Utf8> nativeString = toNativeUtf8(allocator: arena);
     return nativeString;
   }
 }

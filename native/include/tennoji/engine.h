@@ -135,22 +135,92 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(
 TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder);
 TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder);
 
+// Paragraph
 // sure non-null terminated string exist but we'll just assume dart is the only one interfacing this
 TENNOJI_EXPORT TennojiParagraphBuilder* rina_paragraph_builder_create(
   int32_t* encodedStyle,
-  uint8_t esLength,
   uint8_t* strutData,
-  uint8_t sdLength,
+  bool hasStrutData,
   /*const std::string&*/ const char* fontFamily,
   /*const std::vector<std::string>&*/ const char** strutFontFamilies,
-  uint8_t sffLen,
-  float fontSize,
-  float height,
-  /*const std::u16string&*/ const uint16_t* ellipsis,
+  uint32_t sffLen,
+  /*const std::u16string&*/ const char* ellipsis,
   /*const std::string&*/ const char* locale
 );
+TENNOJI_EXPORT void rina_paragraph_builder_push_style(
+  TennojiParagraphBuilder* builder,
+  int32_t* encoded,
+  const char** fontFamilies,
+  uint32_t ffLength,
+  float fontSize,
+  float letterSpacing,
+  float wordSpacing,
+  float height,
+  float decorationThickness,
+  const char* locale,
+  TennojiCanvasPaintMetadata* background,
+  TennojiCanvasPaintMetadata* foreground,
+  uint32_t* shadowsData,
+  uint32_t* fontFeaturesData,
+  uint32_t* fontVariationsData
+);
+TENNOJI_EXPORT void rina_paragraph_builder_pop(
+  TennojiParagraphBuilder* builder
+);
+TENNOJI_EXPORT void rina_paragraph_builder_add_text(
+  TennojiParagraphBuilder* builder,
+  const char* text
+);
+TENNOJI_EXPORT void rina_paragraph_builder_add_placeholder(
+  TennojiParagraphBuilder* builder,
+  float width,
+  float height,
+  uint32_t alignment,
+  float baselineOffset,
+  uint32_t baseline
+);
+TENNOJI_EXPORT TennojiParagraph* rina_paragraph_builder_build(
+  TennojiParagraphBuilder* builder
+);
+TENNOJI_EXPORT void rina_paragraph_builder_destroy(
+  TennojiParagraphBuilder* builder
+);
+TENNOJI_EXPORT void rina_load_font_from_list(
+  const uint8_t* data, uint32_t length,
+  const char* fontFamily
+);
 
+TENNOJI_EXPORT float rina_paragraph_get_width(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_height(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_longest_line(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_min_intrinsic_width(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_max_intrinsic_width(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_alphabetic_baseline(TennojiParagraph* paragraph);
+TENNOJI_EXPORT float rina_paragraph_get_ideographic_baseline(TennojiParagraph* paragraph);
+TENNOJI_EXPORT bool rina_paragraph_did_exceed_max_lines(TennojiParagraph* paragraph);
+TENNOJI_EXPORT void rina_paragraph_layout(TennojiParagraph* paragraph, double width);
 
+TENNOJI_EXPORT float* rina_paragraph_get_boxes_for_range(
+  TennojiParagraph* paragraph,
+  uint32_t start, uint32_t end,
+  uint8_t boxHeightStyle,
+  uint8_t boxWidthStyle
+);
+TENNOJI_EXPORT float* rina_paragraph_get_boxes_for_placeholders(
+  TennojiParagraph* paragraph
+);
+TENNOJI_EXPORT int32_t* rina_paragraph_get_position_for_offset(
+  TennojiParagraph* paragraph,
+  double dx, double dy
+);
+TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_at(
+  TennojiParagraph* paragraph,
+  int32_t codeUnitOffset
+);
+TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_for_offset(
+  TennojiParagraph* paragraph,
+  double dx, double dy
+);
 // this fucker on rsuperellipse
 TENNOJI_EXPORT bool rina_rsuperellipse_contains(
     float px, float py,            // The point to test

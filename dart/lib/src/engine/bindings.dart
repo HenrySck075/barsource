@@ -10,6 +10,7 @@
 library;
 
 import 'dart:ffi' as ffi;
+import '' as self;
 
 @ffi.Native<
   ffi.Pointer<TennojiEngine> Function(ffi.Pointer<TennojiEngineConfig>)
@@ -359,30 +360,224 @@ external void rina_encoder_destroy(ffi.Pointer<TennojiEncoder> encoder);
 @ffi.Native<
   ffi.Pointer<TennojiParagraphBuilder> Function(
     ffi.Pointer<ffi.Int32>,
-    ffi.Uint8,
     ffi.Pointer<ffi.Uint8>,
-    ffi.Uint8,
+    ffi.Bool,
     ffi.Pointer<ffi.Char>,
     ffi.Pointer<ffi.Pointer<ffi.Char>>,
-    ffi.Uint8,
-    ffi.Float,
-    ffi.Float,
-    ffi.Pointer<ffi.Uint16>,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Char>,
     ffi.Pointer<ffi.Char>,
   )
 >(isLeaf: true)
 external ffi.Pointer<TennojiParagraphBuilder> rina_paragraph_builder_create(
   ffi.Pointer<ffi.Int32> encodedStyle,
-  int esLength,
   ffi.Pointer<ffi.Uint8> strutData,
-  int sdLength,
+  bool hasStrutData,
   ffi.Pointer<ffi.Char> fontFamily,
   ffi.Pointer<ffi.Pointer<ffi.Char>> strutFontFamilies,
   int sffLen,
-  double fontSize,
-  double height,
-  ffi.Pointer<ffi.Uint16> ellipsis,
+  ffi.Pointer<ffi.Char> ellipsis,
   ffi.Pointer<ffi.Char> locale,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiParagraphBuilder>,
+    ffi.Pointer<ffi.Int32>,
+    ffi.Pointer<ffi.Pointer<ffi.Char>>,
+    ffi.Uint32,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+    ffi.Pointer<ffi.Uint32>,
+    ffi.Pointer<ffi.Uint32>,
+    ffi.Pointer<ffi.Uint32>,
+  )
+>(isLeaf: true)
+external void rina_paragraph_builder_push_style(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+  ffi.Pointer<ffi.Int32> encoded,
+  ffi.Pointer<ffi.Pointer<ffi.Char>> fontFamilies,
+  int ffLength,
+  double fontSize,
+  double letterSpacing,
+  double wordSpacing,
+  double height,
+  double decorationThickness,
+  ffi.Pointer<ffi.Char> locale,
+  ffi.Pointer<TennojiCanvasPaintMetadata> background,
+  ffi.Pointer<TennojiCanvasPaintMetadata> foreground,
+  ffi.Pointer<ffi.Uint32> shadowsData,
+  ffi.Pointer<ffi.Uint32> fontFeaturesData,
+  ffi.Pointer<ffi.Uint32> fontVariationsData,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiParagraphBuilder>)>(
+  isLeaf: true,
+)
+external void rina_paragraph_builder_pop(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+);
+
+@ffi.Native<
+  ffi.Void Function(ffi.Pointer<TennojiParagraphBuilder>, ffi.Pointer<ffi.Char>)
+>(isLeaf: true)
+external void rina_paragraph_builder_add_text(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+  ffi.Pointer<ffi.Char> text,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiParagraphBuilder>,
+    ffi.Float,
+    ffi.Float,
+    ffi.Uint32,
+    ffi.Float,
+    ffi.Uint32,
+  )
+>(isLeaf: true)
+external void rina_paragraph_builder_add_placeholder(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+  double width,
+  double height,
+  int alignment,
+  double baselineOffset,
+  int baseline,
+);
+
+@ffi.Native<
+  ffi.Pointer<TennojiParagraph> Function(ffi.Pointer<TennojiParagraphBuilder>)
+>(isLeaf: true)
+external ffi.Pointer<TennojiParagraph> rina_paragraph_builder_build(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiParagraphBuilder>)>(
+  isLeaf: true,
+)
+external void rina_paragraph_builder_destroy(
+  ffi.Pointer<TennojiParagraphBuilder> builder,
+);
+
+@ffi.Native<
+  ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.Uint32, ffi.Pointer<ffi.Char>)
+>(isLeaf: true)
+external void rina_load_font_from_list(
+  ffi.Pointer<ffi.Uint8> data,
+  int length,
+  ffi.Pointer<ffi.Char> fontFamily,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_width(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_height(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_longest_line(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_min_intrinsic_width(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_max_intrinsic_width(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_alphabetic_baseline(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external double rina_paragraph_get_ideographic_baseline(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Bool Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external bool rina_paragraph_did_exceed_max_lines(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiParagraph>, ffi.Double)>(
+  isLeaf: true,
+)
+external void rina_paragraph_layout(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  double width,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Float> Function(
+    ffi.Pointer<TennojiParagraph>,
+    ffi.Uint32,
+    ffi.Uint32,
+    ffi.Uint8,
+    ffi.Uint8,
+  )
+>(isLeaf: true)
+external ffi.Pointer<ffi.Float> rina_paragraph_get_boxes_for_range(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int start,
+  int end,
+  int boxHeightStyle,
+  int boxWidthStyle,
+);
+
+@ffi.Native<ffi.Pointer<ffi.Float> Function(ffi.Pointer<TennojiParagraph>)>(
+  isLeaf: true,
+)
+external ffi.Pointer<ffi.Float> rina_paragraph_get_boxes_for_placeholders(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Int32> Function(
+    ffi.Pointer<TennojiParagraph>,
+    ffi.Double,
+    ffi.Double,
+  )
+>(isLeaf: true)
+external ffi.Pointer<ffi.Int32> rina_paragraph_get_position_for_offset(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  double dx,
+  double dy,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int32)
+>(isLeaf: true)
+external ffi.Pointer<ffi.Int32> rina_paragraph_get_glyph_info_at(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int codeUnitOffset,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Int32> Function(
+    ffi.Pointer<TennojiParagraph>,
+    ffi.Double,
+    ffi.Double,
+  )
+>(isLeaf: true)
+external ffi.Pointer<ffi.Int32> rina_paragraph_get_glyph_info_for_offset(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  double dx,
+  double dy,
 );
 
 @ffi.Native<
@@ -1209,6 +1404,65 @@ external ffi.Pointer<TennojiImageFilter> rina_image_filter_create_composed(
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiImageFilter>)>(isLeaf: true)
 external void rina_image_filter_destroy(ffi.Pointer<TennojiImageFilter> filter);
 
+const addresses = _SymbolAddresses();
+
+class _SymbolAddresses {
+  const _SymbolAddresses();
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiEngine>)>>
+  get rina_engine_destroy => ffi.Native.addressOf(self.rina_engine_destroy);
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>>
+  get rina_canvas_destroy => ffi.Native.addressOf(self.rina_canvas_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>
+  >
+  get rina_texture_destroy => ffi.Native.addressOf(self.rina_texture_destroy);
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCodec>)>>
+  get rina_codec_destroy => ffi.Native.addressOf(self.rina_codec_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiFrameInfo>)>
+  >
+  get rina_frame_info_destroy =>
+      ffi.Native.addressOf(self.rina_frame_info_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiImageDescriptor>)>
+  >
+  get rina_idesc_destroy => ffi.Native.addressOf(self.rina_idesc_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiEncoder>)>
+  >
+  get rina_encoder_destroy => ffi.Native.addressOf(self.rina_encoder_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiParagraphBuilder>)>
+  >
+  get rina_paragraph_builder_destroy =>
+      ffi.Native.addressOf(self.rina_paragraph_builder_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasVertices>)>
+  >
+  get rina_vertices_destroy => ffi.Native.addressOf(self.rina_vertices_destroy);
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiShader>)>>
+  get rina_shader_destroy => ffi.Native.addressOf(self.rina_shader_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasPath>)>
+  >
+  get rina_path_destroy => ffi.Native.addressOf(self.rina_path_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasPathMeasure>)>
+  >
+  get rina_path_measure_destroy =>
+      ffi.Native.addressOf(self.rina_path_measure_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiColorFilter>)>
+  >
+  get rina_color_filter_destroy =>
+      ffi.Native.addressOf(self.rina_color_filter_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiImageFilter>)>
+  >
+  get rina_image_filter_destroy =>
+      ffi.Native.addressOf(self.rina_image_filter_destroy);
+}
+
 final class TennojiEngine extends ffi.Opaque {}
 
 final class TennojiDecoder extends ffi.Opaque {}
@@ -1220,6 +1474,8 @@ final class TennojiTexture extends ffi.Opaque {}
 final class TennojiCanvas extends ffi.Opaque {}
 
 final class TennojiParagraphBuilder extends ffi.Opaque {}
+
+final class TennojiParagraph extends ffi.Opaque {}
 
 final class TennojiCanvasImage extends ffi.Opaque {}
 
@@ -1310,4 +1566,8 @@ final class TennojiCanvasPaintMetadata extends ffi.Struct {
   external ffi.Pointer<ffi.Uint32> encodedData;
 
   external ffi.Pointer<TennojiShader> shader;
+
+  external ffi.Pointer<TennojiColorFilter> colorFilter;
+
+  external ffi.Pointer<TennojiImageFilter> imageFilter;
 }

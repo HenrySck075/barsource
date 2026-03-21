@@ -56,27 +56,6 @@ bool _radiusIsValid(Radius radius) {
 Color _scaleAlpha(Color x, double factor) {
   return x.withValues(alpha: clampDouble(x.a * factor, 0, 1));
 }
-
-// ????
-bool _listEquals<T>(List<T>? a, List<T>? b) {
-  if (identical(a, b)) {
-    return true;
-  }
-  if (a == null || b == null) {
-    return false;
-  }
-  final int length = a.length;
-  if (b.length != length) {
-    return false;
-  }
-  for (int index = 0; index < length; index++) {
-    if (a[index] != b[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /// An immutable color value in ARGB format.
 ///
 /// Consider the light teal of the [Flutter logo](https://flutter.dev/brand). It
@@ -1662,16 +1641,14 @@ final class Paint {
   }
 
   set colorFilter(ColorFilter? value) {
-    /*
-    final nativePtr = value?._toNativeColorFilter() ?? nullptr.cast<TennojiColorFilterMetadata>();
-    if (nativePtr == nullptr) {
+    final _ColorFilter? nativeFilter = value?._toNativeColorFilter();
+    if (nativeFilter == null) {
       if (_objects != null) {
         _objects![_kColorFilterIndex] = null;
       }
     } else {
-      */
-      _ensureObjectsInitialized()[_kColorFilterIndex] = /*nativePtr*/value;
-    //}
+      _ensureObjectsInitialized()[_kColorFilterIndex] = nativeFilter;
+    }
   }
 
   /// The [ImageFilter] to use when drawing raster images.
@@ -3129,9 +3106,7 @@ abstract class Path {
 
 base class _NativePath implements Path, Finalizable {
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    Native.addressOf<
-      NativeFunction<Void Function(Pointer<TennojiCanvasPath>)>
-    >(rina_path_destroy).cast<NativeFinalizerFunction>()
+    addresses.rina_path_destroy.cast<NativeFinalizerFunction>()
   );
   /// Create a new empty [Path] object.
   _NativePath() {
@@ -3542,9 +3517,7 @@ class PathMetric {
 
 base class _PathMeasure implements Finalizable {
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    Native.addressOf<
-      NativeFunction<Void Function(Pointer<TennojiCanvasPathMeasure>)>
-    >(rina_path_measure_destroy).cast<NativeFinalizerFunction>()
+    addresses.rina_path_measure_destroy.cast<NativeFinalizerFunction>()
   ); 
   _PathMeasure(_NativePath path, bool forceClosed) {
     _nativePtr = rina_path_measure_create(path._nativePtr, forceClosed);
@@ -4068,9 +4041,7 @@ class ColorFilter implements ImageFilter {
 base class _ColorFilter implements Finalizable {
   late final Pointer<TennojiColorFilter> _nativePtr;
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    Native.addressOf<
-      NativeFunction<Void Function(Pointer<TennojiColorFilter>)>
-    >(rina_color_filter_destroy).cast<NativeFinalizerFunction>()
+    addresses.rina_color_filter_destroy.cast<NativeFinalizerFunction>()
   );
   void _postSetup() {
     if (_nativePtr == nullptr) {
@@ -4501,8 +4472,7 @@ class _FragmentShaderImageFilter implements ImageFilter {
 base class _ImageFilter implements Finalizable {
   late final Pointer<TennojiImageFilter> _nativePtr;
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    Native.addressOf<NativeFunction<Void Function(Pointer<TennojiImageFilter>)>>(rina_image_filter_destroy)
-    .cast<NativeFinalizerFunction>()
+    addresses.rina_image_filter_destroy.cast<NativeFinalizerFunction>()
   );
   void _postSetup() {
     if (_nativePtr == nullptr) {
@@ -5077,11 +5047,13 @@ typedef _UniformFloatInfo = ({int index, int size});
 base class FragmentProgram {
   @pragma('vm:entry-point')
   FragmentProgram._fromFile(String filePath) {
-    final ret = rina_fragment_create(filePath.asNativePointer().cast<Char>());
-    _nativePtr = ret.result;
-    if (_nativePtr == nullptr) {
-      throw Exception(ret.errorDetails.toString());
-    }
+    using((arena){
+      final ret = rina_fragment_create(filePath.asNativePointer(arena).cast<Char>());
+      _nativePtr = ret.result;
+      if (_nativePtr == nullptr) {
+        throw Exception(ret.errorDetails.toString());
+      }
+    });
     assert(() {
       _debugName = filePath;
       return true;
@@ -6481,20 +6453,21 @@ class Shadow {
   // bytes for each shadow.
   static ByteData _encodeShadows(List<Shadow>? shadows) {
     if (shadows == null) {
-      return ByteData(0);
+      return ByteData(4)..setUint32(0,0,_kFakeHostEndian);
     }
 
-    final int byteCount = shadows.length * _kBytesPerShadow;
+    final int byteCount = shadows.length * _kBytesPerShadow + 4;
     final shadowsData = ByteData(byteCount);
+    shadowsData.setUint32(0, shadows.length, _kFakeHostEndian);
 
     var shadowOffset = 0;
     for (var shadowIndex = 0; shadowIndex < shadows.length; ++shadowIndex) {
       final Shadow shadow = shadows[shadowIndex];
-      shadowOffset = shadowIndex * _kBytesPerShadow;
+      shadowOffset = shadowIndex * _kBytesPerShadow + 4;
 
       shadowsData.setInt32(
         _kColorOffset + shadowOffset,
-        shadow.color.value ^ Shadow._kColorDefault,
+        shadow.color.value /*^ Shadow._kColorDefault*/,
         _kFakeHostEndian,
       );
 

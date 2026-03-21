@@ -13,3 +13,4 @@ part 'lerp.dart';
 part 'math.dart';
 part 'painting.dart';
 part 'natives.dart';
+part 'text.dart';

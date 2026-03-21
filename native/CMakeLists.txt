@@ -9,6 +9,7 @@ pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswresample
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/third_party/skia" CACHE PATH "Skia path")
 set(TENNOJI_TOKIMEKI ON "Disables input checks. You should disable this option if you plan to use the native library outside of the package or you're uncertain about the users.")
 
+include(cmake/Platform.cmake)
 # Auto-download Skia if not present
 if(NOT EXISTS "${SKIA_DIR}/include")
   message(STATUS "Skia not found at ${SKIA_DIR}, downloading from geode-skia...")

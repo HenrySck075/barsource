@@ -35,6 +35,9 @@ ffigen:
     leaf:
       include: 
          - "rina_.*" 
+    symbol-address:
+      include:
+        - "rina_.*_destroy"
   macros:
     include:
       - 'TENNOJI_*'
