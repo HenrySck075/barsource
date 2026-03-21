@@ -67,3 +67,16 @@ extension VectorOfStringConv on List<String> {
     calloc.free(ptr);
   }
 }
+
+
+
+extension BorrowingArena on Arena {
+  void borrow(Pointer ptr) {
+    this.using(
+      ptr,
+      // we don't have any ide what the allocator is
+      // however it for the most part defaults to calloc and also free() doesnt care
+      (_)=>calloc.free(ptr)
+    );
+  }
+}

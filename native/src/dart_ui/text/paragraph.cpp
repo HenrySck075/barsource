@@ -3,6 +3,7 @@
 #include "include/core/SkData.h"
 #include "include/core/SkFontStyle.h"
 #include "modules/skparagraph/include/FontCollection.h"
+#include "modules/skparagraph/include/Metrics.h"
 #include "modules/skparagraph/include/TypefaceFontProvider.h"
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
@@ -511,6 +512,28 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_for_offset(
   auto d = paragraph->paragraph->getClosestUTF16GlyphInfoAt(dx,dy,&info);
   if (!d) return nullptr;
   return packGlyphInfo(info);
+}
+TENNOJI_EXPORT int32_t* rina_paragraph_get_word_boundary(
+  TennojiParagraph* paragraph,
+  int32_t characterPos
+) {
+  auto range = paragraph->paragraph->getWordBoundary(characterPos);
+  auto ret = static_cast<int32_t*>(malloc(sizeof(int32_t)*2));
+  ret[0] = range.start;
+  ret[1] = range.end;
+  return ret;
+}
+TENNOJI_EXPORT int32_t* rina_paragraph_get_line_boundary(
+  TennojiParagraph* paragraph,
+  int32_t offset
+) {
+  skia::textlayout::LineMetrics metrics;
+  auto range = paragraph->paragraph->getLineMetricsAt(offset, &metrics);
+  if (!range) return nullptr;
+  auto ret = static_cast<int32_t*>(malloc(sizeof(int32_t)*2));
+  ret[0] = metrics.fStartIndex;
+  ret[1] = metrics.fEndIndex;
+  return ret;
 }
 
 __UNEXTERN_C__

@@ -581,6 +581,22 @@ external ffi.Pointer<ffi.Int32> rina_paragraph_get_glyph_info_for_offset(
 );
 
 @ffi.Native<
+  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int32)
+>(isLeaf: true)
+external ffi.Pointer<ffi.Int32> rina_paragraph_get_word_boundary(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int characterPos,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int32)
+>(isLeaf: true)
+external ffi.Pointer<ffi.Int32> rina_paragraph_get_line_boundary(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int offset,
+);
+
+@ffi.Native<
   ffi.Bool Function(
     ffi.Float,
     ffi.Float,

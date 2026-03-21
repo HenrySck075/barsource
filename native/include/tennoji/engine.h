@@ -221,6 +221,15 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_for_offset(
   TennojiParagraph* paragraph,
   double dx, double dy
 );
+TENNOJI_EXPORT int32_t* rina_paragraph_get_word_boundary(
+  TennojiParagraph* paragraph,
+  int32_t characterPos
+);
+TENNOJI_EXPORT int32_t* rina_paragraph_get_line_boundary(
+  TennojiParagraph* paragraph,
+  int32_t offset
+);
+
 // this fucker on rsuperellipse
 TENNOJI_EXPORT bool rina_rsuperellipse_contains(
     float px, float py,            // The point to test

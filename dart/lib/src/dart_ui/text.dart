@@ -3323,7 +3323,9 @@ base class _NativeParagraph implements Paragraph {
     ));
   @override
   GlyphInfo? getClosestGlyphInfoForOffset(Offset offset) =>
-     GlyphInfo._packedArray(rina_paragraph_get_glyph_info_for_offset(_nativePtr,offset.dx, offset.dy));
+    GlyphInfo._packedArray(
+      rina_paragraph_get_glyph_info_for_offset(_nativePtr,offset.dx, offset.dy
+    ));
 
 
   @override
@@ -3335,39 +3337,45 @@ base class _NativeParagraph implements Paragraph {
       case TextAffinity.downstream:
         characterPosition = position.offset;
     }
-    final List<int> boundary = _getWordBoundary(characterPosition);
-    return TextRange(start: boundary[0], end: boundary[1]);
+    final boundary = rina_paragraph_get_word_boundary(_nativePtr, characterPosition);
+    final ret = TextRange(start: boundary[0], end: boundary[1]);
+    malloc.free(boundary);
+    return ret;
   }
-
-  @Native<Handle Function(Pointer<Void>, Uint32)>(symbol: 'Paragraph::getWordBoundary')
-  external List<int> _getWordBoundary(int offset);
-
   @override
   TextRange getLineBoundary(TextPosition position) {
-    final List<int> boundary = _getLineBoundary(position.offset);
-    final line = TextRange(start: boundary[0], end: boundary[1]);
-
-    final List<int> nextBoundary = _getLineBoundary(position.offset + 1);
-    final nextLine = TextRange(start: nextBoundary[0], end: nextBoundary[1]);
-    // If there is no next line, because we're at the end of the field, return line.
-    if (!nextLine.isValid) {
-      return line;
+    return using((arena){
+    final boundary = rina_paragraph_get_line_boundary(_nativePtr, position.offset);
+    if (boundary == nullptr) {
+      throw StateError(
+        'getLineBoundary returned nullptr, possibly invalid position.'
+      );
     }
+    final line = TextRange(start: boundary[0], end: boundary[1]);
+    arena.borrow(boundary);
+
+/*
+*/
 
     // _getLineBoundary only considers the offset and assumes that the
     // TextAffinity is upstream. In the case that TextPosition is just after a
     // word wrap (downstream), we need to return the line for the next offset.
     if (position.affinity == TextAffinity.downstream &&
-        line != nextLine &&
-        position.offset == line.end &&
-        line.end == nextLine.start) {
-      return TextRange(start: nextBoundary[0], end: nextBoundary[1]);
+        position.offset == line.end) {
+      final nextBoundary = rina_paragraph_get_line_boundary(
+        _nativePtr, position.offset + 1
+      );
+      if (nextBoundary == nullptr) return line;
+      final nextLine = TextRange(start: nextBoundary[0], end: nextBoundary[1]);
+      arena.borrow(nextBoundary);
+      if (!(line != nextLine && line.end == nextLine.end)) {
+        return line;
+      }
+      return nextLine;
     }
     return line;
+    });
   }
-
-  @Native<Handle Function(Pointer<Void>, Uint32)>(symbol: 'Paragraph::getLineBoundary')
-  external List<int> _getLineBoundary(int offset);
 
   // Redirecting the paint function in this way solves some dependency problems
   // in the C++ code. If we straighten out the C++ dependencies, we can remove
