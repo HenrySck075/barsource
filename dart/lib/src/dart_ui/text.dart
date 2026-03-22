@@ -3236,32 +3236,46 @@ base class _NativeParagraph implements Paragraph {
 
   late final Pointer<TennojiParagraph> _nativePtr;
 
-  @override
-  double get width => rina_paragraph_get_width(_nativePtr);
+  T _runWithDisposeCheck<T>(T Function(Pointer<TennojiParagraph>) fn) {
+    _assertDisposed();
+    return fn(_nativePtr);
+  }
 
+  double? _width; 
   @override
-  double get height => rina_paragraph_get_height(_nativePtr);
+  double get width => _width ??= _runWithDisposeCheck<double>(rina_paragraph_get_width);
 
+  double? _height;
   @override
-  double get longestLine => rina_paragraph_get_longest_line(_nativePtr);
+  double get height => _height ??= _runWithDisposeCheck<double>(rina_paragraph_get_height);
 
+  double? _longestLine;
   @override
-  double get minIntrinsicWidth => rina_paragraph_get_min_intrinsic_width(_nativePtr);
+  double get longestLine => _longestLine ??= _runWithDisposeCheck<double>(rina_paragraph_get_longest_line);
 
+  double? _minIntrinsicWidth;
   @override
-  double get maxIntrinsicWidth => rina_paragraph_get_max_intrinsic_width(_nativePtr);
+  double get minIntrinsicWidth => _minIntrinsicWidth ??= _runWithDisposeCheck<double>(rina_paragraph_get_min_intrinsic_width);
 
+  double? _maxIntrinsicWidth;
   @override
-  double get alphabeticBaseline => rina_paragraph_get_alphabetic_baseline(_nativePtr);
+  double get maxIntrinsicWidth => _maxIntrinsicWidth ??= _runWithDisposeCheck<double>(rina_paragraph_get_max_intrinsic_width);
 
+  double? _alphabeticBaseline;
   @override
-  double get ideographicBaseline => rina_paragraph_get_ideographic_baseline(_nativePtr);
+  double get alphabeticBaseline => _alphabeticBaseline ??= _runWithDisposeCheck<double>(rina_paragraph_get_alphabetic_baseline);
 
+  double? _ideographicBaseline;
   @override
-  bool get didExceedMaxLines => rina_paragraph_did_exceed_max_lines(_nativePtr);
+  double get ideographicBaseline => _ideographicBaseline ??= _runWithDisposeCheck<double>(rina_paragraph_get_ideographic_baseline);
+
+  bool? _didExceedMaxLines;
+  @override
+  bool get didExceedMaxLines => _didExceedMaxLines ??= _runWithDisposeCheck<bool>(rina_paragraph_did_exceed_max_lines);
 
   @override
   void layout(ParagraphConstraints constraints) {
+    _assertDisposed();
     rina_paragraph_layout(_nativePtr,constraints.width);
     assert(() {
       _needsLayout = false;
@@ -3297,6 +3311,7 @@ base class _NativeParagraph implements Paragraph {
     BoxHeightStyle boxHeightStyle = BoxHeightStyle.tight,
     BoxWidthStyle boxWidthStyle = BoxWidthStyle.tight,
   }) {
+    _assertDisposed();
     return _decodeTextBoxes(
       rina_paragraph_get_boxes_for_range(
         _nativePtr,
@@ -3307,29 +3322,36 @@ base class _NativeParagraph implements Paragraph {
 
   @override
   List<TextBox> getBoxesForPlaceholders() {
+    _assertDisposed();
     return _decodeTextBoxes(rina_paragraph_get_boxes_for_placeholders(_nativePtr));
   }
 
   @override
   TextPosition getPositionForOffset(Offset offset) {
+    _assertDisposed();
     final Pointer<Int32> encoded = rina_paragraph_get_position_for_offset(_nativePtr, offset.dx, offset.dy);
     return TextPosition(offset: encoded[0], affinity: TextAffinity.values[encoded[1]]);
   }
 
   @override
-  GlyphInfo? getGlyphInfoAt(int codeUnitOffset) 
-    => GlyphInfo._packedArray(rina_paragraph_get_glyph_info_at(
+  GlyphInfo? getGlyphInfoAt(int codeUnitOffset) {
+    _assertDisposed();
+    return GlyphInfo._packedArray(rina_paragraph_get_glyph_info_at(
       _nativePtr, codeUnitOffset
     ));
+  }
   @override
-  GlyphInfo? getClosestGlyphInfoForOffset(Offset offset) =>
-    GlyphInfo._packedArray(
+  GlyphInfo? getClosestGlyphInfoForOffset(Offset offset) {
+    _assertDisposed();
+    return GlyphInfo._packedArray(
       rina_paragraph_get_glyph_info_for_offset(_nativePtr,offset.dx, offset.dy
     ));
+  }
 
 
   @override
   TextRange getWordBoundary(TextPosition position) {
+    _assertDisposed();
     final int characterPosition;
     switch (position.affinity) {
       case TextAffinity.upstream:
@@ -3344,6 +3366,7 @@ base class _NativeParagraph implements Paragraph {
   }
   @override
   TextRange getLineBoundary(TextPosition position) {
+    _assertDisposed();
     return using((arena){
     final boundary = rina_paragraph_get_line_boundary(_nativePtr, position.offset);
     if (boundary == nullptr) {
@@ -3377,54 +3400,58 @@ base class _NativeParagraph implements Paragraph {
     });
   }
 
+/*
   // Redirecting the paint function in this way solves some dependency problems
   // in the C++ code. If we straighten out the C++ dependencies, we can remove
   // this indirection.
   @Native<Void Function(Pointer<Void>, Pointer<Void>, Double, Double)>(symbol: 'Paragraph::paint')
   external void _paint(_NativeCanvas canvas, double x, double y);
-
-  @override
-  List<LineMetrics> computeLineMetrics() {
-    final Float64List encoded = _computeLineMetrics();
-    final int count = encoded.length ~/ 9;
+*/
+  LineMetrics? _decodeLineMetrics(Pointer<Float> ptr) {
+    if (ptr == nullptr) return null;
     var position = 0;
-    final metrics = <LineMetrics>[
-      for (int index = 0; index < count; index += 1)
-        LineMetrics(
-          hardBreak: encoded[position++] != 0,
-          ascent: encoded[position++],
-          descent: encoded[position++],
-          unscaledAscent: encoded[position++],
-          height: encoded[position++],
-          width: encoded[position++],
-          left: encoded[position++],
-          baseline: encoded[position++],
-          lineNumber: encoded[position++].toInt(),
-        ),
-    ];
+    final metrics = LineMetrics(
+      hardBreak: ptr[position++] != 0,
+      ascent: ptr[position++],
+      descent: ptr[position++],
+      unscaledAscent: ptr[position++],
+      height: ptr[position++],
+      width: ptr[position++],
+      left: ptr[position++],
+      baseline: ptr[position++],
+      lineNumber: ptr[position++].toInt(),
+    );
     return metrics;
   }
-
-  @Native<Handle Function(Pointer<Void>)>(symbol: 'Paragraph::computeLineMetrics')
-  external Float64List _computeLineMetrics();
-
   @override
-  LineMetrics? getLineMetricsAt(int lineNumber) => _getLineMetricsAt(lineNumber, LineMetrics._);
-  @Native<Handle Function(Pointer<Void>, Uint32, Handle)>(symbol: 'Paragraph::getLineMetricsAt')
-  external LineMetrics? _getLineMetricsAt(int lineNumber, Function constructor);
-
+  List<LineMetrics> computeLineMetrics() {
+    _assertDisposed();
+    final Pointer<Float> res = rina_paragraph_compute_line_metrics(_nativePtr);
+    final int count = res.cast<Uint32>()[0];
+    final Pointer<Float> encoded = res+1;
+    final metrics = <LineMetrics>[
+      for (int index = 0; index < count; index += 1)
+        _decodeLineMetrics(encoded+(index*9))!,
+    ];
+    malloc.free(res);
+    return metrics;
+  }
   @override
-  @Native<Uint32 Function(Pointer<Void>)>(symbol: 'Paragraph::getNumberOfLines')
-  external int get numberOfLines;
+  LineMetrics? getLineMetricsAt(int lineNumber) {
+    _assertDisposed();
+    return _decodeLineMetrics(rina_paragraph_get_line_metrics_at(_nativePtr, lineNumber));
+  }
+
+  int? _numberOfLines;
+  @override
+  int get numberOfLines => _numberOfLines ??= ((){_assertDisposed();return rina_paragraph_get_number_of_lines(_nativePtr);})();
 
   @override
   int? getLineNumberAt(int codeUnitOffset) {
-    final int lineNumber = _getLineNumber(codeUnitOffset);
+    _assertDisposed();
+    final int lineNumber = rina_paragraph_get_line_number_at(_nativePtr, codeUnitOffset);
     return lineNumber < 0 ? null : lineNumber;
   }
-
-  @Native<Int32 Function(Pointer<Void>, Uint32)>(symbol: 'Paragraph::getLineNumberAt')
-  external int _getLineNumber(int codeUnitOffset);
 
   @override
   void dispose() {
@@ -3433,15 +3460,18 @@ base class _NativeParagraph implements Paragraph {
       _disposed = true;
       return true;
     }());
-    _dispose();
+    rina_paragraph_destroy(_nativePtr);
   }
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Paragraph::dispose')
-  external void _dispose();
-
   bool _disposed = false;
+
+  void _assertDisposed() {
+    assert(() {
+      if (_disposed) {
+        throw StateError('Paragraph was used after being disposed.');
+      }
+      return true;
+    }());
+  }
 
   @override
   bool get debugDisposed {

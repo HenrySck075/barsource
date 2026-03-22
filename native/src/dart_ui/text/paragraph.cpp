@@ -14,6 +14,7 @@
 #include "tennoji/types.h"
 #include "tennoji/export.h"
 #include "../../renderer/canvas_internal.h"
+#include "paragraph_internal.h"
 #include <execution>
 #include <string>
 
@@ -227,14 +228,6 @@ skia::textlayout::TextStyle text_style_from_encoded(
 #endif
 
 __EXTERN_C__
-
-struct TennojiParagraphBuilder {
-  std::unique_ptr<skia::textlayout::ParagraphBuilder> builder;
-};
-struct TennojiParagraph {
-  std::unique_ptr<skia::textlayout::Paragraph> paragraph;
-};
-
 
 static sk_sp<skia::textlayout::FontCollection> g_collector;
 static sk_sp<skia::textlayout::TypefaceFontProvider> g_provider;
@@ -515,7 +508,7 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_for_offset(
 }
 TENNOJI_EXPORT int32_t* rina_paragraph_get_word_boundary(
   TennojiParagraph* paragraph,
-  int32_t characterPos
+  int64_t characterPos
 ) {
   auto range = paragraph->paragraph->getWordBoundary(characterPos);
   auto ret = static_cast<int32_t*>(malloc(sizeof(int32_t)*2));
@@ -525,7 +518,7 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_word_boundary(
 }
 TENNOJI_EXPORT int32_t* rina_paragraph_get_line_boundary(
   TennojiParagraph* paragraph,
-  int32_t offset
+  int64_t offset
 ) {
   skia::textlayout::LineMetrics metrics;
   auto range = paragraph->paragraph->getLineMetricsAt(offset, &metrics);
@@ -534,6 +527,82 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_line_boundary(
   ret[0] = metrics.fStartIndex;
   ret[1] = metrics.fEndIndex;
   return ret;
+}
+TENNOJI_EXPORT float* rina_paragraph_compute_line_metrics(
+  TennojiParagraph* paragraph
+) {
+  std::vector<skia::textlayout::LineMetrics> metrics;
+  paragraph->paragraph->getLineMetrics(metrics);
+
+  /* dart code as a reference
+       LineMetrics(
+          hardBreak: encoded[position++] != 0,
+          ascent: encoded[position++],
+          descent: encoded[position++],
+          unscaledAscent: encoded[position++],
+          height: encoded[position++],
+          width: encoded[position++],
+          left: encoded[position++],
+          baseline: encoded[position++],
+          lineNumber: encoded[position++].toInt(),
+        ),
+  */
+
+  uint32_t length = metrics.size();
+  float* ret = (float*)malloc(sizeof(float)*length);
+  ret[0] = *reinterpret_cast<float*>(&length);
+
+  float* list = ret+1;
+  for (size_t i = 0; i < length; i++) {
+    list[i*9 + 0] = metrics[i].fHardBreak ? 1.0f : 0.0f;
+    list[i*9 + 1] = metrics[i].fAscent;
+    list[i*9 + 2] = metrics[i].fDescent;
+    list[i*9 + 3] = metrics[i].fUnscaledAscent;
+    list[i*9 + 4] = metrics[i].fHeight;
+    list[i*9 + 5] = metrics[i].fWidth;
+    list[i*9 + 6] = metrics[i].fLeft;
+    list[i*9 + 7] = metrics[i].fBaseline;
+    list[i*9 + 8] = (float)metrics[i].fLineNumber;
+  }
+
+  return ret;
+}
+TENNOJI_EXPORT float* rina_paragraph_get_line_metrics_at(
+  TennojiParagraph* paragraph,
+  uint64_t lineNumber
+) {
+  skia::textlayout::LineMetrics metrics;
+  auto d = paragraph->paragraph->getLineMetricsAt(lineNumber, &metrics);
+  if (!d) return nullptr;
+
+  float* ret = (float*)malloc(sizeof(float)*9);
+  ret[0] = metrics.fHardBreak ? 1.0f : 0.0f;
+  ret[1] = metrics.fAscent;
+  ret[2] = metrics.fDescent;
+  ret[3] = metrics.fUnscaledAscent;
+  ret[4] = metrics.fHeight;
+  ret[5] = metrics.fWidth;
+  ret[6] = metrics.fLeft;
+  ret[7] = metrics.fBaseline;
+  ret[8] = (float)metrics.fLineNumber;
+
+  return ret;
+}
+TENNOJI_EXPORT uint64_t rina_paragraph_get_number_of_lines(
+  TennojiParagraph* paragraph
+) {
+  return paragraph->paragraph->lineNumber();
+}
+TENNOJI_EXPORT uint64_t rina_paragraph_get_line_number_at(
+  TennojiParagraph* paragraph,
+  int64_t codeUnitOffset
+) {
+  return paragraph->paragraph->getLineNumberAtUTF16Offset(codeUnitOffset);
+}
+TENNOJI_EXPORT void rina_paragraph_destroy(
+  TennojiParagraph* paragraph
+) {
+  delete paragraph;
 }
 
 __UNEXTERN_C__

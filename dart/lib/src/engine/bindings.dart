@@ -91,6 +91,15 @@ external ffi.Pointer<TennojiCanvas> rina_canvas_create(
 external void rina_canvas_destroy(ffi.Pointer<TennojiCanvas> canvas);
 
 @ffi.Native<
+  ffi.Void Function(ffi.Pointer<TennojiCanvas>, ffi.Uint32, ffi.Uint8)
+>(isLeaf: true)
+external void rina_canvas_draw_color(
+  ffi.Pointer<TennojiCanvas> canvas,
+  int color,
+  int blendMode,
+);
+
+@ffi.Native<
   ffi.Void Function(
     ffi.Pointer<TennojiCanvas>,
     ffi.Pointer<TennojiCanvasPaintMetadata>,
@@ -135,6 +144,21 @@ external void rina_canvas_draw_image(
   double dx,
   double dy,
   ffi.Pointer<TennojiCanvasPaintMetadata> paintData,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Pointer<TennojiParagraph>,
+    ffi.Float,
+    ffi.Float,
+  )
+>(isLeaf: true)
+external void rina_canvas_draw_paragraph(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiParagraph> paragraph,
+  double dx,
+  double dy,
 );
 
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
@@ -474,6 +498,9 @@ external void rina_load_font_from_list(
   ffi.Pointer<ffi.Char> fontFamily,
 );
 
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external void rina_paragraph_destroy(ffi.Pointer<TennojiParagraph> paragraph);
+
 @ffi.Native<ffi.Float Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
 external double rina_paragraph_get_width(
   ffi.Pointer<TennojiParagraph> paragraph,
@@ -581,7 +608,7 @@ external ffi.Pointer<ffi.Int32> rina_paragraph_get_glyph_info_for_offset(
 );
 
 @ffi.Native<
-  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int32)
+  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int64)
 >(isLeaf: true)
 external ffi.Pointer<ffi.Int32> rina_paragraph_get_word_boundary(
   ffi.Pointer<TennojiParagraph> paragraph,
@@ -589,11 +616,39 @@ external ffi.Pointer<ffi.Int32> rina_paragraph_get_word_boundary(
 );
 
 @ffi.Native<
-  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int32)
+  ffi.Pointer<ffi.Int32> Function(ffi.Pointer<TennojiParagraph>, ffi.Int64)
 >(isLeaf: true)
 external ffi.Pointer<ffi.Int32> rina_paragraph_get_line_boundary(
   ffi.Pointer<TennojiParagraph> paragraph,
   int offset,
+);
+
+@ffi.Native<ffi.Pointer<ffi.Float> Function(ffi.Pointer<TennojiParagraph>)>(
+  isLeaf: true,
+)
+external ffi.Pointer<ffi.Float> rina_paragraph_compute_line_metrics(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<
+  ffi.Pointer<ffi.Float> Function(ffi.Pointer<TennojiParagraph>, ffi.Uint64)
+>(isLeaf: true)
+external ffi.Pointer<ffi.Float> rina_paragraph_get_line_metrics_at(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int lineNumber,
+);
+
+@ffi.Native<ffi.Uint64 Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
+external int rina_paragraph_get_number_of_lines(
+  ffi.Pointer<TennojiParagraph> paragraph,
+);
+
+@ffi.Native<ffi.Uint64 Function(ffi.Pointer<TennojiParagraph>, ffi.Int64)>(
+  isLeaf: true,
+)
+external int rina_paragraph_get_line_number_at(
+  ffi.Pointer<TennojiParagraph> paragraph,
+  int codeUnitOffset,
 );
 
 @ffi.Native<
@@ -1452,6 +1507,11 @@ class _SymbolAddresses {
   >
   get rina_paragraph_builder_destroy =>
       ffi.Native.addressOf(self.rina_paragraph_builder_destroy);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiParagraph>)>
+  >
+  get rina_paragraph_destroy =>
+      ffi.Native.addressOf(self.rina_paragraph_destroy);
   ffi.Pointer<
     ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasVertices>)>
   >

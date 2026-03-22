@@ -48,11 +48,16 @@ TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
   int32_t height
 );
 TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas);
+
+TENNOJI_EXPORT void rina_canvas_draw_color(
+  TennojiCanvas* canvas,
+  uint32_t color, // ARGB
+  uint8_t blendMode // SkBlendMode
+);
 TENNOJI_EXPORT void rina_canvas_draw_paint(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paintData
 );
-
 TENNOJI_EXPORT void rina_canvas_draw_rect(
   TennojiCanvas* canvas,
   float left, float top,
@@ -64,6 +69,11 @@ TENNOJI_EXPORT void rina_canvas_draw_image(
   TennojiCanvasImage* image,
   float dx, float dy,
   TennojiCanvasPaintMetadata* paintData
+);
+TENNOJI_EXPORT void rina_canvas_draw_paragraph(
+  TennojiCanvas* canvas,
+  TennojiParagraph* paragraph,
+  float dx, float dy
 );
 
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas);
@@ -190,6 +200,9 @@ TENNOJI_EXPORT void rina_load_font_from_list(
   const char* fontFamily
 );
 
+TENNOJI_EXPORT void rina_paragraph_destroy(
+  TennojiParagraph* paragraph
+);
 TENNOJI_EXPORT float rina_paragraph_get_width(TennojiParagraph* paragraph);
 TENNOJI_EXPORT float rina_paragraph_get_height(TennojiParagraph* paragraph);
 TENNOJI_EXPORT float rina_paragraph_get_longest_line(TennojiParagraph* paragraph);
@@ -223,13 +236,27 @@ TENNOJI_EXPORT int32_t* rina_paragraph_get_glyph_info_for_offset(
 );
 TENNOJI_EXPORT int32_t* rina_paragraph_get_word_boundary(
   TennojiParagraph* paragraph,
-  int32_t characterPos
+  int64_t characterPos
 );
 TENNOJI_EXPORT int32_t* rina_paragraph_get_line_boundary(
   TennojiParagraph* paragraph,
-  int32_t offset
+  int64_t offset
 );
-
+// the first element is a reinterpreted uint32_t denoting the length
+TENNOJI_EXPORT float* rina_paragraph_compute_line_metrics(
+  TennojiParagraph* paragraph
+);
+TENNOJI_EXPORT float* rina_paragraph_get_line_metrics_at(
+  TennojiParagraph* paragraph,
+  uint64_t lineNumber
+);
+TENNOJI_EXPORT uint64_t rina_paragraph_get_number_of_lines(
+  TennojiParagraph* paragraph
+);
+TENNOJI_EXPORT uint64_t rina_paragraph_get_line_number_at(
+  TennojiParagraph* paragraph,
+  int64_t codeUnitOffset
+);
 // this fucker on rsuperellipse
 TENNOJI_EXPORT bool rina_rsuperellipse_contains(
     float px, float py,            // The point to test

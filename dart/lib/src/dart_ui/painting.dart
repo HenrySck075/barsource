@@ -6791,6 +6791,19 @@ class Canvas {
 
   Pointer<TennojiCanvas> get nativePtr => _nativePtr;
 
+  void drawColor(Color color, BlendMode blendMode) {
+    rina_canvas_draw_color(_nativePtr, color.value, blendMode.index);
+  }
+
+  void drawParagraph(Paragraph paragraph, Offset offset) {
+    rina_canvas_draw_paragraph(
+      _nativePtr,
+      (paragraph as _NativeParagraph)._nativePtr,
+      offset.dx,
+      offset.dy,
+    );
+  }
+
   void drawPaint(Paint paint) {
     using((arena)=>
     rina_canvas_draw_paint(

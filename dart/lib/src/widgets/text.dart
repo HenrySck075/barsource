@@ -1,5 +1,4 @@
-import 'package:tennoji/src/painting/dart_ui.dart' as ui;
-import 'package:tennoji/src/painting/text_style.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui;
 import 'package:tennoji/src/rendering/object.dart';
 import 'package:tennoji/src/widgets/framework.dart';
 

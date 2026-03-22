@@ -2,6 +2,7 @@
 #include "canvas_internal.h"
 #include "../dart_ui/image_internal.h"
 #include "../dart_ui/shader_internal.h"
+#include "../dart_ui/text/paragraph_internal.h"
 #include "../dart_ui/stuff.h"
 
 #include "include/core/SkCanvas.h"
@@ -83,7 +84,25 @@ TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas) {
   if (!canvas) return;
   delete canvas;
 }
-
+TENNOJI_EXPORT void rina_canvas_draw_color(
+  TennojiCanvas* canvas,
+  uint32_t color, // ARGB
+  uint8_t blendMode // SkBlendMode
+) {
+  if (!canvas || !canvas->canvas) return;
+  SkPaint paint;
+  paint.setColor(color);
+  paint.setBlendMode((SkBlendMode)blendMode);
+  canvas->canvas->drawPaint(paint);
+}
+TENNOJI_EXPORT void rina_canvas_draw_paragraph(
+  TennojiCanvas* canvas,
+  TennojiParagraph* paragraph,
+  float dx, float dy
+) {
+  if (!canvas || !canvas->canvas || !paragraph) return;
+  paragraph->paragraph->paint(canvas->canvas, dx, dy);
+}
 TENNOJI_EXPORT void rina_canvas_draw_paint(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paintData
