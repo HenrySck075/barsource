@@ -1,6 +1,7 @@
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart';
 
 import '../foundation/geometry.dart';
 import '../painting/canvas.dart';
@@ -110,7 +111,7 @@ void render(Widget root, RenderConfig config) {
 
     // Paint (this calls decoder_get_texture on video clips, which
     // auto-queues audio packets from the same demuxer stream)
-    rina_canvas_draw_color(nativeCanvas, 0xFF000000);
+    rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
     final canvas = Canvas(nativeCanvas);
     final paintingContext = PaintingContext(canvas);
     pipelineOwner.flushLayout();

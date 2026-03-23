@@ -8,6 +8,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #include "include/core/SkSurface.h"
@@ -26,6 +27,7 @@ struct TennojiEncoder {
     AVStream* videoStream = nullptr;
     AVStream* audioStream = nullptr;
     AVBufferRef* hwDeviceCtx = nullptr;
+    SwsContext* swsCtx = nullptr;
     TennojiEngine* engine = nullptr;
     tennoji::AudioMixer* audioMixer = nullptr;
     int64_t videoPts = 0;
@@ -176,6 +178,17 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         }
     }
 
+    // Create SwsContext for color conversion
+    enc->swsCtx = sws_getContext(
+        config->width, config->height, AV_PIX_FMT_BGRA,
+        config->width, config->height, enc->videoCodecCtx->pix_fmt,
+        SWS_BILINEAR, nullptr, nullptr, nullptr
+    );
+    if (!enc->swsCtx) {
+        rina_encoder_destroy(enc);
+        return nullptr;
+    }
+
     // Open output file
     if (!(enc->fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&enc->fmtCtx->pb, config->output_path, AVIO_FLAG_WRITE);
@@ -227,27 +240,15 @@ TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
     frame->pts = encoder->videoPts++;
     av_frame_get_buffer(frame, 0);
 
-    // BGRA → YUV420P conversion
-    for (int y = 0; y < encoder->height; y++) {
-        for (int x = 0; x < encoder->width; x++) {
-            int srcIdx = (y * encoder->width + x) * 4;
-            uint8_t b = pixels[srcIdx + 0];
-            uint8_t g = pixels[srcIdx + 1];
-            uint8_t r = pixels[srcIdx + 2];
-
-            // BT.601 RGB→YUV
-            int yy = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
-            frame->data[0][y * frame->linesize[0] + x] = (uint8_t)(yy < 0 ? 0 : (yy > 255 ? 255 : yy));
-
-            if (y % 2 == 0 && x % 2 == 0) {
-                int uu = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
-                int vv = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
-                int uvIdx_u = (y / 2) * frame->linesize[1] + (x / 2);
-                int uvIdx_v = (y / 2) * frame->linesize[2] + (x / 2);
-                frame->data[1][uvIdx_u] = (uint8_t)(uu < 0 ? 0 : (uu > 255 ? 255 : uu));
-                frame->data[2][uvIdx_v] = (uint8_t)(vv < 0 ? 0 : (vv > 255 ? 255 : vv));
-            }
-        }
+    // BGRA -> YUV420P conversion using libswscale
+    const uint8_t* srcSlice[] = { pixels.data() };
+    const int srcStride[] = { encoder->width * 4 };
+    
+    int h = sws_scale(encoder->swsCtx, srcSlice, srcStride, 0, encoder->height,
+                      frame->data, frame->linesize);
+    if (h != encoder->height) {
+        av_frame_free(&frame);
+        return -1;
     }
 
     // Encode the frame
@@ -476,6 +477,8 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
     if (encoder->audioMixer) {
         tennoji::audio_mixer_destroy(encoder->audioMixer);
     }
+
+    if (encoder->swsCtx) sws_freeContext(encoder->swsCtx);
 
     if (encoder->videoCodecCtx) avcodec_free_context(&encoder->videoCodecCtx);
     if (encoder->audioCodecCtx) avcodec_free_context(&encoder->audioCodecCtx);

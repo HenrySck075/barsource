@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswresample)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswresample libswscale)
 
 set(SKIA_DIR "${CMAKE_SOURCE_DIR}/third_party/skia" CACHE PATH "Skia path")
 set(TENNOJI_TOKIMEKI ON "Disables input checks. You should disable this option if you plan to use the native library outside of the package or you're uncertain about the users.")
