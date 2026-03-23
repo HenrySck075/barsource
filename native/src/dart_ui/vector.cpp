@@ -11,13 +11,13 @@ extern "C" {
 
 TENNOJI_EXPORT TennojiCanvasPath* rina_path_create() {
   return new TennojiCanvasPath {
-    .builder = sk_sp(new SkPathBuilder())
+    .builder = std::make_unique<SkPathBuilder>()
   };
 }
 
 TENNOJI_EXPORT TennojiCanvasPath* rina_path_clone(TennojiCanvasPath* path) {
   return new TennojiCanvasPath {
-    .builder = sk_sp(new SkPathBuilder(*(path->builder)))
+    .builder = std::make_unique<SkPathBuilder>(*(path->builder))
   };
 }
 
@@ -197,7 +197,7 @@ TENNOJI_EXPORT void rina_path_add_rsuperellipse(TennojiCanvasPath* path, float* 
   const float ox = hw * smoothness;
   const float oh = hh * smoothness;
 
-  const auto builder = path->builder;
+  const auto builder = path->builder.get();
 
   builder->moveTo(centerX, top); // top-center
 
@@ -282,7 +282,7 @@ TENNOJI_EXPORT TennojiCanvasPathMeasure* rina_path_measure_create(
   TennojiCanvasPath* path, bool forceClose
 ) {
   return new TennojiCanvasPathMeasure {
-    .measure = sk_sp(new SkPathMeasure(path->builder->snapshot(), forceClose))
+    .measure = std::unique_ptr<SkPathMeasure>(new SkPathMeasure(path->builder->snapshot(), forceClose))
   };
 }
 TENNOJI_EXPORT void rina_path_measure_destroy(TennojiCanvasPathMeasure* measure) {
@@ -319,7 +319,7 @@ TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
   auto extracted = measure->computedContours[contourIndex]->getSegment(start,end, builder, startWithMoveTo);
   if (!extracted) return nullptr;
   return new TennojiCanvasPath {
-    .builder = sk_sp(builder)
+    .builder = std::unique_ptr<SkPathBuilder>(builder)
   };
 }
 

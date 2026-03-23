@@ -1,15 +1,10 @@
 import 'dart:math' as math;
 
-import '../foundation/geometry.dart';
 import 'box.dart';
 import 'object.dart';
 import 'time_box.dart';
 
-/// The direction children are laid out in a flex container.
-enum Axis {
-  horizontal,
-  vertical,
-}
+import '../painting/basic_types.dart';
 
 /// How children are placed along the main axis.
 enum MainAxisAlignment {

@@ -4,6 +4,9 @@
 #include "include/core/SkSurface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/vk/GrVkBackendSurface.h"
+#include "include/gpu/ganesh/vk/GrVkTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/core/SkColorSpace.h"
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #define TENNOJI_USE_VULKAN 1

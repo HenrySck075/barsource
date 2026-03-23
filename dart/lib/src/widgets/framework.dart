@@ -1,13 +1,12 @@
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/painting/basic_types.dart';
 
 import '../foundation/key.dart';
 import '../rendering/object.dart';
 import '../elements/framework.dart' as elements;
-import 'render_widget.dart';
 
-export 'render_widget.dart' show BuildContext;
+export '../elements/framework.dart' show BuildContext;
 
-typedef VoidCallback = void Function();
 
 @immutable
 abstract class Widget {
@@ -18,7 +17,7 @@ abstract class Widget {
 
 abstract class StatelessWidget extends Widget {
   const StatelessWidget({super.key});
-  Widget build(BuildContext context);
+  Widget build(elements.BuildContext context);
   @override
   elements.Element createElement() => elements.StatelessElement(this);
 }
@@ -33,7 +32,7 @@ abstract class StatefulWidget extends Widget {
 abstract class State<T extends StatefulWidget> {
   T get widget => _widget!;
   T? _widget;
-  BuildContext get context => _element!;
+  elements.BuildContext get context => _element!;
   elements.StatefulElement? _element;
 
   // Called by StatefulElement to wire up the state
@@ -48,7 +47,7 @@ abstract class State<T extends StatefulWidget> {
   void initState() {}
   void didUpdateWidget(covariant T oldWidget) {}
   void dispose() {}
-  Widget build(BuildContext context);
+  Widget build(elements.BuildContext context);
 
   void setState(VoidCallback fn) {
     fn();
@@ -58,9 +57,9 @@ abstract class State<T extends StatefulWidget> {
 
 abstract class RenderObjectWidget extends Widget {
   const RenderObjectWidget({super.key});
-  RenderObject createRenderObject(BuildContext context);
+  RenderObject createRenderObject(elements.BuildContext context);
   void updateRenderObject(
-      BuildContext context, covariant RenderObject renderObject) {}
+      elements.BuildContext context, covariant RenderObject renderObject) {}
   @override
   elements.Element createElement() => elements.RenderObjectElement(this);
 }

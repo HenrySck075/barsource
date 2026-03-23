@@ -609,7 +609,7 @@ class TextPainter {
     InlineSpan? text,
     TextAlign textAlign = TextAlign.start,
     TextDirection? textDirection,
-    TextScaler textScaler = const _UnspecifiedTextScaler(),
+    TextScaler textScaler =  TextScaler.noScaling,
     int? maxLines,
     String? ellipsis,
     Locale? locale,
@@ -620,9 +620,7 @@ class TextPainter {
        assert(maxLines == null || maxLines > 0),
        _textAlign = textAlign,
        _textDirection = textDirection,
-       _textScaler = textScaler == const _UnspecifiedTextScaler()
-           ? TextScaler.linear(1)
-           : textScaler,
+       _textScaler = textScaler,
        _maxLines = maxLines,
        _ellipsis = ellipsis,
        _locale = locale,
@@ -644,12 +642,6 @@ class TextPainter {
     required InlineSpan text,
     required TextDirection textDirection,
     TextAlign textAlign = TextAlign.start,
-    @Deprecated(
-      'Use textScaler instead. '
-      'Use of textScaleFactor was deprecated in preparation for the upcoming nonlinear text scaling support. '
-      'This feature was deprecated after v3.12.0-2.0.pre.',
-    )
-    double textScaleFactor = 1.0,
     TextScaler textScaler = TextScaler.noScaling,
     int? maxLines,
     String? ellipsis,
@@ -660,17 +652,11 @@ class TextPainter {
     double minWidth = 0.0,
     double maxWidth = double.infinity,
   }) {
-    assert(
-      textScaleFactor == 1.0 || identical(textScaler, TextScaler.noScaling),
-      'Use textScaler instead.',
-    );
     final painter = TextPainter(
       text: text,
       textAlign: textAlign,
       textDirection: textDirection,
-      textScaler: textScaler == TextScaler.noScaling
-          ? TextScaler.linear(textScaleFactor)
-          : textScaler,
+      textScaler: textScaler,
       maxLines: maxLines,
       ellipsis: ellipsis,
       locale: locale,
@@ -698,12 +684,6 @@ class TextPainter {
     required InlineSpan text,
     required TextDirection textDirection,
     TextAlign textAlign = TextAlign.start,
-    @Deprecated(
-      'Use textScaler instead. '
-      'Use of textScaleFactor was deprecated in preparation for the upcoming nonlinear text scaling support. '
-      'This feature was deprecated after v3.12.0-2.0.pre.',
-    )
-    double textScaleFactor = 1.0,
     TextScaler textScaler = TextScaler.noScaling,
     int? maxLines,
     String? ellipsis,
@@ -714,17 +694,11 @@ class TextPainter {
     double minWidth = 0.0,
     double maxWidth = double.infinity,
   }) {
-    assert(
-      textScaleFactor == 1.0 || identical(textScaler, TextScaler.noScaling),
-      'Use textScaler instead.',
-    );
     final painter = TextPainter(
       text: text,
       textAlign: textAlign,
       textDirection: textDirection,
-      textScaler: textScaler == TextScaler.noScaling
-          ? TextScaler.linear(textScaleFactor)
-          : textScaler,
+      textScaler: textScaler,
       maxLines: maxLines,
       ellipsis: ellipsis,
       locale: locale,
@@ -880,30 +854,6 @@ class TextPainter {
     markNeedsLayout();
     _layoutTemplate?.dispose();
     _layoutTemplate = null; // Shouldn't really matter, but for strict correctness...
-  }
-
-  /// Deprecated. Will be removed in a future version of Flutter. Use
-  /// [textScaler] instead.
-  ///
-  /// The number of font pixels for each logical pixel.
-  ///
-  /// For example, if the text scale factor is 1.5, text will be 50% larger than
-  /// the specified font size.
-  ///
-  /// After this is set, you must call [layout] before the next call to [paint].
-  @Deprecated(
-    'Use textScaler instead. '
-    'Use of textScaleFactor was deprecated in preparation for the upcoming nonlinear text scaling support. '
-    'This feature was deprecated after v3.12.0-2.0.pre.',
-  )
-  double get textScaleFactor => textScaler.textScaleFactor;
-  @Deprecated(
-    'Use textScaler instead. '
-    'Use of textScaleFactor was deprecated in preparation for the upcoming nonlinear text scaling support. '
-    'This feature was deprecated after v3.12.0-2.0.pre.',
-  )
-  set textScaleFactor(double value) {
-    textScaler = TextScaler.linear(value);
   }
 
   /// {@template flutter.painting.textPainter.textScaler}

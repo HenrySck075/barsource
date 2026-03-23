@@ -38,6 +38,11 @@ static const int _kMaskFilterSigmaIndex = 15;
 static const int _kInvertColorIndex = 16;
 
 SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata) {
+  if (!metadata) {
+    // idk return a default paint 
+    SkPaint defaultPaint;
+    defaultPaint.setAntiAlias(true);
+  }
   SkPaint paint;
 
   auto data = metadata->encodedData;
@@ -55,7 +60,8 @@ SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata) {
     *reinterpret_cast<float*>(&data[_kMaskFilterSigmaIndex])
   ));
 
-  paint.setShader(metadata->shader->getShader());
+  if (metadata->shader)
+    paint.setShader(metadata->shader->getShader());
 
   return paint;
 }

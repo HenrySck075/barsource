@@ -17,6 +17,7 @@
 #include "paragraph_internal.h"
 #include <execution>
 #include <string>
+#include "include/core/SkFontScanner.h"
 
 skia::textlayout::StrutStyle strut_style_from_encoded(
   uint8_t* d,

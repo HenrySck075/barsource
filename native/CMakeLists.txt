@@ -76,19 +76,9 @@ if(NOT EXISTS "${SKIA_DIR}/include")
   message(STATUS "Skia download and extraction complete!")
 endif()
 
+file(GLOB_RECURSE TENNOJI_SOURCES src/*.cpp)
 add_library(tennoji SHARED
-  src/engine.cpp
-  src/renderer/skia_surface.cpp
-  src/renderer/canvas.cpp
-  src/renderer/compositor.cpp
-  src/media/decoder.cpp
-  src/media/encoder.cpp
-  src/media/demuxer.cpp
-  src/media/muxer.cpp
-  src/media/frame_pool.cpp
-  src/media/audio_mixer.cpp
-  src/util/gpu_context.cpp
-  src/util/thread_pool.cpp
+  ${TENNOJI_SOURCES}
 )
 
 target_compile_definitions(tennoji PRIVATE TENNOJI_BUILD)
@@ -96,7 +86,13 @@ if(TENNOJI_TOKIMEKI)
   target_compile_definitions(tennoji PRIVATE TENNOJI_TOKIMEKI)
 endif()
 target_include_directories(tennoji PUBLIC include PRIVATE ${SKIA_DIR} ${FFMPEG_INCLUDE_DIRS})
-target_link_libraries(tennoji PRIVATE ${FFMPEG_LIBRARIES} ${SKIA_DIR}/out/Release/libskia.a)
+target_link_libraries(tennoji PRIVATE 
+  ${FFMPEG_LIBRARIES} 
+  ${SKIA_DIR}/out/Release/libskia.a
+  ${SKIA_DIR}/out/Release/libskparagraph.a
+  ${SKIA_DIR}/out/Release/libicu.a
+  ${SKIA_DIR}/out/Release/libskunicode_icu.a
+)
 
 if(WIN32)
   target_link_libraries(tennoji PRIVATE d3d11 dxgi)

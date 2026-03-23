@@ -12,6 +12,7 @@ import 'package:meta/meta.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart'
     as ui
     show Locale, LocaleStringAttribute, ParagraphBuilder, SpellOutStringAttribute, StringAttribute;
+import 'package:tennoji/src/foundation/collections.dart';
 
 import 'basic_types.dart';
 import 'inline_span.dart';
@@ -344,9 +345,7 @@ class TextSpan extends InlineSpan {
         (style == null) != (textSpan.style == null)) {
       return RenderComparison.layout;
     }
-    RenderComparison result = recognizer == textSpan.recognizer
-        ? RenderComparison.identical
-        : RenderComparison.metadata;
+    RenderComparison result = RenderComparison.metadata;
     if (style != null) {
       final RenderComparison candidate = style!.compareTo(textSpan.style!);
       if (candidate.index > result.index) {
@@ -383,12 +382,6 @@ class TextSpan extends InlineSpan {
     }
     return other is TextSpan &&
         other.text == text &&
-        other.recognizer == recognizer &&
-        other.semanticsLabel == semanticsLabel &&
-        other.semanticsIdentifier == semanticsIdentifier &&
-        onEnter == other.onEnter &&
-        onExit == other.onExit &&
-        mouseCursor == other.mouseCursor &&
         listEquals<InlineSpan>(other.children, children);
   }
 
@@ -396,15 +389,10 @@ class TextSpan extends InlineSpan {
   int get hashCode => Object.hash(
     super.hashCode,
     text,
-    recognizer,
-    semanticsLabel,
-    semanticsIdentifier,
-    onEnter,
-    onExit,
-    mouseCursor,
     children == null ? null : Object.hashAll(children!),
   );
 
+/*
   @override
   String toStringShort() => objectRuntimeType(this, 'TextSpan');
 
@@ -449,4 +437,5 @@ class TextSpan extends InlineSpan {
         }).toList() ??
         const <DiagnosticsNode>[];
   }
+  */
 }

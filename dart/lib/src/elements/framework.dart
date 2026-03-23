@@ -3,7 +3,16 @@ import 'dart:collection';
 
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
+abstract class BuildContext {
+  // Returns the widget that this context is associated with.
+  // Typed as dynamic here to avoid circular import with framework.dart.
+  // framework.dart provides the concrete Widget type.
+  dynamic get widget;
 
+  T? dependOnInheritedWidgetOfExactType<T>();
+
+  void visitAncestorElements(bool Function(Element element) visitor);
+}
 enum _ElementLifecycle {
   initial,
   active,
@@ -39,6 +48,18 @@ abstract class Element implements BuildContext {
       return ancestor.widget as T;
     }
     return null;
+  }
+
+  @override
+  void visitAncestorElements(bool Function(Element element) visitor) {
+    assert(_active);
+    Element? ancestor = _parent;
+    while (ancestor != null) {
+      if (!visitor(ancestor)) {
+        return;
+      }
+      ancestor = ancestor._parent;
+    }
   }
 
   void _updateInheritance() {

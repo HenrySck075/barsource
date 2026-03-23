@@ -1,4 +1,5 @@
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:tennoji/src/elements/framework.dart';
 
 import '../rendering/object.dart';
 import '../rendering/box.dart';
@@ -27,6 +28,7 @@ class Container extends SingleChildRenderObjectWidget {
 
 class SizedBox extends SingleChildRenderObjectWidget {
   const SizedBox({super.key, this.width, this.height, super.child});
+  const SizedBox.shrink({super.key}) : width = 0, height = 0;
   final double? width;
   final double? height;
 

@@ -49,7 +49,7 @@ void main(){
         itemBuilder: (context, data, anim){
           return SlideTransition(
             animation: anim, offset: OffsetTween(begin: (1.0, 0.0), end: (0.0, 0.0)),
-            child: Container(width: 100, height: 20,color:Color(0xFF363636))
+            child: Container(width: 100, height: 20,color:Color(0xFF363636), child: Text(text: data))
           );
         },
         instructions: [

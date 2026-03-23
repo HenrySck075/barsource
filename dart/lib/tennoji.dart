@@ -7,6 +7,7 @@ export 'src/foundation/geometry.dart';
 export 'src/foundation/change_notifier.dart' hide VoidCallback;
 
 // Painting
+export 'src/painting/basic_types.dart';
 export 'src/painting/canvas.dart';
 export 'src/painting/colors.dart';
 export 'src/painting/text_span.dart';
@@ -38,6 +39,7 @@ export 'src/widgets/sequence.dart';
 export 'src/widgets/clip.dart';
 export 'src/widgets/animated.dart';
 export 'src/widgets/animated_list.dart';
+export 'src/widgets/text.dart';
 
 // Elements
 export 'src/elements/framework.dart';
@@ -45,4 +47,3 @@ export 'src/elements/framework.dart';
 // Engine
 export 'src/engine/engine.dart';
 export 'src/engine/render_controller.dart';
-export 'src/engine/texture_registry.dart';

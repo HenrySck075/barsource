@@ -1,3 +1,5 @@
+import 'package:tennoji/src/painting/basic_types.dart';
+
 import '../rendering/flex_render.dart';
 import '../rendering/object.dart';
 import 'framework.dart';

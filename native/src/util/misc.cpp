@@ -4,13 +4,13 @@
 
 extern "C" {
 bool rina_rsuperellipse_contains(
-    double px, double py,            // The point to test
-    double left, double top, 
-    double right, double bottom,
-    double tlRx, double tlRy,        // Top-Left Radii
-    double trRx, double trRy,        // Top-Right Radii
-    double blRx, double blRy,        // Bottom-Left Radii
-    double brRx, double brRy         // Bottom-Right Radii
+    float px, float py,            // The point to test
+    float left, float top, 
+    float right, float bottom,
+    float tlRx, float tlRy,        // Top-Left Radii
+    float trRx, float trRy,        // Top-Right Radii
+    float blRx, float blRy,        // Bottom-Left Radii
+    float brRx, float brRy         // Bottom-Right Radii
 ) {
     // 1. Basic Bounds Check
     if (px < left || px > right || py < top || py > bottom) {
