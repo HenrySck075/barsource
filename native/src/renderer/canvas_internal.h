@@ -7,9 +7,13 @@
 
 struct TennojiEngine;
 
+#include "include/core/SkPictureRecorder.h"
+
 struct TennojiCanvas {
-  sk_sp<SkSurface> surface;
+  std::unique_ptr<SkPictureRecorder> recorder;
   SkCanvas* canvas = nullptr;
   TennojiEngine* engine = nullptr;
+  int width = 0;
+  int height = 0;
 };
 SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata);

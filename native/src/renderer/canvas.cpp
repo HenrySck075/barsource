@@ -71,12 +71,11 @@ TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
 
   auto* c = new TennojiCanvas();
   c->engine = engine;
-  c->surface = tennoji::create_gpu_surface(engine->grContext, width, height);
-  if (!c->surface) {
-      delete c;
-      return nullptr;
-  }
-  c->canvas = c->surface->getCanvas();
+  c->width = width;
+  c->height = height;
+  c->recorder = std::make_unique<SkPictureRecorder>();
+  c->canvas = c->recorder->beginRecording(width, height);
+  
   return c;
 }
 
