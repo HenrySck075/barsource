@@ -1,8 +1,8 @@
-import '../painting/paint.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart';
+
 import '../rendering/object.dart';
 import '../rendering/box.dart';
 import '../rendering/align_render.dart';
-import '../foundation/geometry.dart';
 import 'framework.dart';
 
 class Container extends SingleChildRenderObjectWidget {

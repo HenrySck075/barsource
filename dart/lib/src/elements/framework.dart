@@ -1,12 +1,20 @@
+import 'package:meta/meta.dart';
+
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
 
+enum _ElementLifecycle {
+  initial,
+  active,
+  inactive,
+  defunct,
+}
 abstract class Element implements BuildContext {
   Element(this._widget);
-  Widget _widget;
+  Widget? _widget;
 
   @override
-  Widget get widget => _widget;
+  Widget get widget => _widget!;
 
   Element? _parent;
   RenderObject? _renderObject;
@@ -14,10 +22,25 @@ abstract class Element implements BuildContext {
   bool _dirty = true;
 
   RenderObject? get renderObject => _renderObject;
+  _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
 
   void mount(Element? parent, Object? newSlot) {
     _parent = parent;
     _active = true;
+    _lifecycleState = .active;
+  }
+
+  void rebuild({bool force=false}) {
+    if (_lifecycleState != _ElementLifecycle.active || (!_dirty && !force)) {
+      return;
+    }
+    performRebuild();
+  }
+
+  @protected
+  @mustCallSuper
+  void performRebuild() {
+    _dirty = false;
   }
 
   void update(covariant Widget newWidget) {
@@ -25,7 +48,10 @@ abstract class Element implements BuildContext {
   }
 
   void unmount() {
+    assert(_lifecycleState == _ElementLifecycle.inactive);
+    assert(_widget != null);
     _active = false;
+    _lifecycleState = .defunct;
   }
 
   void markNeedsBuild() {
@@ -49,9 +75,11 @@ class ComponentElement extends Element {
     rebuild();
   }
 
-  void rebuild() {
+  @override
+  void performRebuild() {
     Widget built = build();
     _child = updateChild(_child, built, null);
+    super.performRebuild();
   }
 
   Element? updateChild(Element? child, Widget? newWidget, Object? newSlot) {
@@ -173,4 +201,40 @@ class RenderObjectElement extends Element {
   @override
   Widget build() =>
       throw UnimplementedError('RenderObjectElement does not build');
+}
+/// An [Element] that uses a [ProxyWidget] as its configuration.
+abstract class ProxyElement extends ComponentElement {
+  /// Initializes fields for subclasses.
+  ProxyElement(ProxyWidget super.widget);
+
+  @override
+  Widget build() => (widget as ProxyWidget).child;
+
+  @override
+  void update(ProxyWidget newWidget) {
+    final oldWidget = widget as ProxyWidget;
+    assert(widget != newWidget);
+    super.update(newWidget);
+    assert(widget == newWidget);
+    updated(oldWidget);
+    rebuild(force: true);
+  }
+
+  /// Called during build when the [widget] has changed.
+  ///
+  /// By default, calls [notifyClients]. Subclasses may override this method to
+  /// avoid calling [notifyClients] unnecessarily (e.g. if the old and new
+  /// widgets are equivalent).
+  @protected
+  void updated(covariant ProxyWidget oldWidget) {
+    notifyClients(oldWidget);
+  }
+
+  /// Notify other objects that the widget associated with this element has
+  /// changed.
+  ///
+  /// Called during [update] (via [updated]) after changing the widget
+  /// associated with this element but before rebuilding this element.
+  @protected
+  void notifyClients(covariant ProxyWidget oldWidget);
 }

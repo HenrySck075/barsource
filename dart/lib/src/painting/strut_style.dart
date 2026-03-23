@@ -7,6 +7,7 @@ library;
 
 
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/foundation/collections.dart';
 
 import 'basic_types.dart';
 import 'text_style.dart';
@@ -619,9 +620,10 @@ class StrutStyle {
       Object.hash(fontFamily, fontSize, fontWeight, fontStyle, height, leading, forceStrutHeight);
 
   @override
-  String toStringShort() => objectRuntimeType(this, 'StrutStyle');
+  String toStringShort() => /*objectRuntimeType(this, */'StrutStyle';//);
 
   /// Adds all properties prefixing property names with the optional `prefix`.
+  /*
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties, {String prefix = ''}) {
     super.debugFillProperties(properties);
@@ -684,4 +686,5 @@ class StrutStyle {
       );
     }
   }
+  */
 }

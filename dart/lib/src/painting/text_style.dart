@@ -9,7 +9,9 @@ import 'package:meta/meta.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart'
     as ui
     show ParagraphStyle, Shadow, StrutStyle, TextStyle, kTextHeightNone, lerpDouble, Paint;
+import 'package:tennoji/src/foundation/collections.dart';
 import 'package:tennoji/src/painting/text_painter.dart';
+import 'package:tennoji/src/painting/text_scaler.dart';
 
 
 import 'basic_types.dart';
@@ -1561,9 +1563,10 @@ class TextStyle {
   }
 
   @override
-  String toStringShort() => objectRuntimeType(this, 'TextStyle');
+  String toStringShort() => /*objectRuntimeType(this, */'TextStyle';//);
 
   /// Adds all properties prefixing property names with the optional `prefix`.
+  /*
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties, {String prefix = ''}) {
     super.debugFillProperties(properties);
@@ -1682,6 +1685,7 @@ class TextStyle {
 
     styles.add(EnumProperty<TextOverflow>('${prefix}overflow', overflow, defaultValue: null));
   }
+  */
 }
 
 /// Interpolate between two lists of [FontVariation] objects.

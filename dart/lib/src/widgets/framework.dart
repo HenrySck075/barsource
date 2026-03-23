@@ -79,3 +79,31 @@ abstract class MultiChildRenderObjectWidget extends RenderObjectWidget {
       {super.key, this.children = const []});
   final List<Widget> children;
 }
+abstract class ProxyWidget extends Widget {
+  /// Creates a widget that has exactly one child widget.
+  const ProxyWidget({super.key, required this.child});
+  final Widget child;
+}
+abstract class InheritedWidget extends ProxyWidget {
+  /// Abstract const constructor. This constructor enables subclasses to provide
+  /// const constructors so that they can be used in const expressions.
+  const InheritedWidget({super.key, required super.child});
+
+  @override
+  elements.InheritedElement createElement() => elements.InheritedElement(this);
+
+  /// Whether the framework should notify widgets that inherit from this widget.
+  ///
+  /// When this widget is rebuilt, sometimes we need to rebuild the widgets that
+  /// inherit from this widget but sometimes we do not. For example, if the data
+  /// held by this widget is the same as the data held by `oldWidget`, then we
+  /// do not need to rebuild the widgets that inherited the data held by
+  /// `oldWidget`.
+  ///
+  /// The framework distinguishes these cases by calling this function with the
+  /// widget that previously occupied this location in the tree as an argument.
+  /// The given widget is guaranteed to have the same [runtimeType] as this
+  /// object.
+  @protected
+  bool updateShouldNotify(covariant InheritedWidget oldWidget);
+}

@@ -2,17 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// @docImport 'dart:ui';
+/// @docImport 'package:tennoji/src/dart_ui/dart_ui.dart';
 ///
 /// @docImport 'package:flutter/material.dart';
 ///
 /// @docImport 'placeholder_span.dart';
 library;
 
-import 'dart:ui' as ui show ParagraphBuilder, StringAttribute;
+import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui show ParagraphBuilder, StringAttribute;
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:meta/meta.dart';
 
 import 'basic_types.dart';
@@ -48,130 +46,6 @@ class Accumulator {
 /// [InlineSpan]s.
 typedef InlineSpanVisitor = bool Function(InlineSpan span);
 
-/// The textual and semantic label information for an [InlineSpan].
-///
-/// For [PlaceholderSpan]s, [InlineSpanSemanticsInformation.placeholder] is used by default.
-///
-/// See also:
-///
-///  * [InlineSpan.getSemanticsInformation]
-@immutable
-class InlineSpanSemanticsInformation {
-  /// Constructs an object that holds the text and semantics label values of an
-  /// [InlineSpan].
-  ///
-  /// Use [InlineSpanSemanticsInformation.placeholder] instead of directly setting
-  /// [isPlaceholder].
-  const InlineSpanSemanticsInformation(
-    this.text, {
-    this.isPlaceholder = false,
-    this.semanticsLabel,
-    this.semanticsIdentifier,
-    this.stringAttributes = const <ui.StringAttribute>[],
-    this.recognizer,
-  }) : assert(!isPlaceholder || (text == '\uFFFC' && semanticsLabel == null && recognizer == null)),
-       requiresOwnNode = isPlaceholder || recognizer != null || semanticsIdentifier != null;
-
-  /// The text info for a [PlaceholderSpan].
-  static const InlineSpanSemanticsInformation placeholder = InlineSpanSemanticsInformation(
-    '\uFFFC',
-    isPlaceholder: true,
-  );
-
-  /// The text value, if any. For [PlaceholderSpan]s, this will be the unicode
-  /// placeholder value.
-  final String text;
-
-  /// The semanticsLabel, if any.
-  final String? semanticsLabel;
-
-  /// The semanticsIdentifier, if any.
-  final String? semanticsIdentifier;
-
-  /// The gesture recognizer, if any, for this span.
-  final GestureRecognizer? recognizer;
-
-  /// Whether this is for a placeholder span.
-  final bool isPlaceholder;
-
-  /// True if this configuration should get its own semantics node.
-  ///
-  /// This will be the case if the [recognizer] is not null, or if
-  /// [isPlaceholder] is true, or if [semanticsIdentifier] has a value.
-  final bool requiresOwnNode;
-
-  /// The string attributes attached to this semantics information
-  final List<ui.StringAttribute> stringAttributes;
-
-  @override
-  bool operator ==(Object other) {
-    return other is InlineSpanSemanticsInformation &&
-        other.text == text &&
-        other.semanticsLabel == semanticsLabel &&
-        other.semanticsIdentifier == semanticsIdentifier &&
-        other.recognizer == recognizer &&
-        other.isPlaceholder == isPlaceholder &&
-        listEquals<ui.StringAttribute>(other.stringAttributes, stringAttributes);
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(text, semanticsLabel, semanticsIdentifier, recognizer, isPlaceholder);
-
-  @override
-  String toString() =>
-      '${objectRuntimeType(this, 'InlineSpanSemanticsInformation')}{text: $text, semanticsLabel: $semanticsLabel, semanticsIdentifier: $semanticsIdentifier, recognizer: $recognizer}';
-}
-
-/// Combines _semanticsInfo entries where permissible.
-///
-/// Consecutive inline spans can be combined if their
-/// [InlineSpanSemanticsInformation.requiresOwnNode] return false.
-List<InlineSpanSemanticsInformation> combineSemanticsInfo(
-  List<InlineSpanSemanticsInformation> infoList,
-) {
-  final combined = <InlineSpanSemanticsInformation>[];
-  var workingText = '';
-  var workingLabel = '';
-  var workingAttributes = <ui.StringAttribute>[];
-  for (final info in infoList) {
-    if (info.requiresOwnNode) {
-      combined.add(
-        InlineSpanSemanticsInformation(
-          workingText,
-          semanticsLabel: workingLabel,
-          stringAttributes: workingAttributes,
-        ),
-      );
-      workingText = '';
-      workingLabel = '';
-      workingAttributes = <ui.StringAttribute>[];
-      combined.add(info);
-    } else {
-      workingText += info.text;
-      final String effectiveLabel = info.semanticsLabel ?? info.text;
-      for (final ui.StringAttribute infoAttribute in info.stringAttributes) {
-        workingAttributes.add(
-          infoAttribute.copy(
-            range: TextRange(
-              start: infoAttribute.range.start + workingLabel.length,
-              end: infoAttribute.range.end + workingLabel.length,
-            ),
-          ),
-        );
-      }
-      workingLabel += effectiveLabel;
-    }
-  }
-  combined.add(
-    InlineSpanSemanticsInformation(
-      workingText,
-      semanticsLabel: workingLabel,
-      stringAttributes: workingAttributes,
-    ),
-  );
-  return combined;
-}
 
 /// An immutable span of inline content which forms part of a paragraph.
 ///
@@ -316,28 +190,6 @@ abstract class InlineSpan {
     return buffer.toString();
   }
 
-  /// Flattens the [InlineSpan] tree to a list of
-  /// [InlineSpanSemanticsInformation] objects.
-  ///
-  /// [PlaceholderSpan]s in the tree will be represented with a
-  /// [InlineSpanSemanticsInformation.placeholder] value.
-  List<InlineSpanSemanticsInformation> getSemanticsInformation() {
-    final collector = <InlineSpanSemanticsInformation>[];
-    computeSemanticsInformation(collector);
-    return collector;
-  }
-
-  /// Walks the [InlineSpan] tree and accumulates a list of
-  /// [InlineSpanSemanticsInformation] objects.
-  ///
-  /// This method should not be directly called. Use
-  /// [getSemanticsInformation] instead.
-  ///
-  /// [PlaceholderSpan]s in the tree will be represented with a
-  /// [InlineSpanSemanticsInformation.placeholder] value.
-  @protected
-  void computeSemanticsInformation(List<InlineSpanSemanticsInformation> collector);
-
   /// Walks the [InlineSpan] tree and writes the plain text representation to `buffer`.
   ///
   /// This method should not be directly called. Use [toPlainText] instead.
@@ -423,10 +275,12 @@ abstract class InlineSpan {
   @override
   int get hashCode => style.hashCode;
 
+/*
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.defaultDiagnosticsTreeStyle = DiagnosticsTreeStyle.whitespace;
     style?.debugFillProperties(properties);
   }
+*/
 }

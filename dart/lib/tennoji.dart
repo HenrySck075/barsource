@@ -7,8 +7,10 @@ export 'src/foundation/geometry.dart';
 export 'src/foundation/change_notifier.dart' hide VoidCallback;
 
 // Painting
-export 'src/painting/paint.dart';
 export 'src/painting/canvas.dart';
+export 'src/painting/colors.dart';
+export 'src/painting/text_span.dart';
+export 'src/painting/text_style.dart';
 
 // Rendering
 export 'src/rendering/object.dart';

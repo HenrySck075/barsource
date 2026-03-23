@@ -1,13 +1,9 @@
 // Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-/// @docImport 'package:flutter/material.dart';
 library;
 
-import 'dart:ui' as ui show PlaceholderAlignment;
-
-import 'package:flutter/foundation.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui show PlaceholderAlignment;
 
 import 'basic_types.dart';
 import 'inline_span.dart';
@@ -73,12 +69,7 @@ abstract class PlaceholderSpan extends InlineSpan {
       buffer.writeCharCode(placeholderCodeUnit);
     }
   }
-
-  @override
-  void computeSemanticsInformation(List<InlineSpanSemanticsInformation> collector) {
-    collector.add(InlineSpanSemanticsInformation.placeholder);
-  }
-
+  /*
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
@@ -88,6 +79,7 @@ abstract class PlaceholderSpan extends InlineSpan {
     );
     properties.add(EnumProperty<TextBaseline>('baseline', baseline, defaultValue: null));
   }
+  */
 
   @override
   bool debugAssertIsValid() {

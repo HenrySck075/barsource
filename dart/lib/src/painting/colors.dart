@@ -6,9 +6,10 @@
 library;
 
 import 'dart:math' as math;
-import 'dart:ui' show Color, lerpDouble;
-
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart' show Color, clampDouble, lerpDouble;
+import 'package:tennoji/src/foundation/collections.dart';
+import 'package:tennoji/src/foundation/object.dart';
 
 double _getHue(double red, double green, double blue, double max, double delta) {
   late double hue;
@@ -209,7 +210,7 @@ class HSVColor {
   int get hashCode => Object.hash(alpha, hue, saturation, value);
 
   @override
-  String toString() => '${objectRuntimeType(this, 'HSVColor')}($alpha, $hue, $saturation, $value)';
+  String toString() => 'HSVColor($alpha, $hue, $saturation, $value)';
 }
 
 /// A color represented using [alpha], [hue], [saturation], and [lightness].
@@ -487,6 +488,7 @@ class ColorSwatch<T> extends Color {
   }
 }
 
+/*
 /// [DiagnosticsProperty] that has an [Color] as value.
 class ColorProperty extends DiagnosticsProperty<Color> {
   /// Create a diagnostics property for [Color].
@@ -513,3 +515,4 @@ class ColorProperty extends DiagnosticsProperty<Color> {
     return json;
   }
 }
+*/
