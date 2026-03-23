@@ -97,6 +97,13 @@ static GPUContext* create_vulkan_context() {
     deviceCreateInfo.queueCreateInfoCount = 1;
     deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
 
+    // Enable External Memory FD extension for zero-copy
+    const char* deviceExtensions[] = {
+        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
+    };
+    deviceCreateInfo.enabledExtensionCount = 1;
+    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
+
     VkDevice device = VK_NULL_HANDLE;
     if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
         vkDestroyInstance(instance, nullptr);
@@ -110,6 +117,7 @@ static GPUContext* create_vulkan_context() {
     ctx->native_device = device;
     ctx->native_queue = queue;
     ctx->native_display = instance;
+    ctx->native_context = physicalDevice; // Store physical device for memory allocation
 
     // Create Skia GrDirectContext from Vulkan
     skgpu::VulkanBackendContext vkBackendCtx = {};

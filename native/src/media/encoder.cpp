@@ -15,7 +15,16 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
+#include <libavutil/hwcontext_drm.h>
 }
+
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <libdrm/drm_fourcc.h>
+#endif
+
+#ifndef DRM_FORMAT_ARGB8888
+#define DRM_FORMAT_ARGB8888 0x34325241
+#endif
 
 #include "include/core/SkSurface.h"
 #include "include/core/SkImage.h"
@@ -23,6 +32,7 @@ extern "C" {
 #include "include/gpu/ganesh/GrDirectContext.h"
 
 #include "../renderer/canvas_internal.h"
+#include "../renderer/skia_surface.h"
 #include "decoder_internal.h"
 #include "muxer.h"
 #include "audio_mixer.h"
@@ -34,6 +44,7 @@ struct RenderFrame {
 
 struct EncodeFrame {
     std::vector<uint8_t> pixels;
+    tennoji::ExportableSurface surface;
     int64_t pts;
 };
 
@@ -44,6 +55,7 @@ struct TennojiEncoder {
     AVStream* videoStream = nullptr;
     AVStream* audioStream = nullptr;
     AVBufferRef* hwDeviceCtx = nullptr;
+    AVBufferRef* hwFramesCtx = nullptr;
     SwsContext* swsCtx = nullptr;
     TennojiEngine* engine = nullptr;
     tennoji::AudioMixer* audioMixer = nullptr;
@@ -65,15 +77,16 @@ struct TennojiEncoder {
     std::condition_variable encodeCv;
     std::queue<EncodeFrame> encodeQueue;
 
+    // Surface Pool
+    std::vector<tennoji::ExportableSurface> allSurfaces;
+    std::queue<tennoji::ExportableSurface> freeSurfaces;
+    std::mutex poolMutex;
+
     std::atomic<bool> running{true};
     std::atomic<bool> renderFinished{false};
 };
 
 static void render_loop(TennojiEncoder* enc) {
-    // Create a dedicated surface for this thread to render into
-    // Reusing the surface avoids re-allocation
-    sk_sp<SkSurface> surface;
-    
     while (true) {
         RenderFrame frame;
         {
@@ -84,31 +97,62 @@ static void render_loop(TennojiEncoder* enc) {
             enc->renderQueue.pop();
         }
 
-        if (!surface) {
-             surface = tennoji::create_gpu_surface(enc->engine->grContext, enc->width, enc->height);
+        tennoji::ExportableSurface exSurface;
+        {
+            std::lock_guard<std::mutex> lock(enc->poolMutex);
+            if (!enc->freeSurfaces.empty()) {
+                exSurface = enc->freeSurfaces.front();
+                enc->freeSurfaces.pop();
+            }
         }
 
-        if (surface) {
-             surface->getCanvas()->clear(SK_ColorTRANSPARENT);
-             surface->getCanvas()->drawPicture(frame.picture);
+        if (!exSurface.isValid()) {
+            if (enc->hwFramesCtx) {
+                exSurface = tennoji::create_exportable_gpu_surface(enc->engine->gpuCtx, enc->width, enc->height);
+            }
+            if (!exSurface.isValid()) {
+                exSurface.skSurface = tennoji::create_gpu_surface(enc->engine->grContext, enc->width, enc->height);
+                exSurface.fd = -1;
+            }
+            if (exSurface.skSurface) {
+                std::lock_guard<std::mutex> lock(enc->poolMutex);
+                enc->allSurfaces.push_back(exSurface);
+            }
+        }
+
+        if (exSurface.skSurface) {
+             exSurface.skSurface->getCanvas()->clear(SK_ColorTRANSPARENT);
+             exSurface.skSurface->getCanvas()->drawPicture(frame.picture);
              
-             if (auto* grCtx = surface->recordingContext()) {
+             if (auto* grCtx = exSurface.skSurface->recordingContext()) {
                  static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
              }
 
-             // Read pixels (GPU -> CPU copy)
-             // This happens on render thread so GrContext is safe
-             SkImageInfo readInfo = SkImageInfo::Make(
-                enc->width, enc->height,
-                kBGRA_8888_SkColorType, kPremul_SkAlphaType);
-
-             std::vector<uint8_t> pixels(enc->width * enc->height * 4);
-             if (surface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
+             if (exSurface.fd != -1) {
+                 // Zero copy path
                  {
                      std::lock_guard<std::mutex> lock(enc->encodeMutex);
-                     enc->encodeQueue.push({std::move(pixels), frame.pts});
+                     enc->encodeQueue.push({std::vector<uint8_t>(), exSurface, frame.pts});
                  }
                  enc->encodeCv.notify_one();
+             } else {
+                 // Read pixels (GPU -> CPU copy)
+                 SkImageInfo readInfo = SkImageInfo::Make(
+                    enc->width, enc->height,
+                    kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+
+                 std::vector<uint8_t> pixels(enc->width * enc->height * 4);
+                 if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
+                     {
+                         std::lock_guard<std::mutex> lock(enc->encodeMutex);
+                         enc->encodeQueue.push({std::move(pixels), exSurface, frame.pts});
+                     }
+                     enc->encodeCv.notify_one();
+                 } else {
+                     // Readback failed, return surface
+                     std::lock_guard<std::mutex> lock(enc->poolMutex);
+                     enc->freeSurfaces.push(exSurface);
+                 }
              }
         }
     }
@@ -133,28 +177,122 @@ static void encode_loop(TennojiEncoder* encoder) {
             encoder->encodeQueue.pop();
         }
 
-        // Create AVFrame (YUV420P) from BGRA pixels
-        AVFrame* frame = av_frame_alloc();
-        frame->format = encoder->videoCodecCtx->pix_fmt;
-        frame->width = encoder->width;
-        frame->height = encoder->height;
-        frame->pts = frameData.pts;
-        av_frame_get_buffer(frame, 0);
+        AVFrame* encode_frame = nullptr;
+        AVFrame* sw_frame = nullptr;
+        AVFrame* hw_frame = nullptr;
 
-        // BGRA -> YUV420P conversion using libswscale
-        const uint8_t* srcSlice[] = { frameData.pixels.data() };
-        const int srcStride[] = { encoder->width * 4 };
-        
-        int h = sws_scale(encoder->swsCtx, srcSlice, srcStride, 0, encoder->height,
-                          frame->data, frame->linesize);
-        if (h != encoder->height) {
-            av_frame_free(&frame);
-            continue;
+        if (frameData.surface.isValid() && frameData.surface.fd != -1 && frameData.pixels.empty()) {
+            // Zero-copy path
+            sw_frame = av_frame_alloc();
+            sw_frame->format = AV_PIX_FMT_DRM_PRIME;
+            sw_frame->width = encoder->width;
+            sw_frame->height = encoder->height;
+            sw_frame->pts = frameData.pts;
+
+            AVDRMFrameDescriptor* desc = (AVDRMFrameDescriptor*)av_mallocz(sizeof(AVDRMFrameDescriptor));
+            desc->nb_objects = 1;
+            desc->objects[0].fd = frameData.surface.fd;
+            desc->objects[0].size = encoder->width * encoder->height * 4; // Approx for B8G8R8A8
+            desc->objects[0].format_modifier = DRM_FORMAT_MOD_INVALID;
+
+            desc->nb_layers = 1;
+            desc->layers[0].format = DRM_FORMAT_ARGB8888;
+            desc->layers[0].nb_planes = 1;
+            desc->layers[0].planes[0].object_index = 0;
+            desc->layers[0].planes[0].offset = 0;
+            desc->layers[0].planes[0].pitch = encoder->width * 4;
+
+            sw_frame->buf[0] = av_buffer_create((uint8_t*)desc, sizeof(AVDRMFrameDescriptor),
+                                                av_buffer_default_free, nullptr, 0);
+            sw_frame->data[0] = (uint8_t*)desc;
+
+            // Import to HW frame
+            hw_frame = av_frame_alloc();
+            if (av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0) < 0) {
+                av_frame_free(&sw_frame);
+                av_frame_free(&hw_frame);
+                // Should return surface to pool!
+                {
+                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
+                    encoder->freeSurfaces.push(frameData.surface);
+                }
+                continue;
+            }
+            hw_frame->pts = sw_frame->pts;
+
+            if (av_hwframe_transfer_data(hw_frame, sw_frame, 0) < 0) {
+                av_frame_free(&sw_frame);
+                av_frame_free(&hw_frame);
+                 {
+                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
+                    encoder->freeSurfaces.push(frameData.surface);
+                }
+                continue;
+            }
+            encode_frame = hw_frame;
+        } else {
+            // SW Path
+            sw_frame = av_frame_alloc();
+            sw_frame->format = encoder->hwFramesCtx ? AV_PIX_FMT_NV12 : encoder->videoCodecCtx->pix_fmt;
+            sw_frame->width = encoder->width;
+            sw_frame->height = encoder->height;
+            sw_frame->pts = frameData.pts;
+            
+            if (av_frame_get_buffer(sw_frame, 32) < 0) {
+                av_frame_free(&sw_frame);
+                if (frameData.surface.isValid()) {
+                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
+                    encoder->freeSurfaces.push(frameData.surface);
+                }
+                continue;
+            }
+
+            const uint8_t* srcSlice[] = { frameData.pixels.data() };
+            const int srcStride[] = { encoder->width * 4 };
+            
+            sws_scale(encoder->swsCtx, srcSlice, srcStride, 0, encoder->height,
+                      sw_frame->data, sw_frame->linesize);
+
+            encode_frame = sw_frame;
+
+            if (encoder->hwFramesCtx) {
+                hw_frame = av_frame_alloc();
+                if (av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0) < 0) {
+                    av_frame_free(&sw_frame);
+                    av_frame_free(&hw_frame);
+                    if (frameData.surface.isValid()) {
+                        std::lock_guard<std::mutex> lock(encoder->poolMutex);
+                        encoder->freeSurfaces.push(frameData.surface);
+                    }
+                    continue;
+                }
+                hw_frame->pts = sw_frame->pts;
+                
+                if (av_hwframe_transfer_data(hw_frame, sw_frame, 0) < 0) {
+                    av_frame_free(&sw_frame);
+                    av_frame_free(&hw_frame);
+                    if (frameData.surface.isValid()) {
+                        std::lock_guard<std::mutex> lock(encoder->poolMutex);
+                        encoder->freeSurfaces.push(frameData.surface);
+                    }
+                    continue;
+                }
+                encode_frame = hw_frame;
+            }
+        }
+
+        // Return surface to pool immediately after use/copy
+        if (frameData.surface.isValid()) {
+             std::lock_guard<std::mutex> lock(encoder->poolMutex);
+             encoder->freeSurfaces.push(frameData.surface);
         }
 
         // Encode the frame
-        int ret = avcodec_send_frame(encoder->videoCodecCtx, frame);
-        av_frame_free(&frame);
+        int ret = avcodec_send_frame(encoder->videoCodecCtx, encode_frame);
+        
+        if (hw_frame) av_frame_free(&hw_frame);
+        if (sw_frame) av_frame_free(&sw_frame);
+        
         if (ret < 0) continue;
 
         AVPacket* pkt = av_packet_alloc();
@@ -173,15 +311,15 @@ static void encode_loop(TennojiEncoder* encoder) {
     }
 }
 
-
 static const AVCodec* find_encoder(const char* codec_name, bool try_hw) {
     const AVCodec* codec = nullptr;
 
     if (try_hw) {
-        // Try HW-accelerated encoders first
         if (strcmp(codec_name, "h264") == 0) {
 #if defined(__linux__) && !defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("h264_vaapi");
+#elif defined(__ANDROID__)
+            codec = avcodec_find_encoder_by_name("h264_mediacodec");
 #elif defined(__APPLE__)
             codec = avcodec_find_encoder_by_name("h264_videotoolbox");
 #elif defined(_WIN32)
@@ -191,6 +329,8 @@ static const AVCodec* find_encoder(const char* codec_name, bool try_hw) {
         } else if (strcmp(codec_name, "h265") == 0 || strcmp(codec_name, "hevc") == 0) {
 #if defined(__linux__) && !defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("hevc_vaapi");
+#elif defined(__ANDROID__)
+            codec = avcodec_find_encoder_by_name("hevc_mediacodec");
 #elif defined(__APPLE__)
             codec = avcodec_find_encoder_by_name("hevc_videotoolbox");
 #elif defined(_WIN32)
@@ -200,7 +340,6 @@ static const AVCodec* find_encoder(const char* codec_name, bool try_hw) {
         }
     }
 
-    // Fallback to software encoder
     if (!codec) {
         if (strcmp(codec_name, "h264") == 0) {
             codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -233,7 +372,6 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->height = config->height;
     enc->fps = config->fps;
 
-    // Allocate output context
     int ret = avformat_alloc_output_context2(
         &enc->fmtCtx, nullptr, nullptr, config->output_path);
     if (ret < 0 || !enc->fmtCtx) {
@@ -241,9 +379,8 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         return nullptr;
     }
 
-    // ---- Video stream setup ----
     const char* vcodec_name = config->video_codec ? config->video_codec : "h264";
-    const AVCodec* vcodec = find_encoder(vcodec_name, false);
+    const AVCodec* vcodec = find_encoder(vcodec_name, true);
     if (!vcodec) {
         avformat_free_context(enc->fmtCtx);
         delete enc;
@@ -259,11 +396,48 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->videoCodecCtx->gop_size = 12;
     enc->videoCodecCtx->max_b_frames = 2;
 
+    AVPixelFormat sw_format = AV_PIX_FMT_YUV420P;
+
+    if (strstr(vcodec->name, "vaapi") || strstr(vcodec->name, "nvenc") || strstr(vcodec->name, "videotoolbox") || strstr(vcodec->name, "mediacodec")) {
+        AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+        if (strstr(vcodec->name, "vaapi")) type = AV_HWDEVICE_TYPE_VAAPI;
+        else if (strstr(vcodec->name, "nvenc")) type = AV_HWDEVICE_TYPE_CUDA;
+        else if (strstr(vcodec->name, "videotoolbox")) type = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+        else if (strstr(vcodec->name, "mediacodec")) type = AV_HWDEVICE_TYPE_MEDIACODEC;
+        
+        if (type != AV_HWDEVICE_TYPE_NONE) {
+            int err = av_hwdevice_ctx_create(&enc->hwDeviceCtx, type, nullptr, nullptr, 0);
+            if (err == 0) {
+                 enc->videoCodecCtx->hw_device_ctx = av_buffer_ref(enc->hwDeviceCtx);
+                 
+                 if (type == AV_HWDEVICE_TYPE_VAAPI) enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
+                 else if (type == AV_HWDEVICE_TYPE_CUDA) enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_CUDA;
+                 else if (type == AV_HWDEVICE_TYPE_VIDEOTOOLBOX) enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_VIDEOTOOLBOX;
+                 else if (type == AV_HWDEVICE_TYPE_MEDIACODEC) enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_MEDIACODEC;
+                 
+                 enc->hwFramesCtx = av_hwframe_ctx_alloc(enc->hwDeviceCtx);
+                 if (enc->hwFramesCtx) {
+                     AVHWFramesContext* frames_ctx = (AVHWFramesContext*)enc->hwFramesCtx->data;
+                     frames_ctx->format = enc->videoCodecCtx->pix_fmt;
+                     frames_ctx->sw_format = AV_PIX_FMT_NV12; 
+                     frames_ctx->width = enc->width;
+                     frames_ctx->height = enc->height;
+                     frames_ctx->initial_pool_size = 20;
+                     if (av_hwframe_ctx_init(enc->hwFramesCtx) >= 0) {
+                        enc->videoCodecCtx->hw_frames_ctx = av_buffer_ref(enc->hwFramesCtx);
+                        sw_format = AV_PIX_FMT_NV12;
+                     } else {
+                         av_buffer_unref(&enc->hwFramesCtx);
+                     }
+                 }
+            }
+        }
+    }
+
     if (enc->fmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
         enc->videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    // Set quality preset
     av_opt_set(enc->videoCodecCtx->priv_data, "preset", "medium", 0);
 
     ret = avcodec_open2(enc->videoCodecCtx, vcodec, nullptr);
@@ -278,7 +452,6 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     avcodec_parameters_from_context(enc->videoStream->codecpar, enc->videoCodecCtx);
     enc->videoStream->time_base = enc->videoCodecCtx->time_base;
 
-    // ---- Audio stream setup ----
     if (config->audio_codec) {
         const AVCodec* acodec = find_audio_encoder(config->audio_codec);
         if (acodec) {
@@ -303,7 +476,6 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                 avcodec_parameters_from_context(enc->audioStream->codecpar, enc->audioCodecCtx);
                 enc->audioStream->time_base = enc->audioCodecCtx->time_base;
 
-                // Create audio mixer for resampling
                 enc->audioMixer = tennoji::audio_mixer_create(
                     enc->audioCodecCtx->sample_rate,
                     enc->audioCodecCtx->ch_layout.nb_channels,
@@ -315,10 +487,9 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         }
     }
 
-    // Create SwsContext for color conversion
     enc->swsCtx = sws_getContext(
         config->width, config->height, AV_PIX_FMT_BGRA,
-        config->width, config->height, enc->videoCodecCtx->pix_fmt,
+        config->width, config->height, sw_format,
         SWS_BILINEAR, nullptr, nullptr, nullptr
     );
     if (!enc->swsCtx) {
@@ -326,7 +497,6 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         return nullptr;
     }
 
-    // Open output file
     if (!(enc->fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&enc->fmtCtx->pb, config->output_path, AVIO_FLAG_WRITE);
         if (ret < 0) {
@@ -335,14 +505,12 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         }
     }
 
-    // Write file header
     ret = avformat_write_header(enc->fmtCtx, nullptr);
     if (ret < 0) {
         rina_encoder_destroy(enc);
         return nullptr;
     }
 
-    // Start pipeline threads
     enc->running = true;
     enc->renderThread = std::thread(render_loop, enc);
     enc->encodeThread = std::thread(encode_loop, enc);
@@ -354,18 +522,12 @@ TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
                                                 TennojiCanvas* canvas) {
     if (!encoder || !canvas || !canvas->recorder) return -1;
 
-    // Finish recording the current frame
     sk_sp<SkPicture> pic = canvas->recorder->finishRecordingAsPicture();
     
-    // Begin recording the next frame immediately
-    // This assumes the canvas dimensions don't change
-    // Since rina_canvas_create initializes it with specific width/height, we should reuse those.
-    // TennojiCanvas stores width/height now.
     canvas->canvas = canvas->recorder->beginRecording(canvas->width, canvas->height);
 
     if (!pic) return -1;
 
-    // Push to render queue
     {
         std::lock_guard<std::mutex> lock(encoder->renderMutex);
         encoder->renderQueue.push({std::move(pic), encoder->videoPts++});
@@ -382,7 +544,6 @@ TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
 
     if (!audio_decoder->audioCodecCtx || audio_decoder->audioStreamIdx < 0) return -1;
 
-    // Configure audio mixer if not already done
     if (encoder->audioMixer) {
         tennoji::audio_mixer_configure(
             encoder->audioMixer,
@@ -419,7 +580,6 @@ TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
             if (ret < 0) goto done;
 
-            // Resample frame if needed
             AVFrame* outFrame = frame;
             AVFrame* convertedFrame = nullptr;
             if (encoder->audioMixer) {
@@ -431,7 +591,6 @@ TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
             encoder->audioPts += outFrame->nb_samples;
             samples_written += outFrame->nb_samples;
 
-            // Encode
             ret = avcodec_send_frame(encoder->audioCodecCtx, outFrame);
             if (convertedFrame) av_frame_free(&convertedFrame);
             av_frame_unref(frame);
@@ -464,7 +623,6 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
     if (!encoder || !encoder->audioCodecCtx || !decoder) return -1;
     if (!decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return 0;
 
-    // Configure audio mixer for this decoder's format (idempotent-ish)
     if (encoder->audioMixer) {
         tennoji::audio_mixer_configure(
             encoder->audioMixer,
@@ -475,7 +633,6 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
         );
     }
 
-    // Drain all buffered audio packets from the decoder's queue
     std::deque<AVPacket*> packets;
     {
         std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
@@ -494,7 +651,6 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
             if (ret < 0) break;
 
-            // Resample if needed
             AVFrame* outFrame = frame;
             AVFrame* convertedFrame = nullptr;
             if (encoder->audioMixer) {
@@ -505,7 +661,6 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
             outFrame->pts = encoder->audioPts;
             encoder->audioPts += outFrame->nb_samples;
 
-            // Encode
             ret = avcodec_send_frame(encoder->audioCodecCtx, outFrame);
             if (convertedFrame) av_frame_free(&convertedFrame);
             av_frame_unref(frame);
@@ -535,14 +690,12 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
 TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
     if (!encoder || !encoder->fmtCtx) return -1;
 
-    // Signal threads to stop and wait
     encoder->running = false;
     encoder->renderCv.notify_all();
     
     if (encoder->renderThread.joinable()) encoder->renderThread.join();
     if (encoder->encodeThread.joinable()) encoder->encodeThread.join();
 
-    // Flush video encoder
     if (encoder->videoCodecCtx) {
         avcodec_send_frame(encoder->videoCodecCtx, nullptr);
         AVPacket* pkt = av_packet_alloc();
@@ -559,7 +712,6 @@ TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
         av_packet_free(&pkt);
     }
 
-    // Flush audio encoder
     if (encoder->audioCodecCtx) {
         avcodec_send_frame(encoder->audioCodecCtx, nullptr);
         AVPacket* pkt = av_packet_alloc();
@@ -589,6 +741,14 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
     if (encoder->renderThread.joinable()) encoder->renderThread.join();
     if (encoder->encodeThread.joinable()) encoder->encodeThread.join();
 
+    {
+        std::lock_guard<std::mutex> lock(encoder->poolMutex);
+        for (auto& surface : encoder->allSurfaces) {
+            surface.release(encoder->engine->gpuCtx);
+        }
+        encoder->allSurfaces.clear();
+    }
+
     if (encoder->audioMixer) {
         tennoji::audio_mixer_destroy(encoder->audioMixer);
     }
@@ -597,6 +757,7 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
 
     if (encoder->videoCodecCtx) avcodec_free_context(&encoder->videoCodecCtx);
     if (encoder->audioCodecCtx) avcodec_free_context(&encoder->audioCodecCtx);
+    if (encoder->hwFramesCtx) av_buffer_unref(&encoder->hwFramesCtx);
     if (encoder->hwDeviceCtx) av_buffer_unref(&encoder->hwDeviceCtx);
 
     if (encoder->fmtCtx) {
