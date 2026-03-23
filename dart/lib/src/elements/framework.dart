@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'dart:collection';
 
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
@@ -24,10 +25,36 @@ abstract class Element implements BuildContext {
   RenderObject? get renderObject => _renderObject;
   _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
 
+  Map<Type, InheritedElement>? _inheritedWidgets;
+  Set<InheritedElement>? _dependencies;
+
+  @override
+  T? dependOnInheritedWidgetOfExactType<T>() {
+    assert(_active);
+    final ancestor = _inheritedWidgets?[T];
+    if (ancestor != null) {
+      ancestor.setDependencies(this, null);
+      _dependencies ??= HashSet<InheritedElement>();
+      _dependencies!.add(ancestor);
+      return ancestor.widget as T;
+    }
+    return null;
+  }
+
+  void _updateInheritance() {
+    assert(_active);
+    _inheritedWidgets = _parent?._inheritedWidgets;
+  }
+
+  void didChangeDependencies() {
+    markNeedsBuild();
+  }
+
   void mount(Element? parent, Object? newSlot) {
     _parent = parent;
     _active = true;
-    _lifecycleState = .active;
+    _lifecycleState = _ElementLifecycle.active;
+    _updateInheritance();
   }
 
   void rebuild({bool force=false}) {
@@ -50,8 +77,17 @@ abstract class Element implements BuildContext {
   void unmount() {
     assert(_lifecycleState == _ElementLifecycle.inactive);
     assert(_widget != null);
+    
+    if (_dependencies != null) {
+      for (final InheritedElement dependency in _dependencies!) {
+        dependency.removeDependent(this);
+      }
+      _dependencies = null;
+    }
+    _inheritedWidgets = null;
+
     _active = false;
-    _lifecycleState = .defunct;
+    _lifecycleState = _ElementLifecycle.defunct;
   }
 
   void markNeedsBuild() {
@@ -237,4 +273,61 @@ abstract class ProxyElement extends ComponentElement {
   /// associated with this element but before rebuilding this element.
   @protected
   void notifyClients(covariant ProxyWidget oldWidget);
+}
+
+class InheritedElement extends ProxyElement {
+  InheritedElement(InheritedWidget super.widget);
+
+  final Map<Element, Object?> _dependents = HashMap<Element, Object?>();
+
+  @override
+  void _updateInheritance() {
+    assert(_active);
+    final Map<Type, InheritedElement>? incomingWidgets = _parent?._inheritedWidgets;
+    if (incomingWidgets != null) {
+      _inheritedWidgets = HashMap<Type, InheritedElement>.from(incomingWidgets);
+    } else {
+      _inheritedWidgets = HashMap<Type, InheritedElement>();
+    }
+    _inheritedWidgets![widget.runtimeType] = this;
+  }
+
+  @override
+  void notifyClients(InheritedWidget oldWidget) {
+    for (final Element dependent in _dependents.keys) {
+      notifyDependent(oldWidget, dependent);
+    }
+  }
+
+  @protected
+  void notifyDependent(covariant InheritedWidget oldWidget, Element dependent) {
+    dependent.didChangeDependencies();
+  }
+
+  @override
+  void updated(InheritedWidget oldWidget) {
+    if ((widget as InheritedWidget).updateShouldNotify(oldWidget)) {
+      super.updated(oldWidget);
+    }
+  }
+
+  @protected
+  Object? getDependencies(Element dependent) {
+    return _dependents[dependent];
+  }
+
+  @protected
+  void setDependencies(Element dependent, Object? value) {
+    _dependents[dependent] = value;
+  }
+
+  @protected
+  void updateDependencies(Element dependent, Object? aspect) {
+    setDependencies(dependent, null);
+  }
+
+  @protected
+  void removeDependent(Element dependent) {
+    _dependents.remove(dependent);
+  }
 }
