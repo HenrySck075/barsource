@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import '../foundation/geometry.dart';
 import '../painting/canvas.dart';
+import '../painting/edge_insets.dart';
 import 'pipeline_owner.dart';
 
 abstract class Constraints {
@@ -67,12 +69,31 @@ class BoxConstraints extends Constraints {
     );
   }
 
+  BoxConstraints deflate(EdgeInsets insets) {
+    final double horizontal = insets.left + insets.right;
+    final double vertical = insets.top + insets.bottom;
+    final double deflatedMinWidth = math.max(0.0, minWidth - horizontal);
+    final double deflatedMinHeight = math.max(0.0, minHeight - vertical);
+    return BoxConstraints(
+      minWidth: deflatedMinWidth,
+      maxWidth: math.max(deflatedMinWidth, maxWidth - horizontal),
+      minHeight: deflatedMinHeight,
+      maxHeight: math.max(deflatedMinHeight, maxHeight - vertical),
+    );
+  }
+
   static const BoxConstraints expand = BoxConstraints(
     minWidth: double.infinity,
     maxWidth: double.infinity,
     minHeight: double.infinity,
     maxHeight: double.infinity,
   );
+
+  bool debugAssertIsValid() {
+    assert(minWidth >= 0.0 && minWidth <= maxWidth);
+    assert(minHeight >= 0.0 && minHeight <= maxHeight);
+    return true;
+  }
 }
 
 class PaintingContext {

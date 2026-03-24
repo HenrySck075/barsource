@@ -1992,7 +1992,7 @@ Int32List _encodeParagraphStyle(
   String? ellipsis,
   Locale? locale,
 ) {
-  final realResult = ByteData(9);
+  final realResult = ByteData(9 * 4);
   final result = realResult.buffer.asInt32List(); // also update paragraph_builder.cc
   if (textAlign != null) {
     result[0] |= 1 << 1;
@@ -3677,7 +3677,9 @@ base class _NativeParagraphBuilder implements ParagraphBuilder {
   @override
   void pushStyle(TextStyle style) {
     final fullFontFamilies = <String>[];
-    fullFontFamilies.add(style._fontFamily);
+    if (style._fontFamily != null) {
+      fullFontFamilies.add(style._fontFamily!);
+    }
     final List<String>? fontFamilyFallback = style._fontFamilyFallback;
     if (fontFamilyFallback != null) {
       fullFontFamilies.addAll(fontFamilyFallback);

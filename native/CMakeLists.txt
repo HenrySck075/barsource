@@ -92,6 +92,8 @@ target_link_libraries(tennoji PRIVATE
   ${SKIA_DIR}/out/Release/libskparagraph.a
   ${SKIA_DIR}/out/Release/libicu.a
   ${SKIA_DIR}/out/Release/libskunicode_icu.a
+  ${SKIA_DIR}/out/Release/libskunicode_core.a
+  ${SKIA_DIR}/out/Release/libskshaper.a
 )
 
 if(WIN32)
@@ -100,5 +102,12 @@ elseif(APPLE)
   target_link_libraries(tennoji PRIVATE "-framework Metal" "-framework VideoToolbox")
 else()
   find_package(Vulkan REQUIRED)
-  target_link_libraries(tennoji PRIVATE Vulkan::Vulkan)
+  # find fontconfig and some gang for the font loading
+  find_package(Fontconfig REQUIRED)
+  find_package(Freetype REQUIRED)
+  target_link_libraries(tennoji PRIVATE 
+    Vulkan::Vulkan
+    Fontconfig::Fontconfig
+    Freetype::Freetype
+  )
 endif()

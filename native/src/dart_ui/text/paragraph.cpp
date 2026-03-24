@@ -1,4 +1,6 @@
 
+#include <iostream>
+#include <mutex>
 #include "include/core/SkColor.h"
 #include "include/core/SkData.h"
 #include "include/core/SkFontStyle.h"
@@ -79,7 +81,8 @@ skia::textlayout::ParagraphStyle paragraph_style_from_encoded(
   /*const std::vector<std::string>&*/ const char** strutFontFamilies,
   uint32_t sffLen,
   /*const std::u16string&*/ const char* ellipsis,
-  /*const std::string&*/ const char* locale
+  /*const std::string&*/ const char* locale,
+  /*const std::string&*/ const char* fontFamily
 ) {
   auto mask = encodedStyle[0]; // nobody cares
   auto textAlign = static_cast<skia::textlayout::TextAlign>(encodedStyle[1]);
@@ -93,10 +96,24 @@ skia::textlayout::ParagraphStyle paragraph_style_from_encoded(
   skia::textlayout::TextStyle textStyle;
   SkFontStyle fontStyle(fontWeight, SkFontStyle::kNormal_Width, (SkFontStyle::Slant)fontStyleEnum);
   textStyle.setFontStyle(fontStyle);
+  if (fontFamily && *fontFamily) {
+      std::vector<SkString> families;
+      families.emplace_back(fontFamily);
+      textStyle.setFontFamilies(std::move(families));
+  } else {
+      std::vector<SkString> families;
+      families.emplace_back("Noto Sans");
+      textStyle.setFontFamilies(std::move(families));
+  }
+  if (mask & (1 << 8)) {
+    textStyle.setFontSize(*reinterpret_cast<float*>(&encodedStyle[7]));
+  }
   style.setTextStyle(textStyle);
   style.setTextAlign(textAlign);
   style.setTextDirection(textDirection);
-  style.setHeight((float)(encodedStyle[8]));
+  if (mask & (1 << 9)) {
+    style.setHeight(*reinterpret_cast<float*>(&encodedStyle[8]));
+  }
   if (strutData)
     style.setStrutStyle(strut_style_from_encoded(strutData, strutFontFamilies, sffLen));
   style.setEllipsis(SkString(ellipsis));
@@ -169,13 +186,13 @@ skia::textlayout::TextStyle text_style_from_encoded(
   style.setTextBaseline(static_cast<skia::textlayout::TextBaseline>(textBaselineEnum));
   if (fontFamilies)
     style.setFontFamilies({fontFamilies, fontFamilies+ffLength});
-  if (maskbit(9))
-    style.setFontSize(fontSize);
   if (maskbit(10))
-    style.setLetterSpacing(letterSpacing);
+    style.setFontSize(fontSize);
   if (maskbit(11))
-    style.setWordSpacing(wordSpacing);
+    style.setLetterSpacing(letterSpacing);
   if (maskbit(12))
+    style.setWordSpacing(wordSpacing);
+  if (maskbit(13))
     style.setHeight(height);
   style.setLocale(SkString(locale));
 
@@ -223,6 +240,7 @@ skia::textlayout::TextStyle text_style_from_encoded(
     #include "include/ports/SkFontMgr_mac_ct.h"
 #elif defined(TENNOJI_IS_LINUX)
     #include "include/ports/SkFontMgr_fontconfig.h"
+    #include "include/ports/SkFontScanner_FreeType.h" // For font scanning logic
 #elif defined(TENNOJI_IS_TERMUX)
     #include "include/ports/SkFontMgr_android_ndk.h"
     #include "include/ports/SkFontScanner_FreeType.h" // For font scanning logic
@@ -232,6 +250,8 @@ __EXTERN_C__
 
 static sk_sp<skia::textlayout::FontCollection> g_collector;
 static sk_sp<skia::textlayout::TypefaceFontProvider> g_provider;
+#include "include/ports/SkFontMgr_fontconfig.h"
+
 void LoadDefaultFontManager() {
     sk_sp<SkFontMgr> fontMgr = nullptr;
 
@@ -242,8 +262,9 @@ void LoadDefaultFontManager() {
         // CoreText handles macOS/iOS
         fontMgr = SkFontMgr_New_CoreText(nullptr);
     #elif defined(TENNOJI_IS_LINUX)
+        auto scanner = SkFontScanner_Make_FreeType();
         // Uses Fontconfig to locate system fonts
-        fontMgr = SkFontMgr_New_FontConfig(nullptr,nullptr);
+        fontMgr = SkFontMgr_New_FontConfig(nullptr, std::move(scanner));
     #elif defined(TENNOJI_IS_TERMUX)
         // Create the scanner first (FreeType is the standard choice)
         auto scanner = SkFontScanner_Make_FreeType();
@@ -267,16 +288,19 @@ void LoadDefaultFontManager() {
         g_collector->setDefaultFontManager(SkFontMgr::RefEmpty());
     }
 }
-void setup_font_collection() {
-  static bool configured = false;
-  if (configured) return;
+static std::once_flag g_init_flag;
 
+void do_setup_font_collection() {
   g_collector = sk_make_sp<skia::textlayout::FontCollection>();
   g_provider = sk_make_sp<skia::textlayout::TypefaceFontProvider>();
   
   LoadDefaultFontManager();
-
+  
   g_collector->setAssetFontManager(g_provider);
+}
+
+void setup_font_collection() {
+  std::call_once(g_init_flag, do_setup_font_collection);
 }
 
 TENNOJI_EXPORT TennojiParagraphBuilder* rina_paragraph_builder_create(
@@ -289,6 +313,7 @@ TENNOJI_EXPORT TennojiParagraphBuilder* rina_paragraph_builder_create(
   /*const std::u16string&*/ const char* ellipsis,
   /*const std::string&*/ const char* locale
 ) {
+  setup_font_collection();
   if (!hasStrutData) strutData = nullptr;
 
   return new TennojiParagraphBuilder{
@@ -298,7 +323,8 @@ TENNOJI_EXPORT TennojiParagraphBuilder* rina_paragraph_builder_create(
         strutFontFamilies, 
         sffLen, 
         ellipsis, 
-        locale
+        locale,
+        fontFamily
       ),
       g_collector,
       SkUnicodes::ICU::Make()

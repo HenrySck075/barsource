@@ -618,6 +618,7 @@ class TextPainter {
     TextHeightBehavior? textHeightBehavior,
   }) : assert(text == null || text.debugAssertIsValid()),
        assert(maxLines == null || maxLines > 0),
+       _text = text,
        _textAlign = textAlign,
        _textDirection = textDirection,
        _textScaler = textScaler,
