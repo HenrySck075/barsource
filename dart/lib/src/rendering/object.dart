@@ -145,6 +145,12 @@ abstract class RenderObject {
 
   void attach(PipelineOwner owner) {
     _owner = owner;
+    if (_needsLayout) {
+      _owner!.requestLayout(this);
+    }
+    if (_needsPaint) {
+      _owner!.requestPaint(this);
+    }
   }
 
   void detach() {
