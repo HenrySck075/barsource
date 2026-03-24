@@ -6,7 +6,8 @@ import 'package:tennoji/src/dart_ui/dart_ui.dart';
 import '../rendering/media_render.dart';
 import '../rendering/object.dart';
 import '../rendering/pipeline_owner.dart';
-import '../rendering/time_box.dart';
+import '../rendering/view.dart';
+import '../rendering/box.dart';
 import '../widgets/framework.dart';
 import 'engine.dart';
 
@@ -52,8 +53,14 @@ void render(Widget root, RenderConfig config) {
   rootElement.mount(null, null);
 
   final pipelineOwner = PipelineOwner();
-  final renderRoot = rootElement.renderObject!;
-  renderRoot.attach(pipelineOwner);
+  final renderView = RenderView(
+    configuration: ViewConfiguration(
+      size: config.resolution,
+      currentTime: Duration.zero,
+    ),
+    child: rootElement.renderObject as RenderBox?,
+  );
+  renderView.attach(pipelineOwner);
 
   // Create encoder
   final encConfig = calloc<TennojiEncoderConfig>();
@@ -86,34 +93,30 @@ void render(Widget root, RenderConfig config) {
   // during decoder_get_texture; audio-only clip decoders need explicit
   // decoder_read_audio calls.
   final videoClipDecoders = <Pointer<TennojiDecoder>>[];
-  for (final clip in _collectVideoClips(renderRoot)) {
+  for (final clip in _collectVideoClips(renderView)) {
     if (clip.decoderPtr != null) videoClipDecoders.add(clip.decoderPtr!);
   }
   final audioOnlyDecoders = <Pointer<TennojiDecoder>>[];
-  for (final clip in _collectAudioClips(renderRoot)) {
+  for (final clip in _collectAudioClips(renderView)) {
     if (clip.decoderPtr != null) audioOnlyDecoders.add(clip.decoderPtr!);
   }
   final allAudioDecoders = [...videoClipDecoders, ...audioOnlyDecoders];
 
   while (currentTime < config.duration) {
     // Layout
-    final constraints = TimeBoxConstraints(
+    renderView.configuration = ViewConfiguration(
+      size: config.resolution,
       currentTime: currentTime,
-      minWidth: config.resolution.width,
-      maxWidth: config.resolution.width,
-      minHeight: config.resolution.height,
-      maxHeight: config.resolution.height,
     );
-    renderRoot.layout(constraints);
+    pipelineOwner.flushLayout();
 
     // Paint (this calls decoder_get_texture on video clips, which
     // auto-queues audio packets from the same demuxer stream)
     rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
     final canvas = Canvas(nativeCanvas);
     final paintingContext = PaintingContext(canvas);
-    pipelineOwner.flushLayout();
     pipelineOwner.flushPaint(canvas);
-    renderRoot.paint(paintingContext, Offset.zero);
+    renderView.paint(paintingContext, Offset.zero);
 
     // Encode video frame
     rina_encoder_write_frame(encoder, nativeCanvas);
@@ -130,6 +133,7 @@ void render(Widget root, RenderConfig config) {
     }
 
     currentTime += frameDuration;
+    Engine.instance.updateTime(currentTime);
   }
 
   // Final drain: pick up any remaining buffered audio packets
