@@ -31,7 +31,10 @@ abstract class Element implements BuildContext {
   bool _active = false;
   bool _dirty = true;
 
-  RenderObject? get renderObject => _renderObject;
+  RenderObject? get renderObject {
+    if (_renderObject != null) return _renderObject;
+    return null;
+  }
   _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
 
   Map<Type, InheritedElement>? _inheritedWidgets;
@@ -123,6 +126,14 @@ class ComponentElement extends Element {
   Element? _child;
 
   @override
+  RenderObject? get renderObject {
+    if (_child != null) {
+      return _child!.renderObject;
+    }
+    return null;
+  }
+
+  @override
   void mount(Element? parent, Object? newSlot) {
     super.mount(parent, newSlot);
     _firstBuild();
@@ -179,9 +190,10 @@ class StatefulElement extends ComponentElement {
   late State _state;
 
   @override
-  void mount(Element? parent, Object? newSlot) {
-    super.mount(parent, newSlot);
+  void _firstBuild() {
     _state.initState();
+    //_state.didChangeDependencies();
+    super._firstBuild();
   }
 
   @override
