@@ -44,12 +44,14 @@ void main(){
           color: Color(0xFF0000FF),
         ),
       ),
+      Text(text: "Hello World"),
       ]),
+      Text(text: "g"),
       AnimatedList<String>(
         itemBuilder: (context, data, anim){
           return SlideTransition(
             animation: anim, offset: OffsetTween(begin: (1.0, 0.0), end: (0.0, 0.0)),
-            child: Container(width: 100, height: 60,color:Color(0xFF363636), child: Text(text: data))
+            child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: "sigma"))
           );
         },
         instructions: [
