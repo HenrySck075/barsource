@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
@@ -31,30 +32,6 @@ class Engine {
     _instance = Engine._(ptr);
   }
 
-  // Internal class for timer scheduling
-}
-
-class _ScheduledTimer {
-  _ScheduledTimer(this.duration, this.callback, {this.isPeriodic = false});
-  final Duration duration;
-  final void Function() callback;
-  final bool isPeriodic;
-  
-  late Duration targetTime;
-  Duration? lastFireTime;
-}
-
-// Re-open Engine class to close it properly since I messed up the edit block structure slightly in thought
-// Wait, I inserted inside Engine class but left the closing brace of Engine in the old_str.
-// The new_str ends with "}", so the class is closed.
-// But I added _ScheduledTimer outside.
-// I need to be careful with the brace matching.
-// The old_str ends with `shutdown() { ... }` then `}`.
-// My new_str ends with `shutdown() {` (opening of shutdown).
-// I removed the body of shutdown and the closing brace of class.
-// Let me correct the edit.
-
-
   static Engine get instance => _instance!;
 
   Pointer<TennojiEngine> get nativePtr => _nativePtr;
@@ -71,24 +48,17 @@ class _ScheduledTimer {
     _timers.removeWhere((timer) {
       if (timer.targetTime <= time) {
         timer.callback();
-        return !timer.isPeriodic; // Remove if not periodic
+        if (timer.isPeriodic) {
+          timer.targetTime = time + timer.duration;
+          return false; // Keep periodic timers
+        }
+        return true; // Remove one-shot timers
       }
       return false;
     });
-
-    // Reschedule periodic timers
-    // (Simpler implementation: just let them re-add themselves or handle periodic logic here)
-    // Actually, standard Timer.periodic re-schedules.
-    // For this engine-bound timer, we can just keep it in the list if it's periodic, 
-    // but update its targetTime.
     
-    for (final timer in _timers) {
-        if (timer.isPeriodic && timer.lastFireTime != null && time >= timer.targetTime) {
-             // It fired in the removeWhere block above, now update target
-             timer.lastFireTime = time;
-             timer.targetTime = time + timer.duration;
-        }
-    }
+    // Re-sort in case periodic timers changed order (though likely not needed for simple check)
+    // _timers.sort((a, b) => a.targetTime.compareTo(b.targetTime));
   }
 
   void _registerTimer(_ScheduledTimer timer) {
@@ -106,3 +76,103 @@ class _ScheduledTimer {
     _instance = null;
   }
 }
+
+class _ScheduledTimer {
+  _ScheduledTimer(this.duration, this.callback, {this.isPeriodic = false});
+  final Duration duration;
+  final void Function() callback;
+  final bool isPeriodic;
+  
+  late Duration targetTime;
+}
+
+/// A [Timer] that runs on the [Engine]'s clock.
+class EngineTimer implements Timer {
+  EngineTimer(Duration duration, void Function() callback) {
+    _scheduled = _ScheduledTimer(duration, callback);
+    Engine.instance._registerTimer(_scheduled);
+  }
+
+  /// Creates a periodic timer.
+  EngineTimer.periodic(Duration duration, void Function(Timer) callback) {
+    _scheduled = _ScheduledTimer(
+      duration,
+      () => callback(this),
+      isPeriodic: true,
+    );
+    Engine.instance._registerTimer(_scheduled);
+  }
+
+  late final _ScheduledTimer _scheduled;
+
+  @override
+  void cancel() {
+    Engine.instance._cancelTimer(_scheduled);
+  }
+
+  @override
+  bool get isActive => Engine.instance._timers.contains(_scheduled);
+
+  @override
+  int get tick => 0; // Not fully implemented
+}
+
+/// A [Stopwatch] that runs on the [Engine]'s clock.
+class EngineStopwatch implements Stopwatch {
+  EngineStopwatch();
+
+  Duration _elapsed = Duration.zero;
+  Duration? _startTime;
+  bool _isRunning = false;
+
+  @override
+  int get frequency => 1000000; // microseconds
+
+  @override
+  bool get isRunning => _isRunning;
+
+  @override
+  void start() {
+    if (!_isRunning) {
+      _startTime = Engine.instance.currentTime;
+      _isRunning = true;
+    }
+  }
+
+  @override
+  void stop() {
+    if (_isRunning) {
+      _elapsed += Engine.instance.currentTime - _startTime!;
+      _startTime = null;
+      _isRunning = false;
+    }
+  }
+
+  @override
+  void reset() {
+    _elapsed = Duration.zero;
+    if (_isRunning) {
+      _startTime = Engine.instance.currentTime;
+    } else {
+      _startTime = null;
+    }
+  }
+
+  @override
+  Duration get elapsed {
+    if (_isRunning) {
+      return _elapsed + (Engine.instance.currentTime - _startTime!);
+    }
+    return _elapsed;
+  }
+
+  @override
+  int get elapsedMicroseconds => elapsed.inMicroseconds;
+
+  @override
+  int get elapsedMilliseconds => elapsed.inMilliseconds;
+
+  @override
+  int get elapsedTicks => elapsedMicroseconds;
+}
+

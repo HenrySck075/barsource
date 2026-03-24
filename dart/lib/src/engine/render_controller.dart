@@ -9,6 +9,7 @@ import '../rendering/pipeline_owner.dart';
 import '../rendering/view.dart';
 import '../rendering/box.dart';
 import '../widgets/framework.dart';
+import '../elements/framework.dart' show BuildOwner;
 import 'engine.dart';
 
 class RenderConfig {
@@ -49,7 +50,9 @@ void render(Widget root, RenderConfig config) {
   final enginePtr = Engine.instance.nativePtr;
 
   // Build the tree
+  final buildOwner = BuildOwner();
   final rootElement = root.createElement();
+  rootElement.assignOwner(buildOwner);
   rootElement.mount(null, null);
 
   final pipelineOwner = PipelineOwner();
@@ -103,6 +106,9 @@ void render(Widget root, RenderConfig config) {
   final allAudioDecoders = [...videoClipDecoders, ...audioOnlyDecoders];
 
   while (currentTime < config.duration) {
+    // Rebuild dirty widgets
+    buildOwner.buildScope(rootElement);
+
     // Layout
     renderView.configuration = ViewConfiguration(
       size: config.resolution,
@@ -133,6 +139,7 @@ void render(Widget root, RenderConfig config) {
     }
 
     currentTime += frameDuration;
+    // Update engine time to fire timers for the next frame
     Engine.instance.updateTime(currentTime);
   }
 

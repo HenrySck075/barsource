@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:tennoji/tennoji.dart';
 
 
@@ -14,8 +16,9 @@ class _bombState extends State<bomb> {
 
     _controller = ListController<String>();
 
+
     EngineTimer(Duration(seconds: 1), ()=>_controller.insert(0, "hi"));
-    EngineTimer(Duration(seconds: 1), ()=>_controller.insert(1, "hello"));
+    EngineTimer(Duration(seconds: 2), ()=>_controller.insert(1, "hello"));
   }
 
   @override

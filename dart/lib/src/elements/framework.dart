@@ -3,6 +3,32 @@ import 'dart:collection';
 
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
+
+class BuildOwner {
+  final List<Element> _dirtyElements = [];
+
+  void scheduleBuildFor(Element element) {
+    if (!_dirtyElements.contains(element)) {
+      _dirtyElements.add(element);
+    }
+  }
+
+  void buildScope(Element context) {
+    // Process dirty elements.
+    // Note: We use a simple loop index because rebuilding an element might
+    // add more elements to the list (e.g. children marked dirty).
+    int i = 0;
+    while (i < _dirtyElements.length) {
+      final element = _dirtyElements[i];
+      if (element._dirty && element._active) {
+        element.rebuild();
+      }
+      i++;
+    }
+    _dirtyElements.clear();
+  }
+}
+
 abstract class BuildContext {
   // Returns the widget that this context is associated with.
   // Typed as dynamic here to avoid circular import with framework.dart.
@@ -27,6 +53,10 @@ abstract class Element implements BuildContext {
   Widget get widget => _widget!;
 
   Element? _parent;
+  BuildOwner? _owner;
+  
+  BuildOwner? get owner => _owner;
+
   //RenderObject? _renderObject;
   bool _active = false;
   bool _dirty = true;
@@ -84,9 +114,14 @@ abstract class Element implements BuildContext {
 
   void mount(Element? parent, Object? newSlot) {
     _parent = parent;
+    _owner = parent?.owner;
     _active = true;
     _lifecycleState = _ElementLifecycle.active;
     _updateInheritance();
+  }
+  
+  void assignOwner(BuildOwner owner) {
+    _owner = owner;
   }
 
   void rebuild({bool force=false}) {
@@ -123,7 +158,9 @@ abstract class Element implements BuildContext {
   }
 
   void markNeedsBuild() {
+    if (_dirty && _active) return;
     _dirty = true;
+    _owner?.scheduleBuildFor(this);
   }
 
   Widget build();
@@ -264,6 +301,35 @@ class RenderObjectElement extends Element {
   void update(covariant RenderObjectWidget newWidget) {
     super.update(newWidget);
     newWidget.updateRenderObject(this, _renderObject!);
+
+    // Reconcile children (Naive "nuke and pave" approach)
+    // 1. Unmount old children
+    final oldChildren = List<Element>.of(_children);
+    _children.clear();
+    
+    for (final child in oldChildren) {
+      final childRenderObject = child.renderObject;
+      if (childRenderObject != null && _renderObject is ContainerRenderObjectMixin) {
+        (_renderObject as ContainerRenderObjectMixin).remove(childRenderObject);
+      }
+      child.unmount();
+    }
+
+    // 2. Mount new children
+    final w = widget;
+    if (w is SingleChildRenderObjectWidget && w.child != null) {
+      final childElement = w.child!.createElement();
+      _children.add(childElement);
+      childElement.mount(this, null);
+      _adoptChildRenderObject(childElement);
+    } else if (w is MultiChildRenderObjectWidget) {
+      for (final childWidget in w.children) {
+        final childElement = childWidget.createElement();
+        _children.add(childElement);
+        childElement.mount(this, null);
+        _adoptChildRenderObject(childElement);
+      }
+    }
   }
 
   @override

@@ -55,10 +55,8 @@ class RenderAnimatedList extends RenderTimeBox with ContainerRenderObjectMixin {
 
   @override
   void remove(RenderObject child) {
-    final idx = children.indexOf(child);
-    if (idx >= 0 && idx < _slots.length) {
-      _slots.removeAt(idx);
-    }
+    // We do not remove slots here because they are managed declaratively
+    // by the widget's updateRenderObject method.
     super.remove(child);
   }
 
@@ -67,7 +65,7 @@ class RenderAnimatedList extends RenderTimeBox with ContainerRenderObjectMixin {
   @override
   void performLayout() {
     final time = constraints.currentTime;
-
+    
     for (final child in children) {
       child.layout(TimeBoxConstraints(
         currentTime: time,
