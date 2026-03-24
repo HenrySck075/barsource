@@ -27,14 +27,22 @@ abstract class Element implements BuildContext {
   Widget get widget => _widget!;
 
   Element? _parent;
-  RenderObject? _renderObject;
+  //RenderObject? _renderObject;
   bool _active = false;
   bool _dirty = true;
 
   RenderObject? get renderObject {
-    if (_renderObject != null) return _renderObject;
-    return null;
+    RenderObject? result;
+    void visitor(Element element) {
+      if (result != null) return;
+      result = element.renderObject;
+    }
+    visitChildren(visitor);
+    return result;
   }
+  
+  void visitChildren(void Function(Element element) visitor);
+
   _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
 
   Map<Type, InheritedElement>? _inheritedWidgets;
@@ -126,11 +134,10 @@ class ComponentElement extends Element {
   Element? _child;
 
   @override
-  RenderObject? get renderObject {
+  void visitChildren(void Function(Element element) visitor) {
     if (_child != null) {
-      return _child!.renderObject;
+      visitor(_child!);
     }
-    return null;
   }
 
   @override
@@ -204,6 +211,17 @@ class RenderObjectElement extends Element {
   RenderObjectElement(RenderObjectWidget super.widget);
 
   final List<Element> _children = [];
+  RenderObject? _renderObject;
+
+  @override
+  RenderObject? get renderObject => _renderObject;
+
+  @override
+  void visitChildren(void Function(Element element) visitor) {
+    for (final Element child in _children) {
+      visitor(child);
+    }
+  }
 
   @override
   void mount(Element? parent, Object? newSlot) {
@@ -236,20 +254,10 @@ class RenderObjectElement extends Element {
   }
 
   void _adoptChildRenderObject(Element childElement) {
-    final childRenderObject = _findChildRenderObject(childElement);
+    final childRenderObject = childElement.renderObject;
     if (childRenderObject != null && _renderObject is ContainerRenderObjectMixin) {
       (_renderObject as ContainerRenderObjectMixin).add(childRenderObject);
     }
-  }
-
-  /// Walk down through component elements to find the nearest render object.
-  RenderObject? _findChildRenderObject(Element element) {
-    if (element.renderObject != null) return element.renderObject;
-    // For component elements, check their built child
-    if (element is ComponentElement && element._child != null) {
-      return _findChildRenderObject(element._child!);
-    }
-    return null;
   }
 
   @override
