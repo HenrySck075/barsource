@@ -54,15 +54,18 @@ static GPUContext* create_vulkan_context() {
 
     // Select physical device
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-    if (deviceCount == 0) {
+    if (vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr) != VK_SUCCESS || deviceCount == 0) {
         vkDestroyInstance(instance, nullptr);
         delete ctx;
         return nullptr;
     }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+    if (vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()) != VK_SUCCESS) {
+        vkDestroyInstance(instance, nullptr);
+        delete ctx;
+        return nullptr;
+    }
     VkPhysicalDevice physicalDevice = devices[0]; // Pick first device
 
     // Find graphics queue family

@@ -27,3 +27,6 @@ dart/lib/src/engine/bindings.g.dart
 
 # this fucker
 native/.cache
+
+# Dart compiled example executable
+dart/build/

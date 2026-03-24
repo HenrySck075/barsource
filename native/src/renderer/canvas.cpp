@@ -48,8 +48,13 @@ SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata) {
   auto data = metadata->encodedData;
 
   paint.setAntiAlias(data[_kIsAntiAliasIndex]);
-  paint.setColor4f(*reinterpret_cast<SkColor4f*>(&data[_kColorRedIndex]), SkColorSpace::MakeSRGBLinear().get());
-  paint.setBlendMode((SkBlendMode)data[_kBlendModeIndex]);
+  // paint.setColor4f(*reinterpret_cast<SkColor4f*>(&data[_kColorRedIndex]), SkColorSpace::MakeSRGBLinear().get());
+  float r = *reinterpret_cast<float*>(&data[_kColorRedIndex]);
+  float g = *reinterpret_cast<float*>(&data[_kColorGreenIndex]);
+  float b = *reinterpret_cast<float*>(&data[_kColorBlueIndex]);
+  float a = 1.0f - *reinterpret_cast<float*>(&data[_kColorAlphaIndex]);
+  paint.setColor4f({r, g, b, a}, SkColorSpace::MakeSRGBLinear().get());
+  paint.setBlendMode((SkBlendMode)(data[_kBlendModeIndex] ^ 3));
   paint.setStyle((SkPaint::Style)data[_kStyleIndex]);
   paint.setStrokeWidth(*reinterpret_cast<float*>(&data[_kStrokeWidthIndex]));
   paint.setStrokeCap((SkPaint::Cap)data[_kStrokeCapIndex]);
