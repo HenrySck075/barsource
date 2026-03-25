@@ -3,10 +3,12 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/engine/bindings.dart';
+import 'package:tennoji/src/foundation/binding_base.dart';
+import 'package:tennoji/src/scheduler/binding.dart';
 
 export 'bindings.dart';
 
-class Engine {
+class Engine extends BindingBase with SchedulerBinding {
   Engine._(this._nativePtr);
 
   final Pointer<TennojiEngine> _nativePtr;
@@ -36,54 +38,10 @@ class Engine {
 
   Pointer<TennojiEngine> get nativePtr => _nativePtr;
 
-  Duration _currentTime = Duration.zero;
-  Duration get currentTime => _currentTime;
-
-  final List<_ScheduledTimer> _timers = [];
-
-  void updateTime(Duration time) {
-    _currentTime = time;
-    
-    // Process timers
-    _timers.removeWhere((timer) {
-      if (timer.targetTime <= time) {
-        timer.callback();
-        if (timer.isPeriodic) {
-          timer.targetTime = time + timer.duration;
-          return false; // Keep periodic timers
-        }
-        return true; // Remove one-shot timers
-      }
-      return false;
-    });
-    
-    // Re-sort in case periodic timers changed order (though likely not needed for simple check)
-    // _timers.sort((a, b) => a.targetTime.compareTo(b.targetTime));
-  }
-
-  void _registerTimer(_ScheduledTimer timer) {
-    timer.targetTime = _currentTime + timer.duration;
-    _timers.add(timer);
-    _timers.sort((a, b) => a.targetTime.compareTo(b.targetTime));
-  }
-  
-  void _cancelTimer(_ScheduledTimer timer) {
-    _timers.remove(timer);
-  }
-
   void shutdown() {
     rina_engine_destroy(_nativePtr);
     _instance = null;
   }
-}
-
-class _ScheduledTimer {
-  _ScheduledTimer(this.duration, this.callback, {this.isPeriodic = false});
-  final Duration duration;
-  final void Function() callback;
-  final bool isPeriodic;
-  
-  late Duration targetTime;
 }
 
 /// A [Timer] that runs on the [Engine]'s clock.

@@ -106,6 +106,8 @@ void render(Widget root, RenderConfig config) {
   final allAudioDecoders = [...videoClipDecoders, ...audioOnlyDecoders];
 
   while (currentTime < config.duration) {
+    Engine.instance.handleBeginFrame(currentTime);
+    Engine.instance.handleDrawFrame();
     // Rebuild dirty widgets
     buildOwner.buildScope(rootElement);
 
@@ -139,8 +141,6 @@ void render(Widget root, RenderConfig config) {
     }
 
     currentTime += frameDuration;
-    // Update engine time to fire timers for the next frame
-    Engine.instance.updateTime(currentTime);
   }
 
   // Final drain: pick up any remaining buffered audio packets
