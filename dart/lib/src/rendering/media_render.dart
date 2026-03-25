@@ -36,6 +36,9 @@ class RenderVideoClip extends RenderTimeBox {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
+    if (_decoder != null) {
+      Engine.instance.registerAudioDecoder(_decoder!);
+    }
   }
 
   @override
@@ -46,6 +49,7 @@ class RenderVideoClip extends RenderTimeBox {
       _texture = null;
     }
     if (_decoder != null) {
+      Engine.instance.unregisterAudioDecoder(_decoder!);
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
@@ -105,11 +109,15 @@ class RenderAudioClip extends RenderTimeBox {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
+    if (_decoder != null) {
+      Engine.instance.registerAudioDecoder(_decoder!, needsManualRead: true);
+    }
   }
 
   @override
   void detach() {
     if (_decoder != null) {
+      Engine.instance.unregisterAudioDecoder(_decoder!);
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
