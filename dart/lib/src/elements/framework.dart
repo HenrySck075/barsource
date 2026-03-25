@@ -1,4 +1,6 @@
+import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/rendering/parent_data.dart';
 import 'dart:collection';
 
 import '../widgets/framework.dart';
@@ -49,6 +51,8 @@ abstract class Element implements BuildContext {
   Element(this._widget);
   Widget? _widget;
 
+  Logger get _log => Logger('Element.${runtimeType}');
+
   @override
   Widget get widget => _widget!;
 
@@ -70,7 +74,17 @@ abstract class Element implements BuildContext {
     visitChildren(visitor);
     return result;
   }
-  
+ 
+  @protected
+  Element? get renderObjectAttachingChild {
+    Element? next;
+    visitChildren((Element child) {
+      assert(next == null); // This verifies that there's only one child.
+      next = child;
+    });
+    return next;
+  } 
+
   void visitChildren(void Function(Element element) visitor);
 
   _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
@@ -113,6 +127,7 @@ abstract class Element implements BuildContext {
   }
 
   void mount(Element? parent, Object? newSlot) {
+    _log.finer('Mounting');
     _parent = parent;
     _owner = parent?.owner;
     _active = true;
@@ -128,6 +143,7 @@ abstract class Element implements BuildContext {
     if (_lifecycleState != _ElementLifecycle.active || (!_dirty && !force)) {
       return;
     }
+    _log.finer('Rebuilding (force: $force)');
     performRebuild();
   }
 
@@ -142,6 +158,7 @@ abstract class Element implements BuildContext {
   }
 
   void unmount() {
+    _log.finer('Unmounting');
     assert(_lifecycleState == _ElementLifecycle.inactive);
     assert(_widget != null);
     
@@ -253,6 +270,9 @@ class RenderObjectElement extends Element {
   @override
   RenderObject? get renderObject => _renderObject;
 
+  @override 
+  Element? get renderObjectAttachingChild => null;
+
   @override
   void visitChildren(void Function(Element element) visitor) {
     for (final Element child in _children) {
@@ -281,6 +301,15 @@ class RenderObjectElement extends Element {
         _children.add(childElement);
         childElement.mount(this, null);
         _adoptChildRenderObject(childElement);
+      }
+    }
+  }
+
+  void _updateParentData(ParentDataWidget<ParentData> parentDataWidget) {
+    if (_renderObject != null) {
+      final parentData = _renderObject!.parentData;
+      if (parentData is ParentData) {
+        parentDataWidget.applyParentData(_renderObject!);
       }
     }
   }
@@ -380,6 +409,26 @@ abstract class ProxyElement extends ComponentElement {
   /// associated with this element but before rebuilding this element.
   @protected
   void notifyClients(covariant ProxyWidget oldWidget);
+}
+class ParentDataElement<T extends ParentData> extends ProxyElement {
+  ParentDataElement(ParentDataWidget<T> super.widget);
+  void _applyParentData(ParentDataWidget<T> widget) {
+    void applyParentDataToChild(Element child) {
+      if (child is RenderObjectElement) {
+        child._updateParentData(widget);
+      } else if (child.renderObjectAttachingChild != null) {
+        applyParentDataToChild(child.renderObjectAttachingChild!);
+      }
+    }
+
+    if (renderObjectAttachingChild != null) {
+      applyParentDataToChild(renderObjectAttachingChild!);
+    }
+  }
+  @override
+  void notifyClients(ParentDataWidget<T> oldWidget) {
+    _applyParentData(widget as ParentDataWidget<T>);
+  }
 }
 
 class InheritedElement extends ProxyElement {

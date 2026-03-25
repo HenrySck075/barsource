@@ -1,3 +1,5 @@
+import 'package:tennoji/src/rendering/box.dart';
+
 import '../animation/animation.dart';
 import '../foundation/geometry.dart';
 import 'object.dart';
@@ -41,7 +43,7 @@ class AnimatedListSlot {
 /// Children are stacked vertically.  Each child's visible height is scaled
 /// by the animation progress of its slot, producing a size-transition effect
 /// similar to Flutter's [SizeTransition] wrapped around each item.
-class RenderAnimatedList extends RenderTimeBox with ContainerRenderObjectMixin {
+class RenderAnimatedList extends RenderBox with ContainerRenderObjectMixin {
   /// Per-child slot metadata, indexed in the same order as [children].
   final List<AnimatedListSlot> _slots = [];
 
@@ -67,7 +69,7 @@ class RenderAnimatedList extends RenderTimeBox with ContainerRenderObjectMixin {
     final time = constraints.currentTime;
     
     for (final child in children) {
-      child.layout(TimeBoxConstraints(
+      child.layout(BoxConstraints(
         currentTime: time,
         minWidth: constraints.minWidth,
         maxWidth: constraints.maxWidth,

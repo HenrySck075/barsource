@@ -64,8 +64,8 @@ class RenderAlign extends RenderBox with ContainerRenderObjectMixin {
       final parentConstraints = constraints;
       BoxConstraints childConstraints;
 
-      if (parentConstraints is TimeBoxConstraints) {
-        childConstraints = TimeBoxConstraints(
+      if (parentConstraints is BoxConstraints) {
+        childConstraints = BoxConstraints(
           currentTime: parentConstraints.currentTime,
           maxWidth: parentConstraints.maxWidth,
           maxHeight: parentConstraints.maxHeight,

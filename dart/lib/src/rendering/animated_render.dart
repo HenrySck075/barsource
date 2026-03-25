@@ -1,3 +1,5 @@
+import 'package:tennoji/src/rendering/box.dart';
+
 import '../animation/animation.dart';
 import '../foundation/geometry.dart';
 import 'object.dart';
@@ -11,7 +13,7 @@ import 'time_box.dart';
 ///
 /// Evaluates the animation at the current timeline time and applies the
 /// resulting opacity (0.0 transparent → 1.0 opaque) via [Canvas.saveLayer].
-class RenderAnimatedOpacity extends RenderTimeBox
+class RenderAnimatedOpacity extends RenderBox
     with ContainerRenderObjectMixin {
   RenderAnimatedOpacity({
     required this.animation,
@@ -55,7 +57,7 @@ class RenderAnimatedOpacity extends RenderTimeBox
 ///
 /// The [offset] tween produces fractional offsets multiplied by the child's
 /// size, matching Flutter's [SlideTransition] semantics.
-class RenderAnimatedTranslation extends RenderTimeBox
+class RenderAnimatedTranslation extends RenderBox
     with ContainerRenderObjectMixin {
   RenderAnimatedTranslation({
     required this.animation,
@@ -95,7 +97,7 @@ class RenderAnimatedTranslation extends RenderTimeBox
 // ---------------------------------------------------------------------------
 
 /// A render object that scales its single child from a center point.
-class RenderAnimatedScale extends RenderTimeBox
+class RenderAnimatedScale extends RenderBox
     with ContainerRenderObjectMixin {
   RenderAnimatedScale({
     required this.animation,
@@ -148,7 +150,7 @@ class RenderAnimatedScale extends RenderTimeBox
 ///
 /// The [turns] tween specifies rotation in full turns (1.0 = 360°),
 /// matching Flutter's [RotationTransition] semantics.
-class RenderAnimatedRotation extends RenderTimeBox
+class RenderAnimatedRotation extends RenderBox
     with ContainerRenderObjectMixin {
   RenderAnimatedRotation({
     required this.animation,

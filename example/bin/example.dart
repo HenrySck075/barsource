@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:logging/logging.dart';
 
 import 'package:tennoji/tennoji.dart';
 
@@ -87,6 +88,7 @@ void main(){
     output: "out.mp4", 
     duration: Duration(seconds: 5), 
     fps: 30, 
-    resolution: Size(1280,720)
+    resolution: Size(1280,720),
+    logLevel: Level.ALL
   ));
 }

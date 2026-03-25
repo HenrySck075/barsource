@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:tennoji/src/rendering/parent_data.dart';
 
 import '../foundation/key.dart';
 import '../rendering/object.dart';
@@ -82,6 +83,15 @@ abstract class ProxyWidget extends Widget {
   /// Creates a widget that has exactly one child widget.
   const ProxyWidget({super.key, required this.child});
   final Widget child;
+}
+abstract class ParentDataWidget<T extends ParentData> extends ProxyWidget {
+  ParentDataWidget({super.key, required super.child});
+
+  @protected
+  void applyParentData(RenderObject renderObject);
+
+  @override
+  elements.Element createElement() => elements.ParentDataElement<T>(this); 
 }
 abstract class InheritedWidget extends ProxyWidget {
   /// Abstract const constructor. This constructor enables subclasses to provide

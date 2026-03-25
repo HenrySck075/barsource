@@ -2,13 +2,14 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:tennoji/src/rendering/box.dart';
 
 import '../engine/engine.dart';
 import 'object.dart';
 import 'pipeline_owner.dart';
 import 'time_box.dart';
 
-class RenderVideoClip extends RenderTimeBox {
+class RenderVideoClip extends RenderBox {
   RenderVideoClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -82,7 +83,7 @@ class RenderVideoClip extends RenderTimeBox {
   }
 }
 
-class RenderAudioClip extends RenderTimeBox {
+class RenderAudioClip extends RenderBox {
   RenderAudioClip({
     required this.source,
     this.trimStart = Duration.zero,

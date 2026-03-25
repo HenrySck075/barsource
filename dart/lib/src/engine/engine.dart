@@ -9,6 +9,7 @@ import 'package:tennoji/src/rendering/binding.dart';
 import 'package:tennoji/src/scheduler/binding.dart';
 import 'package:tennoji/src/widgets/binding.dart';
 import 'package:tennoji/src/engine/audio_binding.dart';
+import 'package:logging/logging.dart';
 import 'package:tennoji/src/widgets/framework.dart';
 import 'package:tennoji/src/rendering/view.dart';
 import 'package:tennoji/src/rendering/object.dart';
@@ -26,6 +27,7 @@ class RenderConfig {
     required this.resolution,
     this.codec = const VideoCodec.h264(),
     this.audioCodec = const AudioCodec.aac(),
+    this.logLevel = Level.INFO,
   });
   final String output;
   final Duration duration;
@@ -33,6 +35,7 @@ class RenderConfig {
   final Size resolution;
   final VideoCodec codec;
   final AudioCodec audioCodec;
+  final Level logLevel;
 }
 
 class VideoCodec {
@@ -52,6 +55,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
 
   final Pointer<TennojiEngine> _nativePtr;
   static Engine? _instance;
+  final _log = Logger('Engine');
 
   // Timers rely on Ticker via SchedulerBinding
   Duration _currentTime = Duration.zero;
@@ -91,6 +95,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   }
   
   void run(Widget app, RenderConfig config) {
+    _log.info('Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}');
     // 1. Initialize RenderView
     initRenderView(ViewConfiguration(
       size: config.resolution,
@@ -139,6 +144,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         );
         
         // Draw frame (Build + Layout)
+        _log.fine('Drawing frame at $_currentTime');
         drawFrame();
         
         // Paint phase
@@ -181,6 +187,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       calloc.free(encConfig);
       
       detachRootWidget();
+      _log.info('Render run completed.');
     }
   }
 }

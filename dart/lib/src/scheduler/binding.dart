@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'package:logging/logging.dart';
 
 import 'package:tennoji/src/foundation/binding_base.dart';
 
@@ -29,6 +30,8 @@ mixin SchedulerBinding on BindingBase {
   List<FrameCallback> _transientCallbacks = [];
   List<FrameCallback> _persistentCallbacks = [];
   List<FrameCallback> _postFrameCallbacks = [];
+  
+  final _log = Logger('SchedulerBinding');
 
   void addPersistentFrameCallback(FrameCallback callback) {
     _persistentCallbacks.add(callback);
@@ -41,6 +44,7 @@ mixin SchedulerBinding on BindingBase {
   }
 
   void handleBeginFrame(Duration? timestamp) {
+    _log.fine('handleBeginFrame $timestamp');
     assert(_schedulerPhase == SchedulerPhase.idle);
     _hasScheduledFrame = false;   
     _currentFrameTimestamp = timestamp ?? _currentFrameTimestamp;
@@ -51,6 +55,7 @@ mixin SchedulerBinding on BindingBase {
     _schedulerPhase = .midFrameMicrotasks;
   }
   void handleDrawFrame() {
+    _log.fine('handleDrawFrame');
     assert(_schedulerPhase == SchedulerPhase.midFrameMicrotasks);
     try {
       // PERSISTENT FRAME CALLBACKS

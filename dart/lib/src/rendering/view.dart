@@ -62,8 +62,7 @@ class RenderView extends RenderObject with ContainerRenderObjectMixin {
     // However, we must ensure we don't ignore the layout call entirely.
     
     if (child != null) {
-      child!.layout(TimeBoxConstraints(
-        currentTime: _configuration.currentTime,
+      child!.layout(BoxConstraints(
         minWidth: _configuration.size.width,
         maxWidth: _configuration.size.width,
         minHeight: _configuration.size.height,

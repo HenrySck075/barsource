@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:tennoji/src/rendering/parent_data.dart';
+
 import 'box.dart';
 import 'object.dart';
-import 'time_box.dart';
 
 import '../painting/basic_types.dart';
 
@@ -34,7 +35,7 @@ enum MainAxisSize {
 }
 
 /// Data stored per child in a flex layout.
-class FlexParentData {
+class FlexParentData extends ParentData {
   int flex;
   FlexFit fit;
 
@@ -60,18 +61,6 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
   final CrossAxisAlignment crossAxisAlignment;
   final MainAxisSize mainAxisSize;
 
-  /// Per-child parent data, keyed by child index for simplicity.
-  final Map<RenderObject, FlexParentData> _parentData = {};
-
-  /// Sets the flex parent data for a child.
-  void setParentData(RenderObject child, FlexParentData data) {
-    _parentData[child] = data;
-  }
-
-  FlexParentData _getParentData(RenderObject child) {
-    return _parentData[child] ?? FlexParentData();
-  }
-
   double _getMainAxisExtent(Size size) =>
       direction == Axis.horizontal ? size.width : size.height;
 
@@ -90,12 +79,6 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
     final maxMainAxis = _getMainAxisConstraintMax(parentConstraints);
     final maxCrossAxis = _getCrossAxisConstraintMax(parentConstraints);
 
-    // Propagate time constraints if available.
-    Duration? currentTime;
-    if (parentConstraints is TimeBoxConstraints) {
-      currentTime = parentConstraints.currentTime;
-    }
-
     // Phase 1: Lay out non-flex children and compute total flex.
     double allocatedMainAxis = 0;
     double maxChildCrossAxis = 0;
@@ -104,7 +87,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
 
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
-      final parentData = _getParentData(child);
+      final parentData = child.parentData as FlexParentData;
       final flex = parentData.flex;
 
       if (flex > 0) {
@@ -118,7 +101,6 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
                   ? maxCrossAxis
                   : 0,
           crossAxisMax: maxCrossAxis,
-          currentTime: currentTime,
         );
         child.layout(childConstraints, parentUsesSize: true);
         final childMainExtent = _getMainAxisExtent(child.size);
@@ -135,7 +117,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
 
     for (int i = 0; i < children.length; i++) {
       final child = children[i];
-      final parentData = _getParentData(child);
+      final parentData = child.parentData as FlexParentData;
       final flex = parentData.flex;
 
       if (flex > 0) {
@@ -149,7 +131,6 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
                   ? maxCrossAxis
                   : 0,
           crossAxisMax: maxCrossAxis,
-          currentTime: currentTime,
         );
         child.layout(childConstraints, parentUsesSize: true);
         childMainAxisExtents[i] = _getMainAxisExtent(child.size);
@@ -241,25 +222,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
     double mainAxisMax = double.infinity,
     double crossAxisMin = 0,
     double crossAxisMax = double.infinity,
-    Duration? currentTime,
   }) {
-    if (currentTime != null) {
-      return direction == Axis.horizontal
-          ? TimeBoxConstraints(
-              currentTime: currentTime,
-              minWidth: mainAxisMin,
-              maxWidth: mainAxisMax,
-              minHeight: crossAxisMin,
-              maxHeight: crossAxisMax,
-            )
-          : TimeBoxConstraints(
-              currentTime: currentTime,
-              minWidth: crossAxisMin,
-              maxWidth: crossAxisMax,
-              minHeight: mainAxisMin,
-              maxHeight: mainAxisMax,
-            );
-    }
     return direction == Axis.horizontal
         ? BoxConstraints(
             minWidth: mainAxisMin,
@@ -285,6 +248,18 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
       ));
     }
   }
+
+  @override
+  void setupParentData(covariant RenderObject child) {
+    if (child is RenderExpanded) {
+      child.parentData = FlexParentData(
+        flex: child.flex,
+        fit: child.fit,
+      );
+    } else {
+      child.parentData = FlexParentData();
+    }
+  }
 }
 
 /// A pass-through render object that communicates flex data to its parent
@@ -298,9 +273,8 @@ class RenderExpanded extends RenderBox with ContainerRenderObjectMixin {
   void performLayout() {
     // Register our flex data with the parent RenderFlex.
     if (parent is RenderFlex) {
-      (parent! as RenderFlex).setParentData(
-        this,
-        FlexParentData(flex: flex, fit: fit),
+      (parent! as RenderFlex).setupParentData(
+        this
       );
     }
 
