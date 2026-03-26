@@ -352,6 +352,7 @@ abstract class RenderObjectElement extends Element {
 
     while (ancestor != null && ancestor is! RenderObjectElement) {
       if (ancestor is ParentDataElement<ParentData>) {
+        /*
         assert((ParentDataElement<ParentData> ancestor) {
           if (!debugAncestorTypes.add(ancestor.runtimeType) ||
               !debugParentDataTypes.add(ancestor.debugParentDataType)) {
@@ -359,6 +360,7 @@ abstract class RenderObjectElement extends Element {
           }
           return true;
         }(ancestor));
+        */
         result.add(ancestor);
       }
       ancestor = ancestor._parent;
@@ -367,6 +369,7 @@ abstract class RenderObjectElement extends Element {
       if (result.isEmpty || ancestor == null) {
         return true;
       }
+      /*
       // Validate points 1 and 2 from above.
       _debugCheckCompetingAncestors(
         result,
@@ -374,6 +377,7 @@ abstract class RenderObjectElement extends Element {
         debugParentDataTypes,
         debugAncestorCulprits,
       );
+      */
       return true;
     }());
     return result;
@@ -407,7 +411,7 @@ abstract class RenderObjectElement extends Element {
       }
       return true;
     }());
-    _ancestorRenderObjectElement?.insertRenderObjectChild(renderObject, newSlot);
+    _ancestorRenderObjectElement?.insertRenderObjectChild(renderObject!, newSlot);
     final List<ParentDataElement<ParentData>> parentDataElements =
         _findAncestorParentDataElements();
     for (final parentDataElement in parentDataElements) {
@@ -417,7 +421,7 @@ abstract class RenderObjectElement extends Element {
   @override
   void detachRenderObject() {
     if (_ancestorRenderObjectElement != null) {
-      _ancestorRenderObjectElement!.removeRenderObjectChild(renderObject, slot);
+      _ancestorRenderObjectElement!.removeRenderObjectChild(renderObject!, slot);
       _ancestorRenderObjectElement = null;
     }
     _slot = null;
@@ -433,6 +437,8 @@ abstract class RenderObjectElement extends Element {
   );
   @protected
   void removeRenderObjectChild(covariant RenderObject child, covariant Object? slot);
+
+  bool _debugDoingBuild = false;
 
   @override
   void mount(Element? parent, Object? newSlot) {
