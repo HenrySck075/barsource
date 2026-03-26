@@ -19,30 +19,10 @@ class DurationConstraint extends ParentDataWidget<TimelineParentData> {
   }
 }
 
-class Sequence extends StatefulWidget {
-  const Sequence({super.key, required this.children});
-
-  final List<Widget> children;
+class Sequence extends MultiChildRenderObjectWidget {
+  const Sequence({super.key, required super.children});
 
   @override
-  State<StatefulWidget> createState() => _SequenceState();
+  RenderObject createRenderObject(BuildContext context) => RenderSequence(); 
 }
 
-
-class _SequenceState extends State<Sequence> {
-  late final Ticker _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = Ticker(onTick);
-  }
-
-  void onTick(Duration d) {}
-
-  @override
-  void dispose() {
-    _ticker.stop();
-    super.dispose();
-  }
-}

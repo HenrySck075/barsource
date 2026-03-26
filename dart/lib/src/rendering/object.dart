@@ -130,6 +130,8 @@ abstract class RenderObject {
   bool get attached => _owner != null;
   Size get size => _size!;
   set size(Size value) => _size = value;
+  @protected
+  bool get sizedByParent => false;
 
   /// Whether this [RenderObject] is a known relayout boundary.
   ///
@@ -204,6 +206,7 @@ abstract class RenderObject {
 
   void layout(Constraints constraints, {bool parentUsesSize = false}) {
     _log.finer('layout with $constraints');
+    _isRelayoutBoundary = !parentUsesSize || sizedByParent || constraints.isTight || parent == null;
     _needsLayout = false;
   }
 

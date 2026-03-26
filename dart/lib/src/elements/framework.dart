@@ -52,6 +52,8 @@ abstract class Element implements BuildContext {
   Widget? _widget;
 
   Logger get _log => Logger('Element.${runtimeType}');
+  Object? _slot;
+  Object? get slot => _slot;
 
   @override
   Widget get widget => _widget!;
@@ -84,6 +86,19 @@ abstract class Element implements BuildContext {
     });
     return next;
   } 
+  void attachRenderObject(Object? newSlot) {
+    assert(_slot == null);
+    visitChildren((Element child) {
+      child.attachRenderObject(newSlot);
+    });
+    _slot = newSlot;
+  }
+  void detachRenderObject() {
+    visitChildren((Element child) {
+      child.detachRenderObject();
+    });
+    _slot = null;
+  }
 
   void visitChildren(void Function(Element element) visitor);
 
@@ -261,7 +276,7 @@ class StatefulElement extends ComponentElement {
   Widget build() => _state.build(this);
 }
 
-class RenderObjectElement extends Element {
+abstract class RenderObjectElement extends Element {
   RenderObjectElement(RenderObjectWidget super.widget);
 
   final List<Element> _children = [];
@@ -273,36 +288,172 @@ class RenderObjectElement extends Element {
   @override 
   Element? get renderObjectAttachingChild => null;
 
+  RenderObjectElement? _ancestorRenderObjectElement;
+
+  RenderObjectElement? _findAncestorRenderObjectElement() {
+    Element? ancestor = _parent;
+    while (ancestor != null && ancestor is! RenderObjectElement) {
+      // In debug mode we check whether the ancestor accepts RenderObjects to
+      // produce a better error message in attachRenderObject. In release mode,
+      // we assume only correct trees are built (i.e.
+      // debugExpectsRenderObjectForSlot always returns true) and don't check
+      // explicitly.
+      /*
+      assert(() {
+        if (!ancestor!.debugExpectsRenderObjectForSlot(slot)) {
+          ancestor = null;
+        }
+        return true;
+      }());
+      */
+      ancestor = ancestor?._parent;
+    }
+    /*
+    assert(() {
+      if (ancestor?.debugExpectsRenderObjectForSlot(slot) == false) {
+        ancestor = null;
+      }
+      return true;
+    }());
+    */
+    return ancestor as RenderObjectElement?;
+  }
   @override
   void visitChildren(void Function(Element element) visitor) {
     for (final Element child in _children) {
       visitor(child);
     }
   }
+  List<ParentDataElement<ParentData>> _findAncestorParentDataElements() {
+    Element? ancestor = _parent;
+    final result = <ParentDataElement<ParentData>>[];
+    final debugAncestorTypes = <Type>{};
+    final debugParentDataTypes = <Type>{};
+    final debugAncestorCulprits = <Type>[];
+
+    // More than one ParentDataWidget can contribute ParentData, but there are
+    // some constraints.
+    // 1. ParentData can only be written by unique ParentDataWidget types.
+    //    For example, two KeepAlive ParentDataWidgets trying to write to the
+    //    same child is not allowed.
+    // 2. Each contributing ParentDataWidget must contribute to a unique
+    //    ParentData type, less ParentData be overwritten.
+    //    For example, there cannot be two ParentDataWidgets that both write
+    //    ParentData of type KeepAliveParentDataMixin, if the first check was
+    //    subverted by a subclassing of the KeepAlive ParentDataWidget.
+    // 3. The ParentData itself must be compatible with all ParentDataWidgets
+    //    writing to it.
+    //    For example, TwoDimensionalViewportParentData uses the
+    //    KeepAliveParentDataMixin, so it could be compatible with both
+    //    KeepAlive, and another ParentDataWidget with ParentData type
+    //    TwoDimensionalViewportParentData or a subclass thereof.
+    // The first and second cases are verified here. The third is verified in
+    // debugIsValidRenderObject.
+
+    while (ancestor != null && ancestor is! RenderObjectElement) {
+      if (ancestor is ParentDataElement<ParentData>) {
+        assert((ParentDataElement<ParentData> ancestor) {
+          if (!debugAncestorTypes.add(ancestor.runtimeType) ||
+              !debugParentDataTypes.add(ancestor.debugParentDataType)) {
+            debugAncestorCulprits.add(ancestor.runtimeType);
+          }
+          return true;
+        }(ancestor));
+        result.add(ancestor);
+      }
+      ancestor = ancestor._parent;
+    }
+    assert(() {
+      if (result.isEmpty || ancestor == null) {
+        return true;
+      }
+      // Validate points 1 and 2 from above.
+      _debugCheckCompetingAncestors(
+        result,
+        debugAncestorTypes,
+        debugParentDataTypes,
+        debugAncestorCulprits,
+      );
+      return true;
+    }());
+    return result;
+  }
+  @override
+  void attachRenderObject(Object? newSlot) {
+    assert(_ancestorRenderObjectElement == null);
+    _slot = newSlot;
+    _ancestorRenderObjectElement = _findAncestorRenderObjectElement();
+    assert(() {
+      if (_ancestorRenderObjectElement == null) {
+        /*
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: FlutterError.fromParts(<DiagnosticsNode>[
+              ErrorSummary(
+                'The render object for ${toStringShort()} cannot find ancestor render object to attach to.',
+              ),
+              ErrorDescription(
+                'The ownership chain for the RenderObject in question was:\n  ${debugGetCreatorChain(10)}',
+              ),
+              ErrorHint(
+                'Try wrapping your widget in a View widget or any other widget that is backed by '
+                'a $RenderTreeRootElement to serve as the root of the render tree.',
+              ),
+            ]),
+          ),
+        );
+        */
+        throw "dumbass";
+      }
+      return true;
+    }());
+    _ancestorRenderObjectElement?.insertRenderObjectChild(renderObject, newSlot);
+    final List<ParentDataElement<ParentData>> parentDataElements =
+        _findAncestorParentDataElements();
+    for (final parentDataElement in parentDataElements) {
+      _updateParentData(parentDataElement.widget as ParentDataWidget<ParentData>);
+    }
+  }
+  @override
+  void detachRenderObject() {
+    if (_ancestorRenderObjectElement != null) {
+      _ancestorRenderObjectElement!.removeRenderObjectChild(renderObject, slot);
+      _ancestorRenderObjectElement = null;
+    }
+    _slot = null;
+  }
+
+  @protected
+  void insertRenderObjectChild(covariant RenderObject child, covariant Object? slot);
+  @protected
+  void moveRenderObjectChild(
+    covariant RenderObject child,
+    covariant Object? oldSlot,
+    covariant Object? newSlot,
+  );
+  @protected
+  void removeRenderObjectChild(covariant RenderObject child, covariant Object? slot);
 
   @override
   void mount(Element? parent, Object? newSlot) {
     super.mount(parent, newSlot);
+    assert(() {
+      _debugDoingBuild = true;
+      return true;
+    }());
     _renderObject = (widget as RenderObjectWidget).createRenderObject(this);
-
-    // Attach to parent's render object if it has a container mixin
-    _attachToParentRenderObject();
-
-    // Mount children based on widget type
-    final w = widget;
-    if (w is SingleChildRenderObjectWidget && w.child != null) {
-      final childElement = w.child!.createElement();
-      _children.add(childElement);
-      childElement.mount(this, null);
-      _adoptChildRenderObject(childElement);
-    } else if (w is MultiChildRenderObjectWidget) {
-      for (final childWidget in w.children) {
-        final childElement = childWidget.createElement();
-        _children.add(childElement);
-        childElement.mount(this, null);
-        _adoptChildRenderObject(childElement);
-      }
-    }
+    assert(!_renderObject!.debugDisposed!);
+    assert(() {
+      _debugDoingBuild = false;
+      return true;
+    }());
+    assert(() {
+      _debugUpdateRenderObjectOwner();
+      return true;
+    }());
+    assert(slot == newSlot);
+    attachRenderObject(newSlot);
+    super.performRebuild(); // clears the "dirty" flag
   }
 
   void _updateParentData(ParentDataWidget<ParentData> parentDataWidget) {
