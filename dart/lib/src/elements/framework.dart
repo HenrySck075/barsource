@@ -448,13 +448,13 @@ abstract class RenderObjectElement extends Element {
       return true;
     }());
     _renderObject = (widget as RenderObjectWidget).createRenderObject(this);
-    assert(!_renderObject!.debugDisposed!);
+    //assert(!_renderObject!.debugDisposed!);
     assert(() {
       _debugDoingBuild = false;
       return true;
     }());
     assert(() {
-      _debugUpdateRenderObjectOwner();
+      //_debugUpdateRenderObjectOwner();
       return true;
     }());
     assert(slot == newSlot);

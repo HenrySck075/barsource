@@ -1,5 +1,4 @@
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/elements/framework.dart';
 import 'package:tennoji/src/painting/box_decoration.dart';
 import 'package:tennoji/src/painting/decoration.dart';
 import 'package:tennoji/src/painting/edge_insets.dart';
@@ -141,7 +140,7 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 
 enum DecorationPosition { background, foreground }
 
-class RenderDecoratedBox extends RenderBox with ContainerRenderObjectMixin {
+class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
   RenderDecoratedBox({
     required Decoration decoration,
     DecorationPosition position = DecorationPosition.background,
@@ -180,12 +179,12 @@ class RenderDecoratedBox extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void performLayout() {
-    if (children.isEmpty) {
+    final c = child;
+    if (c == null) {
       size = constraints.constrain(Size.zero);
     } else {
-      final child = children.first;
-      child.layout(constraints, parentUsesSize: true);
-      size = child.size;
+      c.layout(constraints, parentUsesSize: true);
+      size = c.size;
     }
   }
 
@@ -198,8 +197,8 @@ class RenderDecoratedBox extends RenderBox with ContainerRenderObjectMixin {
       _painter!.paint(context.canvas, offset, filledConfiguration);
     }
     
-    if (children.isNotEmpty) {
-      context.paintChild(children.first, offset);
+    if (child != null) {
+      context.paintChild(child!, offset);
     }
 
     if (position == DecorationPosition.foreground) {
@@ -250,7 +249,7 @@ class Padding extends SingleChildRenderObjectWidget {
 
 // Render objects for basic widgets
 
-class RenderSizedBox extends RenderBox with ContainerRenderObjectMixin {
+class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin {
   RenderSizedBox({
     double? width,
     double? height,
@@ -282,12 +281,11 @@ class RenderSizedBox extends RenderBox with ContainerRenderObjectMixin {
       childConstraints = childConstraints.tighten(height: height);
     }
 
-    if (children.isNotEmpty) {
-      final child = children.first;
-      child.layout(childConstraints, parentUsesSize: true);
+    if (child != null) {
+      child!.layout(childConstraints, parentUsesSize: true);
       size = constraints.constrain(Size(
-        width ?? child.size.width,
-        height ?? child.size.height,
+        width ?? child!.size.width,
+        height ?? child!.size.height,
       ));
     } else {
       size = constraints.constrain(Size(
@@ -299,13 +297,13 @@ class RenderSizedBox extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isNotEmpty) {
-      context.paintChild(children.first, offset);
+    if (child != null) {
+      context.paintChild(child!, offset);
     }
   }
 }
 
-class RenderPadding extends RenderBox with ContainerRenderObjectMixin {
+class RenderPadding extends RenderBox with RenderObjectWithChildMixin {
   RenderPadding({
     required EdgeInsetsGeometry padding,
     TextDirection? textDirection,
@@ -331,8 +329,8 @@ class RenderPadding extends RenderBox with ContainerRenderObjectMixin {
   void performLayout() {
     final EdgeInsets resolvedPadding = padding.resolve(textDirection);
     final innerConstraints = constraints.deflate(resolvedPadding);
-    if (children.isNotEmpty) {
-      final child = children.first;
+    if (child != null) {
+      final child = this.child!;
       child.layout(innerConstraints, parentUsesSize: true);
       final childSize = child.size;
       size = constraints.constrain(Size(
@@ -349,9 +347,9 @@ class RenderPadding extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isNotEmpty) {
+    if (child != null) {
       final EdgeInsets resolvedPadding = padding.resolve(textDirection);
-      context.paintChild(children.first, offset + resolvedPadding.topLeft);
+      context.paintChild(child!, offset + resolvedPadding.topLeft);
     }
   }
 }

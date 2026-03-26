@@ -314,6 +314,30 @@ abstract class RenderObject {
     //markNeedsSemanticsUpdate();
   }
 }
+mixin RenderObjectWithChildMixin<ChildType extends RenderObject> on RenderObject {
+  ChildType? _child;
+
+  /// The child of this render object.
+  ChildType? get child => _child;
+
+  /// Replace the child of this render object with the given child.
+  set child(ChildType? value) {
+    if (_child != null) {
+      dropChild(_child!);
+    }
+    if (value != null) {
+      adoptChild(value);
+    }
+    _child = value;
+  }
+
+  @override
+  void visitChildren(RenderObjectVisitor visitor) {
+    if (child != null) {
+      visitor(child!);
+    }
+  }
+}
 mixin ContainerParentDataMixin<ChildType extends RenderObject> on ParentData {
   /// The previous sibling in the parent's child list.
   ChildType? previousSibling;

@@ -3,11 +3,10 @@ import 'package:tennoji/src/painting/basic_types.dart';
 import 'package:tennoji/src/painting/alignment.dart';
 import 'box.dart';
 import 'object.dart';
-import 'time_box.dart';
 
 export '../painting/alignment.dart';
 
-class RenderAlign extends RenderBox with ContainerRenderObjectMixin {
+class RenderAlign extends RenderBox with RenderObjectWithChildMixin {
   RenderAlign({
     AlignmentGeometry alignment = Alignment.center,
     double? widthFactor,
@@ -55,24 +54,14 @@ class RenderAlign extends RenderBox with ContainerRenderObjectMixin {
   @override
   void performLayout() {
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
-    final bool hasChild = children.isNotEmpty;
+    final bool hasChild = child != null;
 
     if (hasChild) {
-      final child = children.first;
+      final child = this.child!;
 
       // Lay out the child with loose constraints.
       final parentConstraints = constraints;
-      BoxConstraints childConstraints;
-
-      if (parentConstraints is BoxConstraints) {
-        childConstraints = BoxConstraints(
-          currentTime: parentConstraints.currentTime,
-          maxWidth: parentConstraints.maxWidth,
-          maxHeight: parentConstraints.maxHeight,
-        );
-      } else {
-        childConstraints = parentConstraints.loosen();
-      }
+      BoxConstraints childConstraints = parentConstraints.loosen();
 
       child.layout(childConstraints, parentUsesSize: true);
 
@@ -98,8 +87,8 @@ class RenderAlign extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isNotEmpty) {
-      context.paintChild(children.first, Offset(
+    if (child != null) {
+      context.paintChild(child!, Offset(
         offset.dx + _childOffset.dx,
         offset.dy + _childOffset.dy,
       ));
