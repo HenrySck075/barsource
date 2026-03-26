@@ -60,18 +60,18 @@ class _ListOperation<T> {
 // ---------------------------------------------------------------------------
 
 /// A builder that receives the item [data] and the current
-/// [TimelineAnimation] driving the transition.
+/// [AnimationController] driving the transition.
 typedef AnimatedListItemBuilder<T> = Widget Function(
   BuildContext context,
   T data,
-  TimelineAnimation animation,
+  AnimationController animation,
 );
 
 /// A builder for items that are being removed.
 typedef AnimatedListRemovedItemBuilder<T> = Widget Function(
   BuildContext context,
   T data,
-  TimelineAnimation animation,
+  AnimationController animation,
 );
 
 /// A streaming-oriented animated list.
@@ -106,7 +106,7 @@ class _AnimatedListState<T> extends State<AnimatedList<T>> {
       for (int i = 0; i < widget.initialItemCount; i++) {
         _activeItems.add(_ItemEntry(
           data: widget.initialItemBuilder!(i),
-          animation: TimelineAnimation(duration: Duration.zero),
+          animation: AnimationController(duration: Duration.zero),
           removing: false,
         ));
       }
@@ -127,7 +127,7 @@ class _AnimatedListState<T> extends State<AnimatedList<T>> {
         if (op.type == _ListOpType.insert) {
           final entry = _ItemEntry<T>(
             data: op.data as T,
-            animation: TimelineAnimation(
+            animation: AnimationController(
               startTime: Engine.instance.currentTime,
               duration: op.duration,
             ),
@@ -139,7 +139,7 @@ class _AnimatedListState<T> extends State<AnimatedList<T>> {
             final removed = _activeItems.removeAt(op.index);
             _removingItems.add(_ItemEntry<T>(
               data: removed.data,
-              animation: TimelineAnimation(
+              animation: AnimationController(
                 startTime: Engine.instance.currentTime,
                 duration: op.duration,
               ),
@@ -241,7 +241,7 @@ class _ItemEntry<T> {
   });
 
   final T data;
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final bool removing;
   final int? insertAfterIndex;
 }

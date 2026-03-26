@@ -27,9 +27,10 @@ mixin SchedulerBinding on BindingBase {
   SchedulerPhase _schedulerPhase = .idle;
   bool _hasScheduledFrame = false;
 
-  List<FrameCallback> _transientCallbacks = [];
-  List<FrameCallback> _persistentCallbacks = [];
-  List<FrameCallback> _postFrameCallbacks = [];
+  final Map<int, FrameCallback> _transientCallbacks = {};
+  int _transientCallbackId = 0;
+  final List<FrameCallback> _persistentCallbacks = [];
+  final List<FrameCallback> _postFrameCallbacks = [];
   
   final _log = Logger('SchedulerBinding');
 
@@ -39,8 +40,12 @@ mixin SchedulerBinding on BindingBase {
   void addPostFrameCallback(FrameCallback callback) {
     _postFrameCallbacks.add(callback);
   }
-  void scheduleFrameCallback(FrameCallback callback) {
-    _transientCallbacks.add(callback);
+  int scheduleFrameCallback(FrameCallback callback) {
+    _transientCallbacks[_transientCallbackId++] = callback;
+    return _transientCallbackId;
+  }
+  void cancelFrameCallbackWithId(int id) {
+    _transientCallbacks.remove(id);
   }
 
   void handleBeginFrame(Duration? timestamp) {
@@ -48,7 +53,7 @@ mixin SchedulerBinding on BindingBase {
     assert(_schedulerPhase == SchedulerPhase.idle);
     _hasScheduledFrame = false;   
     _currentFrameTimestamp = timestamp ?? _currentFrameTimestamp;
-    for (final cb in List.of(_transientCallbacks)) {
+    for (final cb in _transientCallbacks.values) {
       cb(_currentFrameTimestamp);
     }
     _transientCallbacks.clear();

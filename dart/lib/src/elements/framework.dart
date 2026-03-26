@@ -279,7 +279,6 @@ class StatefulElement extends ComponentElement {
 abstract class RenderObjectElement extends Element {
   RenderObjectElement(RenderObjectWidget super.widget);
 
-  final List<Element> _children = [];
   RenderObject? _renderObject;
 
   @override
@@ -318,19 +317,14 @@ abstract class RenderObjectElement extends Element {
     */
     return ancestor as RenderObjectElement?;
   }
-  @override
-  void visitChildren(void Function(Element element) visitor) {
-    for (final Element child in _children) {
-      visitor(child);
-    }
-  }
   List<ParentDataElement<ParentData>> _findAncestorParentDataElements() {
     Element? ancestor = _parent;
     final result = <ParentDataElement<ParentData>>[];
+    /*
     final debugAncestorTypes = <Type>{};
     final debugParentDataTypes = <Type>{};
     final debugAncestorCulprits = <Type>[];
-
+    */
     // More than one ParentDataWidget can contribute ParentData, but there are
     // some constraints.
     // 1. ParentData can only be written by unique ParentDataWidget types.
@@ -469,11 +463,6 @@ abstract class RenderObjectElement extends Element {
         parentDataWidget.applyParentData(_renderObject!);
       }
     }
-  }
-
-  void _attachToParentRenderObject() {
-    // Walk up to find the nearest ancestor render object with ContainerRenderObjectMixin
-    // This is handled by the parent's _adoptChildRenderObject call
   }
 
   void _adoptChildRenderObject(Element childElement) {

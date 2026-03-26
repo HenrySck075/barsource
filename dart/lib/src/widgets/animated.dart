@@ -11,7 +11,7 @@ import 'framework.dart';
 ///
 /// ```dart
 /// FadeTransition(
-///   animation: TimelineAnimation(
+///   animation: AnimationController(
 ///     duration: Duration(seconds: 1),
 ///     curve: Curves.easeIn,
 ///   ),
@@ -27,7 +27,7 @@ class FadeTransition extends SingleChildRenderObjectWidget {
     super.child,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> opacity;
 
   @override
@@ -50,7 +50,7 @@ class FadeTransition extends SingleChildRenderObjectWidget {
 ///
 /// ```dart
 /// SlideTransition(
-///   animation: TimelineAnimation(
+///   animation: AnimationController(
 ///     duration: Duration(milliseconds: 500),
 ///     curve: Curves.easeOut,
 ///   ),
@@ -66,7 +66,7 @@ class SlideTransition extends SingleChildRenderObjectWidget {
     super.child,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final OffsetTween offset;
 
   @override
@@ -86,7 +86,7 @@ class SlideTransition extends SingleChildRenderObjectWidget {
 ///
 /// ```dart
 /// ScaleTransition(
-///   animation: TimelineAnimation(
+///   animation: AnimationController(
 ///     duration: Duration(seconds: 1),
 ///     curve: Curves.bounceOut,
 ///   ),
@@ -103,7 +103,7 @@ class ScaleTransition extends SingleChildRenderObjectWidget {
     super.child,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> scale;
 
   /// Alignment of the scale origin as (x, y) fractions of child size.
@@ -133,7 +133,7 @@ class ScaleTransition extends SingleChildRenderObjectWidget {
 ///
 /// ```dart
 /// RotationTransition(
-///   animation: TimelineAnimation(
+///   animation: AnimationController(
 ///     duration: Duration(seconds: 2),
 ///     curve: Curves.easeInOut,
 ///   ),
@@ -150,7 +150,7 @@ class RotationTransition extends SingleChildRenderObjectWidget {
     super.child,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> turns;
 
   /// Alignment of the rotation origin as (x, y) fractions of child size.

@@ -3,39 +3,34 @@ import 'package:tennoji/src/rendering/box.dart';
 import '../animation/animation.dart';
 import '../foundation/geometry.dart';
 import 'object.dart';
-import 'time_box.dart';
 
 // ---------------------------------------------------------------------------
 // RenderAnimatedOpacity
 // ---------------------------------------------------------------------------
 
-/// A render object that fades its single child using a [TimelineAnimation].
+/// A render object that fades its single child using a [AnimationController].
 ///
 /// Evaluates the animation at the current timeline time and applies the
 /// resulting opacity (0.0 transparent → 1.0 opaque) via [Canvas.saveLayer].
 class RenderAnimatedOpacity extends RenderBox
-    with ContainerRenderObjectMixin {
+    with RenderObjectWithChildMixin {
   RenderAnimatedOpacity({
     required this.animation,
     required this.opacity,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> opacity;
 
   @override
   void performLayout() {
-    for (final child in children) {
-      child.layout(constraints);
-    }
-    size = children.isNotEmpty
-        ? children.first.size
-        : Size(constraints.maxWidth, constraints.maxHeight);
+    child?.layout(constraints);
+    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isEmpty) return;
+    if (child == null) return;
     final t = animation.evaluate(constraints.currentTime);
     final alpha = (opacity.transform(t).clamp(0.0, 1.0) * 255).round();
     if (alpha <= 0) return;
@@ -53,7 +48,7 @@ class RenderAnimatedOpacity extends RenderBox
 // RenderAnimatedTranslation
 // ---------------------------------------------------------------------------
 
-/// A render object that translates its single child using a [TimelineAnimation].
+/// A render object that translates its single child using a [AnimationController].
 ///
 /// The [offset] tween produces fractional offsets multiplied by the child's
 /// size, matching Flutter's [SlideTransition] semantics.
@@ -64,7 +59,7 @@ class RenderAnimatedTranslation extends RenderBox
     required this.offset,
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final OffsetTween offset;
 
   @override
@@ -105,7 +100,7 @@ class RenderAnimatedScale extends RenderBox
     this.alignment = (0.5, 0.5),
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> scale;
 
   /// Alignment of the scale origin as (x, y) fractions of child size.
@@ -158,7 +153,7 @@ class RenderAnimatedRotation extends RenderBox
     this.alignment = (0.5, 0.5),
   });
 
-  final TimelineAnimation animation;
+  final AnimationController animation;
   final Tween<double> turns;
 
   /// Alignment of the rotation origin as (x, y) fractions of child size.

@@ -30,7 +30,7 @@ class _bombState extends State<bomb> {
         Column(children: [
         // Fade in a red box over the first second
         FadeTransition(
-          animation: TimelineAnimation(
+          animation: AnimationController(
             duration: Duration(seconds: 1),
             curve: Curves.easeIn,
           ),
@@ -43,7 +43,7 @@ class _bombState extends State<bomb> {
         ),
         // Slide in a green box from the left over 0.5s
         SlideTransition(
-          animation: TimelineAnimation(
+          animation: AnimationController(
             duration: Duration(milliseconds: 500),
             curve: Curves.easeOut,
           ),
@@ -56,7 +56,7 @@ class _bombState extends State<bomb> {
         ),
         // Spin a blue box one full turn over 2s
         RotationTransition(
-          animation: TimelineAnimation(
+          animation: AnimationController(
             duration: Duration(seconds: 2),
             curve: Curves.easeInOut,
           ),

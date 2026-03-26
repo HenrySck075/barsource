@@ -1,5 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:tennoji/src/engine/render_controller.dart';
+import 'package:tennoji/src/foundation/listenable.dart';
+import 'package:tennoji/src/painting/basic_types.dart';
+
 /// The status of an animation at a given point in time.
 enum AnimationStatus {
   /// The animation is stopped at the beginning.
@@ -8,50 +12,93 @@ enum AnimationStatus {
   /// The animation is running from beginning to end.
   forward,
 
+  /// The animation is running from end to beginning.
+  reverse,
+
   /// The animation is stopped at the end.
   completed,
 }
 
-/// A value that changes over a [Duration], driven by timeline time.
-///
-/// Unlike Flutter's [AnimationController] which is ticker-driven,
-/// this is evaluated purely from a time value — perfect for offline
-/// video rendering where there is no real-time clock.
-class TimelineAnimation {
-  TimelineAnimation({
+abstract class Animation<T> extends Listenable implements ValueListenable<T> {
+  @override
+  T get value;
+  AnimationStatus get status;
+}
+
+/// A value that changes over a [Duration].
+class AnimationController extends Animation<double> {
+  AnimationController({
     required this.duration,
-    this.startTime = Duration.zero,
-    this.curve = Curves.linear,
-  });
-
-  /// When this animation begins on the composition timeline.
-  final Duration startTime;
-
-  /// How long the animation takes.
-  final Duration duration;
-
-  /// The easing curve applied to the raw progress.
-  final Curve curve;
-
-  /// Evaluate the animation at the given [currentTime] on the timeline.
-  ///
-  /// Returns a value in [0.0, 1.0] representing curved progress.
-  /// Before [startTime], returns 0.0. After [startTime] + [duration],
-  /// returns 1.0.
-  double evaluate(Duration currentTime) {
-    if (duration == Duration.zero) return 1.0;
-
-    final elapsed = currentTime - startTime;
-    final t = (elapsed.inMicroseconds / duration.inMicroseconds).clamp(0.0, 1.0);
-    return curve.transform(t);
+    required TickerProvider vsync,
+    this.lowerBound = 0.0,
+    this.upperBound = 1.0,
+  }) {
+    _ticker = vsync.createTicker(_tick);
+    _value = lowerBound;
   }
 
-  /// Get the [AnimationStatus] at the given [currentTime].
-  AnimationStatus status(Duration currentTime) {
-    final elapsed = currentTime - startTime;
-    if (elapsed.inMicroseconds <= 0) return AnimationStatus.dismissed;
-    if (elapsed >= duration) return AnimationStatus.completed;
-    return AnimationStatus.forward;
+  final Duration duration;
+  final double lowerBound;
+  final double upperBound;
+  
+  late final Ticker _ticker;
+  final Set<VoidCallback> _listeners = {};
+  final Set<void Function(AnimationStatus)> _statusListeners = {};
+
+  double _value = 0.0;
+  @override double get value => _value;
+
+  AnimationStatus _status = AnimationStatus.dismissed;
+  @override AnimationStatus get status => _status;
+
+  // --- Core Logic ---
+
+  void _tick(Duration elapsed) {
+    double elapsedInSeconds = elapsed.inMicroseconds / duration.inMicroseconds;
+    
+    if (_status == AnimationStatus.forward) {
+      _value = (lowerBound + (upperBound - lowerBound) * elapsedInSeconds).clamp(lowerBound, upperBound);
+      if (_value >= upperBound) _complete();
+    } else if (_status == AnimationStatus.reverse) {
+      _value = (upperBound - (upperBound - lowerBound) * elapsedInSeconds).clamp(lowerBound, upperBound);
+      if (_value <= lowerBound) _complete();
+    }
+    
+    _notify();
+  }
+
+  void forward() {
+    _status = AnimationStatus.forward;
+    _ticker.start();
+  }
+
+  void reverse() {
+    _status = AnimationStatus.reverse;
+    _ticker.start();
+  }
+
+  void stop() => _ticker.stop();
+
+  void _complete() {
+    _status = (_status == AnimationStatus.forward) ? AnimationStatus.completed : AnimationStatus.dismissed;
+    _ticker.stop();
+    _notifyStatus();
+  }
+
+  // --- Boilerplate Minimization ---
+
+  @override void addListener(VoidCallback listener) => _listeners.add(listener);
+  @override void removeListener(VoidCallback listener) => _listeners.remove(listener);
+  
+  void addStatusListener(void Function(AnimationStatus) listener) => _statusListeners.add(listener);
+
+  void _notify() { for (final l in _listeners) l(); }
+  void _notifyStatus() { for (final l in _statusListeners) l(_status); }
+
+  void dispose() {
+    _ticker.dispose();
+    _listeners.clear();
+    _statusListeners.clear();
   }
 }
 

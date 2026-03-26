@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:tennoji/src/scheduler/binding.dart';
 
 typedef TickerCallback = void Function(Duration elapsed);
@@ -8,13 +9,14 @@ class Ticker {
   final TickerCallback _onTick;
   bool _isTicking = false;
   Duration? _startTime;
+  int? _tickId;
 
   bool get isTicking => _isTicking;
 
   void start() {
     if (_isTicking) return;
     _isTicking = true;
-    _scheduleTick();
+    scheduleTick();
   }
 
   void stop({bool canceled = false}) {
@@ -29,12 +31,20 @@ class Ticker {
     _onTick(timeStamp - _startTime!);
     // We request the next tick
     if (_isTicking) {
-       _scheduleTick();
+       scheduleTick();
     }
   }
 
-  void _scheduleTick() {
-    SchedulerBinding.instance.scheduleFrameCallback(_tick);
+  void scheduleTick() {
+    _tickId = SchedulerBinding.instance.scheduleFrameCallback(_tick);
+  }
+  void unscheduleTick() {
+    if (_tickId != null) SchedulerBinding.instance.cancelFrameCallbackWithId(_tickId!);
+  }
+
+  @mustCallSuper
+  void dispose() {
+    unscheduleTick();
   }
 }
 
