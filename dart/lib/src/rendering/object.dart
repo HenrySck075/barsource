@@ -133,35 +133,9 @@ abstract class RenderObject {
   @protected
   bool get sizedByParent => false;
 
-  /// Whether this [RenderObject] is a known relayout boundary.
-  ///
-  /// A relayout boundary is a [RenderObject] whose parent does not rely on the
-  /// child [RenderObject]'s size in its own layout algorithm. In other words,
-  /// if a [RenderObject]'s [performLayout] implementation does not ask the child
-  /// for its size at all, **the child** is a relayout boundary.
-  ///
-  /// The type of "size" is typically defined by the coordinate system a
-  /// [RenderObject] subclass uses. For instance, [RenderSliver]s produce
-  /// [SliverGeometry] and [RenderBox]es produce [Size]. A parent [RenderObject]
-  /// may not read the child's size but still depend on the child's layout (using
-  /// a [RenderBox] child's baseline location, for example), this flag does not
-  /// reflect such dependencies and the [RenderObject] subclass must handle those
-  /// cases in its own implementation. See [RenderBox.markNeedsLayout] for an
-  /// example.
-  ///
-  /// Relayout boundaries enable an important layout optimization: the parent not
-  /// depending on the size of a child means the child changing size does not
-  /// affect the layout of the parent. When a relayout boundary is marked as
-  /// needing layout, its parent does not have to be marked as dirty, hence the
-  /// name. For details, see [markNeedsLayout].
-  ///
-  /// This flag is typically set in [RenderObject.layout], and consulted by
-  /// [markNeedsLayout] in deciding whether to recursively mark the parent as
-  /// also needing layout.
-  ///
-  /// The flag is initially set to `null` when [layout] has yet been called, and
-  /// reset to `null` when the parent drops this child via [dropChild].
   bool? _isRelayoutBoundary;
+  bool _wasRepaintBoundary = false;
+  bool get isRepaintBoundary => false;
 
   /// Override to setup parent data correctly for your children.
   ///
@@ -201,7 +175,12 @@ abstract class RenderObject {
   void markNeedsPaint() {
     _log.finest('markNeedsPaint');
     _needsPaint = true;
-    _owner?.requestPaint(this);
+    final parent = _parent;
+    if (isRepaintBoundary && _wasRepaintBoundary) {
+      _owner?.requestPaint(this);
+    } else if (parent != null) {
+      parent.markNeedsPaint();
+    }
   }
 
   void layout(Constraints constraints, {bool parentUsesSize = false}) {

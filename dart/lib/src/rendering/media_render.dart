@@ -7,7 +7,6 @@ import 'package:tennoji/src/rendering/box.dart';
 import '../engine/engine.dart';
 import 'object.dart';
 import 'pipeline_owner.dart';
-import 'time_box.dart';
 
 class RenderVideoClip extends RenderBox {
   RenderVideoClip({
@@ -21,6 +20,8 @@ class RenderVideoClip extends RenderBox {
   final Duration trimStart;
   final Duration? trimEnd;
   final double playbackSpeed;
+  @override
+  bool get isRepaintBoundary => true;
 
   Pointer<TennojiDecoder>? _decoder;
   Pointer<TennojiCanvasImage>? _texture;

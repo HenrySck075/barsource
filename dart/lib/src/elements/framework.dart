@@ -194,11 +194,9 @@ abstract class Element implements BuildContext {
     _dirty = true;
     _owner?.scheduleBuildFor(this);
   }
-
-  Widget build();
 }
 
-class ComponentElement extends Element {
+abstract class ComponentElement extends Element {
   ComponentElement(super.widget);
   Element? _child;
 
@@ -245,8 +243,7 @@ class ComponentElement extends Element {
     return newChild;
   }
 
-  @override
-  Widget build() => throw UnimplementedError('Subclass must override build');
+  Widget build();
 }
 
 class StatelessElement extends ComponentElement {
@@ -282,7 +279,10 @@ abstract class RenderObjectElement extends Element {
   RenderObject? _renderObject;
 
   @override
-  RenderObject? get renderObject => _renderObject;
+  RenderObject get renderObject {
+    assert(_renderObject != null, "$runtimeType unmounted");
+    return _renderObject!;
+  }
 
   @override 
   Element? get renderObjectAttachingChild => null;
@@ -405,7 +405,7 @@ abstract class RenderObjectElement extends Element {
       }
       return true;
     }());
-    _ancestorRenderObjectElement?.insertRenderObjectChild(renderObject!, newSlot);
+    _ancestorRenderObjectElement?.insertRenderObjectChild(renderObject, newSlot);
     final List<ParentDataElement<ParentData>> parentDataElements =
         _findAncestorParentDataElements();
     for (final parentDataElement in parentDataElements) {
@@ -415,7 +415,7 @@ abstract class RenderObjectElement extends Element {
   @override
   void detachRenderObject() {
     if (_ancestorRenderObjectElement != null) {
-      _ancestorRenderObjectElement!.removeRenderObjectChild(renderObject!, slot);
+      _ancestorRenderObjectElement!.removeRenderObjectChild(renderObject, slot);
       _ancestorRenderObjectElement = null;
     }
     _slot = null;
@@ -460,15 +460,8 @@ abstract class RenderObjectElement extends Element {
     if (_renderObject != null) {
       final parentData = _renderObject!.parentData;
       if (parentData is ParentData) {
-        parentDataWidget.applyParentData(_renderObject!);
+        parentDataWidget.applyParentData(renderObject);
       }
-    }
-  }
-
-  void _adoptChildRenderObject(Element childElement) {
-    final childRenderObject = childElement.renderObject;
-    if (childRenderObject != null && _renderObject is ContainerRenderObjectMixin) {
-      (_renderObject as ContainerRenderObjectMixin).add(childRenderObject);
     }
   }
 
@@ -476,49 +469,36 @@ abstract class RenderObjectElement extends Element {
   void update(covariant RenderObjectWidget newWidget) {
     super.update(newWidget);
     newWidget.updateRenderObject(this, _renderObject!);
-
-    // Reconcile children (Naive "nuke and pave" approach)
-    // 1. Unmount old children
-    final oldChildren = List<Element>.of(_children);
-    _children.clear();
-    
-    for (final child in oldChildren) {
-      final childRenderObject = child.renderObject;
-      if (childRenderObject != null && _renderObject is ContainerRenderObjectMixin) {
-        (_renderObject as ContainerRenderObjectMixin).remove(childRenderObject);
-      }
-      child.unmount();
-    }
-
-    // 2. Mount new children
-    final w = widget;
-    if (w is SingleChildRenderObjectWidget && w.child != null) {
-      final childElement = w.child!.createElement();
-      _children.add(childElement);
-      childElement.mount(this, null);
-      _adoptChildRenderObject(childElement);
-    } else if (w is MultiChildRenderObjectWidget) {
-      for (final childWidget in w.children) {
-        final childElement = childWidget.createElement();
-        _children.add(childElement);
-        childElement.mount(this, null);
-        _adoptChildRenderObject(childElement);
-      }
-    }
   }
 
   @override
   void unmount() {
-    for (final child in _children) {
-      child.unmount();
-    }
-    _renderObject!.detach();
+    //_renderObject!.detach();
+    final oldWidget = widget as RenderObjectWidget;
     super.unmount();
+    oldWidget.didUnmountRenderObject(_renderObject!);
+  }
+  @override
+  // ignore: must_call_super, _performRebuild calls super.
+  void performRebuild() {
+    _performRebuild(); // calls widget.updateRenderObject()
   }
 
-  @override
-  Widget build() =>
-      throw UnimplementedError('RenderObjectElement does not build');
+  @pragma('dart2js:tryInline')
+  @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
+  void _performRebuild() {
+    assert(() {
+      _debugDoingBuild = true;
+      return true;
+    }());
+    (widget as RenderObjectWidget).updateRenderObject(this, renderObject);
+    assert(() {
+      _debugDoingBuild = false;
+      return true;
+    }());
+    super.performRebuild(); // clears the "dirty" flag
+  }
 }
 /// An [Element] that uses a [ProxyWidget] as its configuration.
 abstract class ProxyElement extends ComponentElement {

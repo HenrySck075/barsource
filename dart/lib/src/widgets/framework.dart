@@ -61,6 +61,7 @@ abstract class RenderObjectWidget extends Widget {
   RenderObject createRenderObject(elements.BuildContext context);
   void updateRenderObject(
       elements.BuildContext context, covariant RenderObject renderObject) {}
+  void didUnmountRenderObject(covariant RenderObject object) {}
 }
 
 abstract class LeafRenderObjectWidget extends RenderObjectWidget {

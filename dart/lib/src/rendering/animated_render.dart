@@ -1,4 +1,5 @@
 import 'package:tennoji/src/rendering/box.dart';
+import 'package:tennoji/src/rendering/pipeline_owner.dart';
 
 import '../animation/animation.dart';
 import '../foundation/geometry.dart';
@@ -15,12 +16,10 @@ import 'object.dart';
 class RenderAnimatedOpacity extends RenderBox
     with RenderObjectWithChildMixin {
   RenderAnimatedOpacity({
-    required this.animation,
     required this.opacity,
   });
 
-  final AnimationController animation;
-  final Tween<double> opacity;
+  final Animation<double> opacity;
 
   @override
   void performLayout() {
@@ -28,18 +27,28 @@ class RenderAnimatedOpacity extends RenderBox
     size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
 
+  void _onOpacityUpdate() {
+    markNeedsPaint();
+  }
+
+  @override
+    void attach(PipelineOwner owner) {
+      opacity.addListener(_onOpacityUpdate);
+      super.attach(owner);
+    }
+
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child == null) return;
-    final t = animation.evaluate(constraints.currentTime);
+    final t = opacity.value;
     final alpha = (opacity.transform(t).clamp(0.0, 1.0) * 255).round();
     if (alpha <= 0) return;
     if (alpha >= 255) {
-      context.paintChild(children.first, offset);
+      context.paintChild(child!, offset);
       return;
     }
     context.canvas.saveLayer(alpha);
-    context.paintChild(children.first, offset);
+    context.paintChild(child!, offset);
     context.canvas.restore();
   }
 }
@@ -53,7 +62,7 @@ class RenderAnimatedOpacity extends RenderBox
 /// The [offset] tween produces fractional offsets multiplied by the child's
 /// size, matching Flutter's [SlideTransition] semantics.
 class RenderAnimatedTranslation extends RenderBox
-    with ContainerRenderObjectMixin {
+    with RenderObjectWithChildMixin {
   RenderAnimatedTranslation({
     required this.animation,
     required this.offset,
@@ -64,18 +73,15 @@ class RenderAnimatedTranslation extends RenderBox
 
   @override
   void performLayout() {
-    for (final child in children) {
-      child.layout(constraints);
-    }
-    size = children.isNotEmpty
-        ? children.first.size
-        : Size(constraints.maxWidth, constraints.maxHeight);
+    child?.layout(constraints);
+    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
 
   @override
   void paint(PaintingContext context, Offset paintOffset) {
-    if (children.isEmpty) return;
-    final t = animation.evaluate(constraints.currentTime);
+    final child = this.child;
+    if (child == null) return;
+    final t = animation.value;
     final (dx, dy) = offset.transform(t);
     // Fractional offset: multiply by child size.
     final childSize = children.first.size;
