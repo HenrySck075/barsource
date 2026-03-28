@@ -112,31 +112,29 @@ class PaintingContext {
 ///
 /// Used by [RenderObject.visitChildren] and [RenderObject.visitChildrenForSemantics].
 typedef RenderObjectVisitor = void Function(RenderObject child);
+/// About the absence of markNeedsPaint and the Layer tree:
+/// Practically in a video editing library the whole thing's repainted every frame anyways
+/// And those who's gonna spam repaint requests are media widgets which will be the majority of the widgets in a real video
+/// Plus Plus basic shapes are fast to compute its not worth caching them
+///
+/// Will add them in if somebody do computationally expensive custom painting
 abstract class RenderObject {
   RenderObject? _parent;
   PipelineOwner? _owner;
   bool _needsLayout = true;
-  bool _needsPaint = true;
-  Size? _size;
   ParentData? parentData;
 
   RenderObject? get parent => _parent;
   PipelineOwner? get owner => _owner;
 
-  Logger get _log => Logger('RenderObject.${runtimeType}');
+  Logger get _log => Logger('RenderObject.$runtimeType');
 
   bool get needsLayout => _needsLayout;
-  bool get needsPaint => _needsPaint;
   bool get attached => _owner != null;
-  Size get size => _size!;
-  set size(Size value) => _size = value;
   @protected
   bool get sizedByParent => false;
 
   bool? _isRelayoutBoundary;
-  bool _wasRepaintBoundary = false;
-  bool get isRepaintBoundary => false;
-
   /// Override to setup parent data correctly for your children.
   ///
   /// You can call this function to set up the parent data for child before the
@@ -149,11 +147,6 @@ abstract class RenderObject {
   /// Clears the needs-layout flag. Called by subclasses after performing layout.
   void clearNeedsLayout() {
     _needsLayout = false;
-  }
-
-  /// Clears the needs-paint flag. Called after painting.
-  void clearNeedsPaint() {
-    _needsPaint = false;
   }
 
   void markNeedsLayout() {
@@ -171,20 +164,23 @@ abstract class RenderObject {
     assert(parent != null);
     parent!.markNeedsLayout();
   }
-
-  void markNeedsPaint() {
-    _log.finest('markNeedsPaint');
-    _needsPaint = true;
-    final parent = _parent;
-    if (isRepaintBoundary && _wasRepaintBoundary) {
-      _owner?.requestPaint(this);
-    } else if (parent != null) {
-      parent.markNeedsPaint();
+  /// The layout constraints most recently supplied by the parent.
+  ///
+  /// If layout has not yet happened, accessing this getter will
+  /// throw a [StateError] exception.
+  @protected
+  Constraints get constraints {
+    if (_constraints == null) {
+      throw StateError('A RenderObject does not have any constraints before it has been laid out.');
     }
+    return _constraints!;
   }
 
+  Constraints? _constraints;
   void layout(Constraints constraints, {bool parentUsesSize = false}) {
+    assert(!_debugDisposed);
     _log.finer('layout with $constraints');
+    _constraints = constraints;
     _isRelayoutBoundary = !parentUsesSize || sizedByParent || constraints.isTight || parent == null;
     _needsLayout = false;
   }
@@ -194,9 +190,6 @@ abstract class RenderObject {
   void attach(PipelineOwner owner) {
     _owner = owner;
     if (_needsLayout) {
-    }
-    if (_needsPaint) {
-      _owner!.requestPaint(this);
     }
   }
 
@@ -292,6 +285,14 @@ abstract class RenderObject {
     //markNeedsCompositingBitsUpdate();
     //markNeedsSemanticsUpdate();
   }
+
+  bool _debugDisposed = false;
+  void dispose() {
+    assert(!_debugDisposed);
+    assert((){
+      return _debugDisposed = true; 
+    }()); 
+  }
 }
 mixin RenderObjectWithChildMixin<ChildType extends RenderObject> on RenderObject {
   ChildType? _child;
@@ -336,6 +337,10 @@ mixin ContainerParentDataMixin<ChildType extends RenderObject> on ParentData {
   }
 }
 /// Mixin for render objects that have a list of children.
+///
+/// This used to provide a `children` list. Now it doesn't. Any code that accesses such property is outdated
+///
+/// And also there's objects which only uses 1 child but uses the container mixin theyre wrong use the single child mixin
 mixin ContainerRenderObjectMixin<
   ChildType extends RenderObject,
   ParentDataType extends ContainerParentDataMixin<ChildType>
@@ -527,7 +532,7 @@ mixin ContainerRenderObjectMixin<
   }
 
   @override
-  void visitChildren(void Function(RenderObject) visitor) {
+  void visitChildren(void Function(ChildType) visitor) {
     ChildType? child = _firstChild;
     while (child != null) {
       visitor(child);

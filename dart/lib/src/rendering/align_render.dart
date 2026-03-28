@@ -6,7 +6,7 @@ import 'object.dart';
 
 export '../painting/alignment.dart';
 
-class RenderAlign extends RenderBox with RenderObjectWithChildMixin {
+class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderAlign({
     AlignmentGeometry alignment = Alignment.center,
     double? widthFactor,

@@ -30,3 +30,5 @@ native/.cache
 
 # Dart compiled example executable
 dart/build/
+
+Session.vim

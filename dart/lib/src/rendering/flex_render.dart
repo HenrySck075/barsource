@@ -35,7 +35,7 @@ enum MainAxisSize {
 }
 
 /// Data stored per child in a flex layout.
-class FlexParentData extends ParentData {
+class FlexParentData extends ParentData with ContainerParentDataMixin<RenderBox> {
   int flex;
   FlexFit fit;
 
@@ -48,7 +48,7 @@ enum FlexFit {
   loose,
 }
 
-class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
+class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, FlexParentData> {
   RenderFlex({
     required this.direction,
     this.mainAxisAlignment = MainAxisAlignment.start,
@@ -83,10 +83,10 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
     double allocatedMainAxis = 0;
     double maxChildCrossAxis = 0;
     int totalFlex = 0;
-    final List<double> childMainAxisExtents = List.filled(children.length, 0);
+    final List<double> childMainAxisExtents = List.filled(childCount, 0);
 
-    for (int i = 0; i < children.length; i++) {
-      final child = children[i];
+    int i = 0;
+    visitChildren((child) {
       final parentData = child.parentData as FlexParentData;
       final flex = parentData.flex;
 
@@ -109,14 +109,15 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
         maxChildCrossAxis =
             math.max(maxChildCrossAxis, _getCrossAxisExtent(child.size));
       }
-    }
+      i++;
+    });
 
     // Phase 2: Distribute remaining space to flex children.
     final double freeSpace = math.max(0, maxMainAxis - allocatedMainAxis);
     final double spacePerFlex = totalFlex > 0 ? freeSpace / totalFlex : 0;
 
-    for (int i = 0; i < children.length; i++) {
-      final child = children[i];
+    /*int*/ i = 0;
+    visitChildren((child){
       final parentData = child.parentData as FlexParentData;
       final flex = parentData.flex;
 
@@ -138,7 +139,8 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
         maxChildCrossAxis =
             math.max(maxChildCrossAxis, _getCrossAxisExtent(child.size));
       }
-    }
+      i++;
+    });
 
     // Determine own size.
     final double idealMainAxis =
@@ -162,7 +164,6 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
     // Phase 3: Position children (compute offsets for paint).
     _childOffsets.clear();
     final double remainingSpace = actualMainAxis - allocatedMainAxis;
-    final int childCount = children.length;
 
     double leadingSpace;
     double betweenSpace;
@@ -190,8 +191,8 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
     }
 
     double mainAxisOffset = leadingSpace;
-    for (int i = 0; i < children.length; i++) {
-      final child = children[i];
+    /*int*/ i = 0;
+    visitChildren((child) {
       final childCrossExtent = _getCrossAxisExtent(child.size);
 
       double crossAxisOffset;
@@ -211,7 +212,8 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
               : Offset(crossAxisOffset, mainAxisOffset);
 
       mainAxisOffset += childMainAxisExtents[i] + betweenSpace;
-    }
+      i++;
+    });
   }
 
   /// Stored child offsets for painting.
@@ -240,13 +242,13 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    for (final child in children) {
+    visitChildren((child) {
       final childOffset = _childOffsets[child] ?? Offset.zero;
       context.paintChild(child, Offset(
         offset.dx + childOffset.dx,
         offset.dy + childOffset.dy,
       ));
-    }
+    });
   }
 
   @override
@@ -264,7 +266,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin {
 
 /// A pass-through render object that communicates flex data to its parent
 /// [RenderFlex] via parent data.
-class RenderExpanded extends RenderBox with ContainerRenderObjectMixin {
+class RenderExpanded extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderExpanded({this.flex = 1, this.fit = FlexFit.tight});
   final int flex;
   final FlexFit fit;
@@ -278,9 +280,9 @@ class RenderExpanded extends RenderBox with ContainerRenderObjectMixin {
       );
     }
 
+    final child = this.child;
     // Lay out our single child with the same constraints we received.
-    if (children.isNotEmpty) {
-      final child = children.first;
+    if (child != null) {
       child.layout(constraints, parentUsesSize: true);
       size = child.size;
     } else {
@@ -290,8 +292,9 @@ class RenderExpanded extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isNotEmpty) {
-      context.paintChild(children.first, offset);
+    final child = this.child;
+    if (child != null) {
+      context.paintChild(child, offset);
     }
   }
 }

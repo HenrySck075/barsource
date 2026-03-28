@@ -1,14 +1,19 @@
+import 'package:tennoji/src/painting/basic_types.dart';
+
 import 'object.dart';
 
 abstract class RenderBox extends RenderObject {
-  late BoxConstraints _constraints;
+  @override
+  BoxConstraints get constraints => super.constraints as BoxConstraints;
 
-  BoxConstraints get constraints => _constraints;
+  Size? _size;
+  Size get size => _size??(throw StateError("RenderBox $runtimeType was not laid out"));
+  set size(Size value) => _size = value;
 
   @override
   void layout(covariant BoxConstraints constraints,
       {bool parentUsesSize = false}) {
-    _constraints = constraints;
+    super.layout(constraints, parentUsesSize: parentUsesSize);
     performLayout();
     clearNeedsLayout();
   }

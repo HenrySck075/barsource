@@ -1,3 +1,4 @@
+import 'package:tennoji/src/painting/alignment.dart';
 import 'package:tennoji/src/rendering/box.dart';
 import 'package:tennoji/src/rendering/pipeline_owner.dart';
 
@@ -14,7 +15,7 @@ import 'object.dart';
 /// Evaluates the animation at the current timeline time and applies the
 /// resulting opacity (0.0 transparent → 1.0 opaque) via [Canvas.saveLayer].
 class RenderAnimatedOpacity extends RenderBox
-    with RenderObjectWithChildMixin {
+    with RenderObjectWithChildMixin<RenderBox> {
   RenderAnimatedOpacity({
     required this.opacity,
   });
@@ -27,21 +28,21 @@ class RenderAnimatedOpacity extends RenderBox
     size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
 
+/*
   void _onOpacityUpdate() {
     markNeedsPaint();
   }
-
+*/
   @override
-    void attach(PipelineOwner owner) {
-      opacity.addListener(_onOpacityUpdate);
-      super.attach(owner);
-    }
+  void attach(PipelineOwner owner) {
+    //opacity.addListener(_onOpacityUpdate);
+    super.attach(owner);
+  }
 
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child == null) return;
-    final t = opacity.value;
-    final alpha = (opacity.transform(t).clamp(0.0, 1.0) * 255).round();
+    final alpha = (opacity.value.clamp(0.0, 1.0) * 255).round();
     if (alpha <= 0) return;
     if (alpha >= 255) {
       context.paintChild(child!, offset);
@@ -62,7 +63,7 @@ class RenderAnimatedOpacity extends RenderBox
 /// The [offset] tween produces fractional offsets multiplied by the child's
 /// size, matching Flutter's [SlideTransition] semantics.
 class RenderAnimatedTranslation extends RenderBox
-    with RenderObjectWithChildMixin {
+    with RenderObjectWithChildMixin<RenderBox> {
   RenderAnimatedTranslation({
     required this.animation,
     required this.offset,
@@ -84,12 +85,12 @@ class RenderAnimatedTranslation extends RenderBox
     final t = animation.value;
     final (dx, dy) = offset.transform(t);
     // Fractional offset: multiply by child size.
-    final childSize = children.first.size;
+    final childSize = child.size;
     final translatedOffset = Offset(
       paintOffset.dx + dx * childSize.width,
       paintOffset.dy + dy * childSize.height,
     );
-    context.paintChild(children.first, translatedOffset);
+    context.paintChild(child, translatedOffset);
   }
 }
 
@@ -98,12 +99,13 @@ class RenderAnimatedTranslation extends RenderBox
 // ---------------------------------------------------------------------------
 
 /// A render object that scales its single child from a center point.
+/// NOTE: Incomplete conversion
 class RenderAnimatedScale extends RenderBox
-    with ContainerRenderObjectMixin {
+    with RenderObjectWithChildMixin<RenderBox> {
   RenderAnimatedScale({
     required this.animation,
     required this.scale,
-    this.alignment = (0.5, 0.5),
+    this.alignment = Alignment.center,
   });
 
   final AnimationController animation;
@@ -111,16 +113,13 @@ class RenderAnimatedScale extends RenderBox
 
   /// Alignment of the scale origin as (x, y) fractions of child size.
   /// (0.5, 0.5) = center (default), (0, 0) = top~left, (1, 1) = bottom~right.
-  final (double, double) alignment;
+  final Alignment alignment;
 
   @override
   void performLayout() {
-    for (final child in children) {
-      child.layout(constraints);
-    }
-    size = children.isNotEmpty
-        ? children.first.size
-        : Size(constraints.maxWidth, constraints.maxHeight);
+    child?.layout(constraints);
+    size = child?.size
+        ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
 
   @override

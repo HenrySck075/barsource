@@ -42,7 +42,7 @@ class AnimatedListSlot {
 /// Children are stacked vertically.  Each child's visible height is scaled
 /// by the animation progress of its slot, producing a size-transition effect
 /// similar to Flutter's [SizeTransition] wrapped around each item.
-class RenderAnimatedList extends RenderBox with ContainerRenderObjectMixin {
+class RenderAnimatedList extends RenderBox with ContainerRenderObjectMixin<RenderBox, ContainerParentDataMixin<RenderBox>> {
   // ---- Layout ---------------------------------------------------------------
 
   @override
