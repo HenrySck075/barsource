@@ -1,33 +1,227 @@
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/painting/basic_types.dart' show VoidCallback;
 import 'package:tennoji/src/rendering/parent_data.dart';
 import 'dart:collection';
 
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
+typedef ElementVisitor = void Function(Element element);
+class _InactiveElements {
+  bool _locked = false;
+  final Set<Element> _elements = HashSet<Element>();
 
-class BuildOwner {
-  final List<Element> _dirtyElements = [];
+  static void _unmount(Element element) {
+    assert(element._lifecycleState == _ElementLifecycle.inactive);
+    /*
+    assert(() {
+      if (debugPrintGlobalKeyedWidgetLifecycle) {
+        if (element.widget.key is GlobalKey) {
+          debugPrint('Discarding $element from inactive elements list.');
+        }
+      }
+      return true;
+    }());
+    */
+    element.visitChildren((Element child) {
+      assert(child._parent == element);
+      _unmount(child);
+    });
+    element.unmount();
+    assert(element._lifecycleState == _ElementLifecycle.defunct);
+  }
 
-  void scheduleBuildFor(Element element) {
-    if (!_dirtyElements.contains(element)) {
-      _dirtyElements.add(element);
+  void _unmountAll() {
+    _locked = true;
+    final List<Element> elements = _elements.toList()..sort(Element._sort);
+    _elements.clear();
+    try {
+      elements.reversed.forEach(_unmount);
+    } finally {
+      assert(_elements.isEmpty);
+      _locked = false;
     }
   }
 
-  void buildScope(Element context) {
-    // Process dirty elements.
-    // Note: We use a simple loop index because rebuilding an element might
-    // add more elements to the list (e.g. children marked dirty).
-    int i = 0;
-    while (i < _dirtyElements.length) {
-      final element = _dirtyElements[i];
-      if (element._dirty && element._active) {
-        element.rebuild();
-      }
-      i++;
+  static void _deactivateRecursively(Element element) {
+    assert(element._lifecycleState == _ElementLifecycle.active);
+    try {
+      element.deactivate();
+    } catch (_) {
+      Element._deactivateFailedSubtreeRecursively(element);
+      rethrow;
     }
-    _dirtyElements.clear();
+    element.visitChildren(_deactivateRecursively);
+    /*
+    assert(() {
+      element.debugDeactivated();
+      return true;
+    }());
+    */
+  }
+
+  void add(Element element) {
+    assert(!_locked);
+    assert(!_elements.contains(element));
+    assert(element._parent == null);
+
+    switch (element._lifecycleState) {
+      case _ElementLifecycle.active:
+        _deactivateRecursively(element);
+        // This element is only added to _elements if the whole subtree is
+        // successfully deactivated.
+        _elements.add(element);
+      case _ElementLifecycle.inactive:
+        _elements.add(element);
+      case _ElementLifecycle.initial || _ElementLifecycle.failed || _ElementLifecycle.defunct:
+        assert(false, '$element must not be deactivated when in ${element._lifecycleState} state.');
+    }
+  }
+
+  void remove(Element element) {
+    assert(!_locked);
+    assert(_elements.contains(element));
+    assert(element._parent == null);
+    _elements.remove(element);
+    assert(element._lifecycleState == _ElementLifecycle.inactive);
+  }
+
+  bool debugContains(Element element) {
+    late bool result;
+    assert(() {
+      result = _elements.contains(element);
+      return true;
+    }());
+    return result;
+  }
+}
+final class BuildScope {
+  /// Creates a [BuildScope] with an optional [scheduleRebuild] callback.
+  BuildScope({this.scheduleRebuild});
+
+  // Whether `scheduleRebuild` is called.
+  bool _buildScheduled = false;
+  // Whether [BuildOwner.buildScope] is actively running in this [BuildScope].
+  bool _building = false;
+
+  final VoidCallback? scheduleRebuild;
+
+  bool? _dirtyElementsNeedsResorting;
+  final List<Element> _dirtyElements = <Element>[];
+
+  @pragma('dart2js:tryInline')
+  @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
+  void _scheduleBuildFor(Element element) {
+    assert(identical(element.buildScope, this));
+    if (!element._inDirtyList) {
+      _dirtyElements.add(element);
+      element._inDirtyList = true;
+    }
+    if (!_buildScheduled && !_building) {
+      _buildScheduled = true;
+      scheduleRebuild?.call();
+    }
+    if (_dirtyElementsNeedsResorting != null) {
+      _dirtyElementsNeedsResorting = true;
+    }
+  }
+  void _tryRebuild(Element element) {
+    assert(element._inDirtyList);
+    assert(identical(element.buildScope, this));
+    element.rebuild();
+  }
+  @pragma('vm:notify-debugger-on-exception')
+  void _flushDirtyElements({required Element debugBuildRoot}) {
+    assert(_dirtyElementsNeedsResorting == null, '_flushDirtyElements must be non-reentrant');
+    _dirtyElements.sort(Element._sort);
+    _dirtyElementsNeedsResorting = false;
+    try {
+      for (var index = 0; index < _dirtyElements.length; index = _dirtyElementIndexAfter(index)) {
+        final Element element = _dirtyElements[index];
+        if (identical(element.buildScope, this)) {
+          //assert(_debugAssertElementInScope(element, debugBuildRoot));
+          _tryRebuild(element);
+        }
+      }
+    } finally {
+      for (final Element element in _dirtyElements) {
+        if (identical(element.buildScope, this)) {
+          element._inDirtyList = false;
+        }
+      }
+      _dirtyElements.clear();
+      _dirtyElementsNeedsResorting = null;
+      _buildScheduled = false;
+    }
+  }
+
+  @pragma('dart2js:tryInline')
+  @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
+  int _dirtyElementIndexAfter(int index) {
+    if (!_dirtyElementsNeedsResorting!) {
+      return index + 1;
+    }
+    index += 1;
+    _dirtyElements.sort(Element._sort);
+    _dirtyElementsNeedsResorting = false;
+    while (index > 0 && _dirtyElements[index - 1].dirty) {
+      // It is possible for previously dirty but inactive widgets to move right in the list.
+      // We therefore have to move the index left in the list to account for this.
+      // We don't know how many could have moved. However, we do know that the only possible
+      // change to the list is that nodes that were previously to the left of the index have
+      // now moved to be to the right of the right-most cleaned node, and we do know that
+      // all the clean nodes were to the left of the index. So we move the index left
+      // until just after the right-most clean node.
+      index -= 1;
+    }
+    assert(() {
+      for (int i = index - 1; i >= 0; i -= 1) {
+        final Element element = _dirtyElements[i];
+        assert(!element.dirty || element._lifecycleState != _ElementLifecycle.active);
+      }
+      return true;
+    }());
+    return index;
+  }
+}
+class BuildOwner {
+  final _InactiveElements _inactiveElements = _InactiveElements();
+  int _debugStateLockLevel = 0;
+  void lockState(VoidCallback callback) {
+    assert(_debugStateLockLevel >= 0);
+    assert(() {
+      _debugStateLockLevel += 1;
+      return true;
+    }());
+    try {
+      callback();
+    } finally {
+      assert(() {
+        _debugStateLockLevel -= 1;
+        return true;
+      }());
+    }
+    assert(_debugStateLockLevel >= 0);
+  }
+  void scheduleBuildFor(Element element) {
+    assert(element.owner == this);
+    assert(element._parentBuildScope != null);
+    element.buildScope._scheduleBuildFor(element);
+  }
+
+  void buildScope(Element context) {
+    assert(context.owner == this);
+    assert(context._parentBuildScope != null);
+    final scope = context.buildScope;
+    scope._building = true;
+    scope._flushDirtyElements(debugBuildRoot: context);
+    scope._building = false;
+  }
+
+  void finalizeTree() {
+    lockState(_inactiveElements._unmountAll);
   }
 }
 
@@ -46,12 +240,13 @@ enum _ElementLifecycle {
   active,
   inactive,
   defunct,
+  failed,
 }
 abstract class Element implements BuildContext {
   Element(this._widget);
   Widget? _widget;
 
-  Logger get _log => Logger('Element.${runtimeType}');
+  Logger get _log => Logger('Element.$runtimeType');
   Object? _slot;
   Object? get slot => _slot;
 
@@ -59,13 +254,18 @@ abstract class Element implements BuildContext {
   Widget get widget => _widget!;
 
   Element? _parent;
+
   BuildOwner? _owner;
-  
   BuildOwner? get owner => _owner;
+
+  BuildScope? _parentBuildScope;
+  BuildScope get buildScope => _parentBuildScope!;
+  bool _inDirtyList = false;
 
   //RenderObject? _renderObject;
   bool _active = false;
   bool _dirty = true;
+  bool get dirty => _dirty;
 
   RenderObject? get renderObject {
     RenderObject? result;
@@ -76,6 +276,15 @@ abstract class Element implements BuildContext {
     visitChildren(visitor);
     return result;
   }
+
+  int get depth {
+    assert(
+      _lifecycleState != .initial, 
+      "Depth is only available when the element is mounted."
+    );
+    return _depth;
+  }
+  int _depth = 0;
  
   @protected
   Element? get renderObjectAttachingChild {
@@ -98,19 +307,78 @@ abstract class Element implements BuildContext {
       child.detachRenderObject();
     });
     _slot = null;
+  } 
+  static int _sort(Element a, Element b) {
+    final int diff = a.depth - b.depth;
+    // If depths are not equal, return the difference.
+    if (diff != 0) {
+      return diff;
+    }
+    // If the `dirty` values are not equal, sort with non-dirty elements being
+    // less than dirty elements.
+    final bool isBDirty = b.dirty;
+    if (a.dirty != isBDirty) {
+      return isBDirty ? -1 : 1;
+    }
+    // Otherwise, `depth`s and `dirty`s are equal.
+    return 0;
   }
 
-  void visitChildren(void Function(Element element) visitor);
+  @protected
+  void updateSlotForChild(Element child, Object? newSlot) {
+    assert(_lifecycleState == _ElementLifecycle.active);
+    assert(child._parent == this);
+    void visit(Element element) {
+      element.updateSlot(newSlot);
+      final Element? descendant = element.renderObjectAttachingChild;
+      if (descendant != null) {
+        visit(descendant);
+      }
+    }
+
+    visit(child);
+  }
+  @protected
+  @mustCallSuper
+  void updateSlot(Object? newSlot) {
+    assert(_lifecycleState == _ElementLifecycle.active);
+    assert(_parent != null);
+    assert(_parent!._lifecycleState == _ElementLifecycle.active);
+    _slot = newSlot;
+  }
+  void _updateDepth(int parentDepth) {
+    final int expectedDepth = parentDepth + 1;
+    if (_depth < expectedDepth) {
+      _depth = expectedDepth;
+      visitChildren((Element child) {
+        child._updateDepth(expectedDepth);
+      });
+    }
+  }
+
+  void _updateBuildScopeRecursively() {
+    if (identical(buildScope, _parent?.buildScope)) {
+      return;
+    }
+    // Unset the _inDirtyList flag so this Element can be added to the dirty list
+    // of the new build scope if it's dirty.
+    _inDirtyList = false;
+    _parentBuildScope = _parent?.buildScope;
+    visitChildren((Element child) {
+      child._updateBuildScopeRecursively();
+    });
+  }
+  void visitChildren(void Function(Element element) visitor) {}
 
   _ElementLifecycle _lifecycleState = _ElementLifecycle.initial;
 
-  Map<Type, InheritedElement>? _inheritedWidgets;
+  Map<Type, InheritedElement>? _inheritedElements;
   Set<InheritedElement>? _dependencies;
 
   @override
   T? dependOnInheritedWidgetOfExactType<T>() {
     assert(_active);
-    final ancestor = _inheritedWidgets?[T];
+    final ancestor = _inheritedElements?[T];
     if (ancestor != null) {
       ancestor.setDependencies(this, null);
       _dependencies ??= HashSet<InheritedElement>();
@@ -134,7 +402,7 @@ abstract class Element implements BuildContext {
 
   void _updateInheritance() {
     assert(_active);
-    _inheritedWidgets = _parent?._inheritedWidgets;
+    _inheritedElements = _parent?._inheritedElements;
   }
 
   void didChangeDependencies() {
@@ -183,7 +451,7 @@ abstract class Element implements BuildContext {
       }
       _dependencies = null;
     }
-    _inheritedWidgets = null;
+    _inheritedElements = null;
 
     _active = false;
     _lifecycleState = _ElementLifecycle.defunct;
@@ -193,6 +461,122 @@ abstract class Element implements BuildContext {
     if (_dirty && _active) return;
     _dirty = true;
     _owner?.scheduleBuildFor(this);
+  }
+
+  void _activateWithParent(Element parent, Object? newSlot) {
+    assert(_lifecycleState == _ElementLifecycle.inactive);
+    _parent = parent;
+    _owner = parent.owner;
+    /*
+    assert(() {
+      if (debugPrintGlobalKeyedWidgetLifecycle) {
+        debugPrint('Reactivating $this (now child of $_parent).');
+      }
+      return true;
+    }());
+    */
+    _updateDepth(_parent!.depth);
+    _updateBuildScopeRecursively();
+    _activateRecursively(this);
+    attachRenderObject(newSlot);
+    assert(_lifecycleState == _ElementLifecycle.active);
+  }
+
+  static void _activateRecursively(Element element) {
+    assert(element._lifecycleState == _ElementLifecycle.inactive);
+    element.activate();
+    assert(element._lifecycleState == _ElementLifecycle.active);
+    element.visitChildren(_activateRecursively);
+  }
+
+  bool _hadUnsatisfiedDependencies = false;
+  @mustCallSuper
+  @visibleForOverriding
+  void activate() {
+    assert(_lifecycleState == _ElementLifecycle.inactive);
+    assert(owner != null);
+    final bool hadDependencies =
+        (_dependencies?.isNotEmpty ?? false) || _hadUnsatisfiedDependencies;
+    _lifecycleState = _ElementLifecycle.active;
+    // We unregistered our dependencies in deactivate, but never cleared the list.
+    // Since we're going to be reused, let's clear our list now.
+    _dependencies?.clear();
+    _hadUnsatisfiedDependencies = false;
+    _updateInheritance();
+    //attachNotificationTree();
+    if (_dirty) {
+      owner!.scheduleBuildFor(this);
+    }
+    if (hadDependencies) {
+      didChangeDependencies();
+    }
+  }
+
+  void forgetChild(Element child) {}
+  void deactivateChild(Element child) {
+    child._parent = null;
+    child.detachRenderObject();
+    owner!._inactiveElements.add(child);
+  }
+  @mustCallSuper
+  @visibleForOverriding
+  void deactivate() {
+    assert(_lifecycleState == _ElementLifecycle.active);
+    assert(_widget != null); // Use the private property to avoid a CastError during hot reload.
+    _ensureDeactivated();
+  }
+
+  /// Removes dependencies and sets the lifecycle state of this [Element] to
+  /// inactive.
+  ///
+  /// This method is immediately called after [Element.deactivate], even if that
+  /// call throws an exception.
+  void _ensureDeactivated() {
+    if (_dependencies case final Set<InheritedElement> dependencies? when dependencies.isNotEmpty) {
+      for (final dependency in dependencies) {
+        dependency.removeDependent(this);
+      }
+      // For expediency, we don't actually clear the list here, even though it's
+      // no longer representative of what we are registered with. If we never
+      // get re-used, it doesn't matter. If we do, then we'll clear the list in
+      // activate(). The benefit of this is that it allows Element's activate()
+      // implementation to decide whether to rebuild based on whether we had
+      // dependencies here.
+    }
+    _inheritedElements = null;
+    _lifecycleState = _ElementLifecycle.inactive;
+  } 
+
+  void _deactivateFailedChildSilently(Element child) {
+    try {
+      child._parent = null;
+      child.detachRenderObject();
+      _deactivateFailedSubtreeRecursively(child);
+    } catch (_) {
+      // Do not rethrow:
+      // The subtree has already thrown a different error and the framework is
+      // cleaning up on a best-effort basis.
+    }
+  }
+
+  // This method calls _ensureDeactivated for the subtree rooted at `element`,
+  // supressing all exceptions thrown.
+  //
+  // This method will attempt to keep doing treewalk even one of the nodes
+  // failed to deactivate.
+  //
+  // The subtree has already thrown a different error and the framework is
+  // cleaning up on a best-effort basis.
+  static void _deactivateFailedSubtreeRecursively(Element element) {
+    try {
+      element.deactivate();
+    } catch (_) {
+      element._ensureDeactivated();
+    }
+    element._lifecycleState = _ElementLifecycle.failed;
+    try {
+      element.visitChildren(_deactivateFailedSubtreeRecursively);
+    } catch (_) {}
   }
 }
 
@@ -471,12 +855,63 @@ abstract class RenderObjectElement extends Element {
     newWidget.updateRenderObject(this, _renderObject!);
   }
 
+  Element inflateWidget(Widget newWidget, Object? newSlot) {
+    final Element newChild = newWidget.createElement();
+    newChild.mount(this, newSlot);
+    return newChild;
+  }
+ 
+  @protected
+  @pragma('dart2js:tryInline')
+  @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
+  Element? updateChild(Element? child, Widget? newWidget, Object? newSlot) {
+    // 1. If the new widget is null, the child is gone.
+    if (newWidget == null) {
+      if (child != null) {
+        deactivateChild(child);
+      }
+      return null;
+    }
+
+    final Element newChild;
+
+    // 2. If we have an existing child, try to update it.
+    if (child != null) {
+      if (child.widget == newWidget) {
+        // The widget hasn't changed, just ensure the slot is correct.
+        if (child.slot != newSlot) {
+          updateSlotForChild(child, newSlot);
+        }
+        newChild = child;
+      } else if (Widget.canUpdate(child.widget, newWidget)) {
+        // The widget changed but is compatible (same Type and Key).
+        if (child.slot != newSlot) {
+          updateSlotForChild(child, newSlot);
+        }
+        child.update(newWidget);
+        newChild = child;
+      } else {
+        // Incompatible: throw away the old element and create a new one.
+        deactivateChild(child);
+        newChild = inflateWidget(newWidget, newSlot);
+      }
+    } else {
+      // 3. No existing child, so we create it.
+      newChild = inflateWidget(newWidget, newSlot);
+    }
+
+    return newChild;
+  }
+
   @override
   void unmount() {
     //_renderObject!.detach();
     final oldWidget = widget as RenderObjectWidget;
     super.unmount();
     oldWidget.didUnmountRenderObject(_renderObject!);
+    _renderObject!.dispose();
+    _renderObject = null;
   }
   @override
   // ignore: must_call_super, _performRebuild calls super.
@@ -498,6 +933,89 @@ abstract class RenderObjectElement extends Element {
       return true;
     }());
     super.performRebuild(); // clears the "dirty" flag
+  }
+}
+
+/// An [Element] that uses a [LeafRenderObjectWidget] as its configuration.
+class LeafRenderObjectElement extends RenderObjectElement {
+  /// Creates an element that uses the given widget as its configuration.
+  LeafRenderObjectElement(LeafRenderObjectWidget super.widget);
+
+  @override
+  void forgetChild(Element child) {
+    assert(false);
+    super.forgetChild(child);
+  }
+
+  @override
+  void insertRenderObjectChild(RenderObject child, Object? slot) {
+    assert(false);
+  }
+
+  @override
+  void moveRenderObjectChild(RenderObject child, Object? oldSlot, Object? newSlot) {
+    assert(false);
+  }
+
+  @override
+  void removeRenderObjectChild(RenderObject child, Object? slot) {
+    assert(false);
+  }
+}
+class SingleChildRenderObjectElement extends RenderObjectElement {
+  /// Creates an element that uses the given widget as its configuration.
+  SingleChildRenderObjectElement(SingleChildRenderObjectWidget super.widget);
+
+  Element? _child;
+
+  @override
+  void visitChildren(ElementVisitor visitor) {
+    if (_child != null) {
+      visitor(_child!);
+    }
+  }
+
+  @override
+  void forgetChild(Element child) {
+    assert(child == _child);
+    _child = null;
+    super.forgetChild(child);
+  }
+
+  @override
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
+    _child = updateChild(_child, (widget as SingleChildRenderObjectWidget).child, null);
+  }
+
+  @override
+  void update(SingleChildRenderObjectWidget newWidget) {
+    super.update(newWidget);
+    assert(widget == newWidget);
+    _child = updateChild(_child, (widget as SingleChildRenderObjectWidget).child, null);
+  }
+
+  @override
+  void insertRenderObjectChild(RenderObject child, Object? slot) {
+    final renderObject = this.renderObject as RenderObjectWithChildMixin<RenderObject>;
+    assert(slot == null);
+    //assert(renderObject.debugValidateChild(child));
+    renderObject.child = child;
+    assert(renderObject == this.renderObject);
+  }
+
+  @override
+  void moveRenderObjectChild(RenderObject child, Object? oldSlot, Object? newSlot) {
+    assert(false);
+  }
+
+  @override
+  void removeRenderObjectChild(RenderObject child, Object? slot) {
+    final renderObject = this.renderObject as RenderObjectWithChildMixin<RenderObject>;
+    assert(slot == null);
+    assert(renderObject.child == child);
+    renderObject.child = null;
+    assert(renderObject == this.renderObject);
   }
 }
 /// An [Element] that uses a [ProxyWidget] as its configuration.
@@ -565,13 +1083,13 @@ class InheritedElement extends ProxyElement {
   @override
   void _updateInheritance() {
     assert(_active);
-    final Map<Type, InheritedElement>? incomingWidgets = _parent?._inheritedWidgets;
+    final Map<Type, InheritedElement>? incomingWidgets = _parent?._inheritedElements;
     if (incomingWidgets != null) {
-      _inheritedWidgets = HashMap<Type, InheritedElement>.from(incomingWidgets);
+      _inheritedElements = HashMap<Type, InheritedElement>.from(incomingWidgets);
     } else {
-      _inheritedWidgets = HashMap<Type, InheritedElement>();
+      _inheritedElements = HashMap<Type, InheritedElement>();
     }
-    _inheritedWidgets![widget.runtimeType] = this;
+    _inheritedElements![widget.runtimeType] = this;
   }
 
   @override

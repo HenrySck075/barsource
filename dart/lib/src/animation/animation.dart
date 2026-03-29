@@ -1,8 +1,11 @@
 import 'dart:math' as math;
 
+import 'package:tennoji/src/animation/listener_helpers.dart';
+import 'package:tennoji/src/dart_ui/dart_ui.dart';
 import 'package:tennoji/src/engine/render_controller.dart';
 import 'package:tennoji/src/foundation/listenable.dart';
 import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:tennoji/src/physics/simulation.dart';
 
 /// The status of an animation at a given point in time.
 enum AnimationStatus {
@@ -18,116 +21,279 @@ enum AnimationStatus {
   /// The animation is stopped at the end.
   completed,
 }
+enum _AnimationDirection {
+  forward,
+  reverse,
+}
 
 abstract class Animation<T> extends Listenable implements ValueListenable<T> {
+  const Animation();
   @override
   T get value;
   AnimationStatus get status;
+
+  void addStatusListener(AnimationStatusListener listener);
+  void removeStatusListener(AnimationStatusListener listener);
 }
 
+class _AlwaysCompleteAnimation extends Animation<double> {
+  const _AlwaysCompleteAnimation();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
+
+  @override
+  void addStatusListener(AnimationStatusListener listener) {}
+
+  @override
+  void removeStatusListener(AnimationStatusListener listener) {}
+
+  @override
+  AnimationStatus get status => AnimationStatus.completed;
+
+  @override
+  double get value => 1.0;
+
+  @override
+  String toString() => 'kAlwaysCompleteAnimation';
+}
+
+/// An animation that is always complete.
+///
+/// Using this constant involves less overhead than building an
+/// [AnimationController] with an initial value of 1.0. This is useful when an
+/// API expects an animation but you don't actually want to animate anything.
+const Animation<double> kAlwaysCompleteAnimation = _AlwaysCompleteAnimation();
+
 /// A value that changes over a [Duration].
-class AnimationController extends Animation<double> {
+class AnimationController extends Animation<double> 
+  with AnimationEagerListenerMixin, AnimationLocalListenersMixin, AnimationLocalStatusListenersMixin {
   AnimationController({
     required this.duration,
-    required TickerProvider vsync,
+    this.reverseDuration,
+    //required TickerProvider vsync,
     this.lowerBound = 0.0,
     this.upperBound = 1.0,
+    double? value
   }) {
-    _ticker = vsync.createTicker(_tick);
-    _value = lowerBound;
+    _ticker = Ticker(_tick);//vsync.createTicker(_tick);
+    _value = value ?? lowerBound;
   }
 
   final Duration duration;
+  final Duration? reverseDuration;
   final double lowerBound;
   final double upperBound;
   
-  late final Ticker _ticker;
-  final Set<VoidCallback> _listeners = {};
-  final Set<void Function(AnimationStatus)> _statusListeners = {};
+  Ticker? _ticker;
+  Simulation? _simulation;
 
   double _value = 0.0;
   @override double get value => _value;
+  set value(double val) {
+    stop();
+    _internalSetValue(val);
+    _notify();
+    _notifyStatus();
+  }
+  void _internalSetValue(double newValue) {
+    _value = clampDouble(newValue, lowerBound, upperBound);
+    if (_value == lowerBound) {
+      _status = AnimationStatus.dismissed;
+    } else if (_value == upperBound) {
+      _status = AnimationStatus.completed;
+    } else {
+      _status = switch (_direction) {
+        _AnimationDirection.forward => AnimationStatus.forward,
+        _AnimationDirection.reverse => AnimationStatus.reverse,
+      };
+    }
+  }
 
   AnimationStatus _status = AnimationStatus.dismissed;
   @override AnimationStatus get status => _status;
 
+  _AnimationDirection _direction = .forward;
+
+  @override
+  bool get isAnimating => _ticker != null && _ticker!.isActive;
+
+  /// The amount of time that has passed between the time the animation started
+  /// and the most recent tick of the animation.
+  ///
+  /// If the controller is not animating, the last elapsed duration is null.
+  Duration? get lastElapsedDuration => _lastElapsedDuration;
+  Duration? _lastElapsedDuration;
+
   // --- Core Logic ---
-
+  TickerFuture _startSimulation(Simulation simulation) {
+    assert(!isAnimating);
+    _simulation = simulation;
+    _lastElapsedDuration = Duration.zero;
+    _value = clampDouble(simulation.x(0.0), lowerBound, upperBound);
+    final TickerFuture result = _ticker!.start();
+    _status = (_direction == _AnimationDirection.forward)
+        ? AnimationStatus.forward
+        : AnimationStatus.reverse;
+    _notifyStatus();
+    return result;
+  }
   void _tick(Duration elapsed) {
-    double elapsedInSeconds = elapsed.inMicroseconds / duration.inMicroseconds;
-    
-    if (_status == AnimationStatus.forward) {
-      _value = (lowerBound + (upperBound - lowerBound) * elapsedInSeconds).clamp(lowerBound, upperBound);
-      if (_value >= upperBound) _complete();
-    } else if (_status == AnimationStatus.reverse) {
-      _value = (upperBound - (upperBound - lowerBound) * elapsedInSeconds).clamp(lowerBound, upperBound);
-      if (_value <= lowerBound) _complete();
+    _lastElapsedDuration = elapsed;
+    final double elapsedInSeconds =
+        elapsed.inMicroseconds.toDouble() / Duration.microsecondsPerSecond;
+    assert(elapsedInSeconds >= 0.0);
+    _value = clampDouble(_simulation!.x(elapsedInSeconds), lowerBound, upperBound);
+    if (_simulation!.isDone(elapsedInSeconds)) {
+      _status = (_direction == _AnimationDirection.forward)
+          ? AnimationStatus.completed
+          : AnimationStatus.dismissed;
+      stop(canceled: false);
     }
-    
     _notify();
-  }
-
-  void forward() {
+    _notifyStatus();
+  }  
+  TickerFuture forward() {
     _status = AnimationStatus.forward;
-    _ticker.start();
+    return _ticker.start();
   }
 
-  void reverse() {
+  TickerFuture reverse() {
     _status = AnimationStatus.reverse;
-    _ticker.start();
+    return _ticker.start();
   }
 
-  void stop() => _ticker.stop();
+  void stop({bool canceled = true}) => _ticker.stop(canceled: canceled);
 
   void _complete() {
     _status = (_status == AnimationStatus.forward) ? AnimationStatus.completed : AnimationStatus.dismissed;
     _ticker.stop();
-    _notifyStatus();
+    notifyStatusListeners(status);
   }
 
   // --- Boilerplate Minimization ---
 
-  @override void addListener(VoidCallback listener) => _listeners.add(listener);
-  @override void removeListener(VoidCallback listener) => _listeners.remove(listener);
-  
-  void addStatusListener(void Function(AnimationStatus) listener) => _statusListeners.add(listener);
-
-  void _notify() { for (final l in _listeners) l(); }
-  void _notifyStatus() { for (final l in _statusListeners) l(_status); }
-
   void dispose() {
-    _ticker.dispose();
-    _listeners.clear();
-    _statusListeners.clear();
+    _ticker?.dispose();
   }
+}
+
+class _InterpolationSimulation extends Simulation {
+  _InterpolationSimulation(this._begin, this._end, Duration duration, this._curve, double scale)
+    : assert(duration.inMicroseconds > 0),
+      _durationInSeconds = (duration.inMicroseconds * scale) / Duration.microsecondsPerSecond;
+
+  final double _durationInSeconds;
+  final double _begin;
+  final double _end;
+  final Curve _curve;
+
+  @override
+  double x(double timeInSeconds) {
+    final double t = clampDouble(timeInSeconds / _durationInSeconds, 0.0, 1.0);
+    return switch (t) {
+      0.0 => _begin,
+      1.0 => _end,
+      _ => _begin + (_end - _begin) * _curve.transform(t),
+    };
+  }
+
+  @override
+  double dx(double timeInSeconds) {
+    final double epsilon = tolerance.time;
+    return (x(timeInSeconds + epsilon) - x(timeInSeconds - epsilon)) / (2 * epsilon);
+  }
+
+  @override
+  bool isDone(double timeInSeconds) => timeInSeconds > _durationInSeconds;
+}
+
+
+
+mixin AnimationWithParentMixin<T> {
+  /// The animation whose value this animation will proxy.
+  ///
+  /// This animation must remain the same for the lifetime of this object. If
+  /// you wish to proxy a different animation at different times, consider using
+  /// [ProxyAnimation].
+  Animation<T> get parent;
+
+  // keep these next five dartdocs in sync with the dartdocs in Animation<T>
+
+  /// Calls the listener every time the value of the animation changes.
+  ///
+  /// Listeners can be removed with [removeListener].
+  void addListener(VoidCallback listener) => parent.addListener(listener);
+
+  /// Stop calling the listener every time the value of the animation changes.
+  ///
+  /// Listeners can be added with [addListener].
+  void removeListener(VoidCallback listener) => parent.removeListener(listener);
+
+  /// The current status of this animation.
+  AnimationStatus get status => parent.status;
 }
 
 // ---------------------------------------------------------------------------
 // Tweens
 // ---------------------------------------------------------------------------
 
+abstract class Animatable<T> {
+  const Animatable();
+
+  Animation<T> animate(Animation<double> parent) => _AnimatedEvaluation(parent, this);
+
+  T evaluate(Animation<double> animation) => transform(animation.value);
+  /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
+  T transform(double t);
+}
+
+class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<double> {
+  _AnimatedEvaluation(this.parent, this._evaluatable);
+
+  @override
+  final Animation<double> parent;
+
+  final Animatable<T> _evaluatable;
+
+  @override
+  T get value => _evaluatable.evaluate(parent);
+
+  @override
+  String toString() {
+    return '$parent\u27A9$_evaluatable\u27A9$value';
+  }
+
+/*
+  @override
+  String toStringDetails() {
+    return '${super.toStringDetails()} $_evaluatable';
+  }
+*/
+}
+
+
 /// Linearly interpolates between [begin] and [end] given a progress [t].
-class Tween<T extends num> {
+class Tween<T> extends Animatable<T> {
   const Tween({required this.begin, required this.end});
 
   final T begin;
   final T end;
 
   /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
-  double transform(double t) => begin + (end - begin) * t;
-}
-
-/// An [Offset]-based tween for sliding animations.
-class OffsetTween {
-  const OffsetTween({required this.begin, required this.end});
-
-  final (double, double) begin;
-  final (double, double) end;
-
-  (double, double) transform(double t) => (
-    begin.$1 + (end.$1 - begin.$1) * t,
-    begin.$2 + (end.$2 - begin.$2) * t,
-  );
+  @override
+  T transform(double t) {
+    try {
+      return (begin as dynamic) + ((end as dynamic) - (begin as dynamic)) * t;
+    } on NoSuchMethodError {
+      throw ArgumentError("Cannot lerp between $begin and $end, class might not implement `+`, `-`, and/or `*`.");
+    } on TypeError {
+      throw ArgumentError("Cannot lerp between $begin and $end, the return type of the `*` operation with a double (time) returns an incompatibe type");
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -24,12 +24,14 @@ class PipelineOwner {
   }
 
   void flushPaint(Canvas canvas) {
-    final context = PaintingContext(canvas);
+    //final context = PaintingContext(canvas);
+    /*
     while (_nodesNeedingPaint.isNotEmpty) {
       final node = _nodesNeedingPaint.removeAt(0);
       if (node.needsPaint) {
         node.paint(context, Offset.zero);
       }
     }
+    */
   }
 }

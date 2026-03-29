@@ -20,3 +20,11 @@ abstract class RenderBox extends RenderObject {
 
   void performLayout();
 }
+
+abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
+  @override
+  void performLayout() {
+    child?.layout(constraints);
+    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
+  }
+}

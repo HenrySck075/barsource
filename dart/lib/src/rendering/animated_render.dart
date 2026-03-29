@@ -14,19 +14,12 @@ import 'object.dart';
 ///
 /// Evaluates the animation at the current timeline time and applies the
 /// resulting opacity (0.0 transparent → 1.0 opaque) via [Canvas.saveLayer].
-class RenderAnimatedOpacity extends RenderBox
-    with RenderObjectWithChildMixin<RenderBox> {
+class RenderAnimatedOpacity extends RenderProxyBox {
   RenderAnimatedOpacity({
     required this.opacity,
   });
 
   final Animation<double> opacity;
-
-  @override
-  void performLayout() {
-    child?.layout(constraints);
-    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
-  }
 
 /*
   void _onOpacityUpdate() {
@@ -62,33 +55,23 @@ class RenderAnimatedOpacity extends RenderBox
 ///
 /// The [offset] tween produces fractional offsets multiplied by the child's
 /// size, matching Flutter's [SlideTransition] semantics.
-class RenderAnimatedTranslation extends RenderBox
-    with RenderObjectWithChildMixin<RenderBox> {
+class RenderAnimatedTranslation extends RenderProxyBox {
   RenderAnimatedTranslation({
-    required this.animation,
     required this.offset,
   });
 
-  final AnimationController animation;
-  final OffsetTween offset;
-
-  @override
-  void performLayout() {
-    child?.layout(constraints);
-    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
-  }
+  final Animation<Offset> offset;
 
   @override
   void paint(PaintingContext context, Offset paintOffset) {
     final child = this.child;
     if (child == null) return;
-    final t = animation.value;
-    final (dx, dy) = offset.transform(t);
+    final o = offset.value;
     // Fractional offset: multiply by child size.
     final childSize = child.size;
     final translatedOffset = Offset(
-      paintOffset.dx + dx * childSize.width,
-      paintOffset.dy + dy * childSize.height,
+      paintOffset.dx + o.dx * childSize.width,
+      paintOffset.dy + o.dy * childSize.height,
     );
     context.paintChild(child, translatedOffset);
   }
@@ -100,16 +83,13 @@ class RenderAnimatedTranslation extends RenderBox
 
 /// A render object that scales its single child from a center point.
 /// NOTE: Incomplete conversion
-class RenderAnimatedScale extends RenderBox
-    with RenderObjectWithChildMixin<RenderBox> {
+class RenderAnimatedScale extends RenderProxyBox {
   RenderAnimatedScale({
-    required this.animation,
     required this.scale,
     this.alignment = Alignment.center,
   });
 
-  final AnimationController animation;
-  final Tween<double> scale;
+  final Animation<double> scale;
 
   /// Alignment of the scale origin as (x, y) fractions of child size.
   /// (0.5, 0.5) = center (default), (0, 0) = top~left, (1, 1) = bottom~right.
@@ -124,20 +104,20 @@ class RenderAnimatedScale extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isEmpty) return;
-    final t = animation.evaluate(constraints.currentTime);
-    final s = scale.transform(t);
+    final child = this.child;
+    if (child == null) return;
+    final s = scale.value;
     if (s == 0.0) return;
 
-    final childSize = children.first.size;
-    final cx = offset.dx + childSize.width * alignment.$1;
-    final cy = offset.dy + childSize.height * alignment.$2;
+    final childSize = child.size;
+    final cx = offset.dx + childSize.width * alignment.x;
+    final cy = offset.dy + childSize.height * alignment.y;
 
     context.canvas.save();
     context.canvas.translate(cx, cy);
     context.canvas.scale(s, s);
     context.canvas.translate(-cx, -cy);
-    context.paintChild(children.first, offset);
+    context.paintChild(child, offset);
     context.canvas.restore();
   }
 }
@@ -150,45 +130,32 @@ class RenderAnimatedScale extends RenderBox
 ///
 /// The [turns] tween specifies rotation in full turns (1.0 = 360°),
 /// matching Flutter's [RotationTransition] semantics.
-class RenderAnimatedRotation extends RenderBox
-    with ContainerRenderObjectMixin {
+class RenderAnimatedRotation extends RenderProxyBox {
   RenderAnimatedRotation({
-    required this.animation,
     required this.turns,
-    this.alignment = (0.5, 0.5),
+    this.alignment = Alignment.center,
   });
 
-  final AnimationController animation;
-  final Tween<double> turns;
+  final Animation<double> turns;
 
   /// Alignment of the rotation origin as (x, y) fractions of child size.
-  final (double, double) alignment;
-
-  @override
-  void performLayout() {
-    for (final child in children) {
-      child.layout(constraints);
-    }
-    size = children.isNotEmpty
-        ? children.first.size
-        : Size(constraints.maxWidth, constraints.maxHeight);
-  }
+  final Alignment alignment;
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (children.isEmpty) return;
-    final t = animation.evaluate(constraints.currentTime);
-    final degrees = turns.transform(t) * 360.0;
+    final child = this.child;
+    if (child == null) return;
+    final degrees = turns.value * 360.0;
 
-    final childSize = children.first.size;
-    final cx = offset.dx + childSize.width * alignment.$1;
-    final cy = offset.dy + childSize.height * alignment.$2;
+    final childSize = child.size;
+    final cx = offset.dx + childSize.width * alignment.x;
+    final cy = offset.dy + childSize.height * alignment.y;
 
     context.canvas.save();
     context.canvas.translate(cx, cy);
     context.canvas.rotate(degrees);
     context.canvas.translate(-cx, -cy);
-    context.paintChild(children.first, offset);
+    context.paintChild(child, offset);
     context.canvas.restore();
   }
 }

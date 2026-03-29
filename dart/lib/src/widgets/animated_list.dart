@@ -1,9 +1,13 @@
+import 'package:tennoji/src/foundation/collections.dart';
+import 'package:tennoji/src/widgets/flex.dart';
+
 import '../animation/animation.dart';
 import '../engine/engine.dart';
-import '../foundation/change_notifier.dart';
+import '../foundation/listenable.dart';
 import '../rendering/animated_list_render.dart';
 import '../rendering/object.dart';
 import 'framework.dart';
+import 'package:collection/collection.dart' hide binarySearch;
 
 // ---------------------------------------------------------------------------
 // ListController — imperative insert / remove schedule
@@ -12,9 +16,18 @@ import 'framework.dart';
 class ListController<T> extends ChangeNotifier {
   final List<_ListOperation<T>> _operations = [];
 
+  ListController(Iterable<T> initialItems) {
+    _operations.addAll(initialItems.mapIndexed((i,e)=>_ListOperation(
+      type: .insert,
+      index: i, 
+      data: e,
+      duration: Duration.zero
+    )));
+  }
+
   void insert(int index, T item, {Duration duration = const Duration(milliseconds: 300)}) {
     _operations.add(_ListOperation(
-      type: _ListOpType.insert,
+      type: .insert,
       index: index,
       data: item,
       duration: duration,
@@ -24,7 +37,7 @@ class ListController<T> extends ChangeNotifier {
 
   void removeAt(int index, {Duration duration = const Duration(milliseconds: 300)}) {
     _operations.add(_ListOperation(
-      type: _ListOpType.remove,
+      type: .remove,
       index: index,
       duration: duration,
     ));
@@ -61,56 +74,56 @@ class _ListOperation<T> {
 
 /// A builder that receives the item [data] and the current
 /// [AnimationController] driving the transition.
-typedef AnimatedListItemBuilder<T> = Widget Function(
+typedef AnimatedItemBuilder<T> = Widget Function(
   BuildContext context,
   T data,
-  AnimationController animation,
+  Animation<double> animation,
 );
 
 /// A builder for items that are being removed.
-typedef AnimatedListRemovedItemBuilder<T> = Widget Function(
+typedef AnimatedRemovedItemBuilder<T> = Widget Function(
   BuildContext context,
   T data,
-  AnimationController animation,
+  Animation<double> animation,
 );
 
 /// A streaming-oriented animated list.
-class AnimatedList<T> extends StatefulWidget {
+class AnimatedList<T extends Object> extends StatefulWidget {
   const AnimatedList({
     super.key,
     required this.itemBuilder,
     required this.listController,
-    this.initialItemCount = 0,
-    this.initialItemBuilder,
     this.removedItemBuilder,
   });
 
-  final AnimatedListItemBuilder<T> itemBuilder;
+  final AnimatedItemBuilder<T> itemBuilder;
   final ListController<T> listController;
-  final int initialItemCount;
-  final T Function(int)? initialItemBuilder;
-  final AnimatedListRemovedItemBuilder<T>? removedItemBuilder;
+  final AnimatedRemovedItemBuilder<T>? removedItemBuilder;
 
   @override
   State<AnimatedList<T>> createState() => _AnimatedListState<T>();
 }
 
-class _AnimatedListState<T> extends State<AnimatedList<T>> {
-  final List<_ItemEntry<T>> _activeItems = [];
-  final List<_ItemEntry<T>> _removingItems = [];
+/// TODO(henrysck): When grid exist, move the majority of the logic to a separate AnimatedMultiBoxMixin
+class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
+  final List<_ActiveItem<T>> _incomingItems = [];
+  final List<_ActiveItem<T>> _outgoingItems = [];
+  final List<T> _items = <T>[];
+
+  _ActiveItem<T>? _removeActiveItemAt(List<_ActiveItem<T>> items, int itemIndex) {
+    final int i = binarySearch(items, _ActiveItem.index(itemIndex));
+    return i == -1 ? null : items.removeAt(i);
+  }
+
+  _ActiveItem<T>? _activeItemAt(List<_ActiveItem<T>> items, int itemIndex) {
+    final int i = binarySearch(items, _ActiveItem.index(itemIndex));
+    return i == -1 ? null : items[i];
+  }
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialItemBuilder != null) {
-      for (int i = 0; i < widget.initialItemCount; i++) {
-        _activeItems.add(_ItemEntry(
-          data: widget.initialItemBuilder!(i),
-          animation: AnimationController(duration: Duration.zero),
-          removing: false,
-        ));
-      }
-    }
+    // 
     widget.listController.addListener(_update);
   }
 
@@ -120,32 +133,117 @@ class _AnimatedListState<T> extends State<AnimatedList<T>> {
     super.dispose();
   }
 
+  int _indexToItemIndex(int index) {
+    var itemIndex = index;
+    for (final _ActiveItem item in _outgoingItems) {
+      if (item.itemIndex <= itemIndex) {
+        itemIndex += 1;
+      } else {
+        break;
+      }
+    }
+    return itemIndex;
+  }
+
+  int _itemIndexToIndex(int itemIndex) {
+    var index = itemIndex;
+    for (final _ActiveItem item in _outgoingItems) {
+      assert(item.itemIndex != itemIndex);
+      if (item.itemIndex < itemIndex) {
+        index -= 1;
+      } else {
+        break;
+      }
+    }
+    return index;
+  }
+
+  void insertItem(int index, T data, {Duration duration = _kDuration}) {
+    assert(index >= 0);
+
+    final int itemIndex = _indexToItemIndex(index);
+    assert(itemIndex >= 0 && itemIndex <= _items.length);
+
+    for (final _ActiveItem item in _incomingItems) {
+      if (item.itemIndex >= itemIndex) {
+        item.itemIndex += 1;
+      }
+    }
+    for (final _ActiveItem item in _outgoingItems) {
+      if (item.itemIndex >= itemIndex) {
+        item.itemIndex += 1;
+      }
+    }
+
+    final controller = AnimationController(duration: duration/*, vsync: this*/);
+    final incomingItem = _ActiveItem.incoming(data, controller, itemIndex);
+    setState(() {
+      _incomingItems
+        ..add(incomingItem)
+        ..sort();
+      _items.insert(index, data);
+    });
+
+    controller.forward().then<void>((_) {
+      _removeActiveItemAt(_incomingItems, incomingItem.itemIndex)!.controller!.dispose();
+    });
+  }
+  void insertAllItems(int startIndex, Iterable<T> items, {Duration duration = _kDuration}) {
+    final iter = items.iterator;
+    for (var i = 0; i < items.length; i++) {
+      iter.moveNext();
+      insertItem(startIndex + i, iter.current);
+    }
+  }
+  // TODO(henrysck) technically builder is already available as AnimatedList.removedItemBuilder
+  void removeItem(int index, AnimatedRemovedItemBuilder<T> builder, {Duration duration = _kDuration}) {
+    assert(index >= 0);
+
+    final int itemIndex = _indexToItemIndex(index);
+    assert(itemIndex >= 0 && itemIndex < _items.length);
+    assert(_activeItemAt(_outgoingItems, itemIndex) == null);
+
+    final _ActiveItem? incomingItem = _removeActiveItemAt(_incomingItems, itemIndex);
+    final AnimationController controller =
+        incomingItem?.controller ??
+        AnimationController(duration: duration, value: 1.0/*, vsync: this*/);
+    final outgoingItem = _ActiveItem.outgoing(_items[index], controller, itemIndex, builder);
+    setState(() {
+      _outgoingItems
+        ..add(outgoingItem)
+        ..sort();
+    });
+
+    controller.reverse().then<void>((void value) {
+      _removeActiveItemAt(_outgoingItems, outgoingItem.itemIndex)!.controller!.dispose();
+      _items.removeAt(outgoingItem.itemIndex);
+
+      // Decrement the incoming and outgoing item indices to account
+      // for the removal.
+      for (final _ActiveItem item in _incomingItems) {
+        if (item.itemIndex > outgoingItem.itemIndex) {
+          item.itemIndex -= 1;
+        }
+      }
+      for (final _ActiveItem item in _outgoingItems) {
+        if (item.itemIndex > outgoingItem.itemIndex) {
+          item.itemIndex -= 1;
+        }
+      }
+    });
+  }
+
   void _update() {
     setState(() {
       final ops = widget.listController._consume();
       for (final op in ops) {
         if (op.type == _ListOpType.insert) {
-          final entry = _ItemEntry<T>(
-            data: op.data as T,
-            animation: AnimationController(
-              startTime: Engine.instance.currentTime,
-              duration: op.duration,
-            ),
-            removing: false,
-          );
-          _activeItems.insert(op.index.clamp(0, _activeItems.length), entry);
+          if (op.index >= 0 && op.index <= _items.length) {
+            insertItem(op.index, op.data!, duration: op.duration);
+          }
         } else if (op.type == _ListOpType.remove) {
-          if (op.index >= 0 && op.index < _activeItems.length) {
-            final removed = _activeItems.removeAt(op.index);
-            _removingItems.add(_ItemEntry<T>(
-              data: removed.data,
-              animation: AnimationController(
-                startTime: Engine.instance.currentTime,
-                duration: op.duration,
-              ),
-              removing: true,
-              insertAfterIndex: op.index,
-            ));
+          if (op.index >= 0 && op.index < _incomingItems.length) {
+            removeItem(op.index, widget.removedItemBuilder ?? widget.itemBuilder, duration: op.duration);
           }
         }
       }
@@ -154,77 +252,21 @@ class _AnimatedListState<T> extends State<AnimatedList<T>> {
 
   @override
   Widget build(BuildContext context) {
-    // Clean up finished removing items
-    final now = Engine.instance.currentTime;
-    _removingItems.removeWhere(
-        (item) => now > item.animation.startTime + item.animation.duration);
+    return Column(
+      children: List.generate(
+        _items.length, (int itemIndex) {
+          final _ActiveItem? outgoingItem = _activeItemAt(_outgoingItems, itemIndex);
+          if (outgoingItem != null) {
+            return outgoingItem.removedItemBuilder!(context, outgoingItem.data!, outgoingItem.controller!);
+          }
 
-    final merged = <_ItemEntry<T>>[];
-    merged.addAll(_activeItems);
-
-    // Re-insert removing items
-    _removingItems.sort(
-        (a, b) => (a.insertAfterIndex ?? 0).compareTo(b.insertAfterIndex ?? 0));
-
-    for (final rem in _removingItems) {
-      int index = rem.insertAfterIndex ?? 0;
-      if (index > merged.length) index = merged.length;
-      merged.insert(index, rem);
-    }
-
-    return _CoreAnimatedList<T>(
-      items: merged,
-      itemBuilder: widget.itemBuilder,
-      removedItemBuilder: widget.removedItemBuilder,
+          final incomingItem = _activeItemAt(_incomingItems, itemIndex);
+          final Animation<double> animation = incomingItem?.controller ?? kAlwaysCompleteAnimation;
+          final T data = incomingItem?.data ?? _items[_itemIndexToIndex(itemIndex)];
+          return widget.itemBuilder(context, data, animation);
+        }
+      )
     );
-  }
-}
-
-class _CoreAnimatedList<T> extends MultiChildRenderObjectWidget {
-  _CoreAnimatedList({
-    super.key,
-    required this.items,
-    required this.itemBuilder,
-    this.removedItemBuilder,
-  }) : super(
-          children: [
-            for (final entry in items)
-              _AnimatedListChild<T>(
-                entry: entry,
-                builder: entry.removing && removedItemBuilder != null
-                    ? removedItemBuilder
-                    : itemBuilder,
-              )
-          ],
-        );
-
-  final List<_ItemEntry<T>> items;
-  final AnimatedListItemBuilder<T> itemBuilder;
-  final AnimatedListRemovedItemBuilder<T>? removedItemBuilder;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) {
-    final renderObject = RenderAnimatedList();
-    _updateSlots(renderObject);
-    return renderObject;
-  }
-
-  @override
-  void updateRenderObject(
-      BuildContext context, covariant RenderAnimatedList renderObject) {
-    _updateSlots(renderObject);
-  }
-
-  void _updateSlots(RenderAnimatedList renderObject) {
-    renderObject.slots.clear();
-    for (int i = 0; i < items.length; i++) {
-      final entry = items[i];
-      renderObject.slots.add(AnimatedListSlot(
-        index: i,
-        animation: entry.animation,
-        removing: entry.removing,
-      ));
-    }
   }
 }
 
@@ -232,32 +274,38 @@ class _CoreAnimatedList<T> extends MultiChildRenderObjectWidget {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-class _ItemEntry<T> {
-  const _ItemEntry({
-    required this.data,
-    required this.animation,
-    required this.removing,
-    this.insertAfterIndex,
-  });
+// The default insert/remove animation duration.
+const Duration _kDuration = Duration(milliseconds: 300);
 
-  final T data;
-  final AnimationController animation;
-  final bool removing;
-  final int? insertAfterIndex;
+// Incoming and outgoing animated items.
+class _ActiveItem<T extends Object> implements Comparable<_ActiveItem> {
+  _ActiveItem.incoming(this.data, this.controller, this.itemIndex) : removedItemBuilder = null;
+
+  _ActiveItem.outgoing(this.data, this.controller, this.itemIndex, this.removedItemBuilder);
+
+  _ActiveItem.index(this.itemIndex) : controller = null, removedItemBuilder = null, data = null;
+
+  final AnimationController? controller;
+  final AnimatedRemovedItemBuilder<T>? removedItemBuilder;
+  int itemIndex;
+  final T? data;
+
+  @override
+  int compareTo(_ActiveItem other) => itemIndex - other.itemIndex;
 }
 
-class _AnimatedListChild<T> extends StatelessWidget {
+class _AnimatedListChild<T extends Object> extends StatelessWidget {
   const _AnimatedListChild({
     required this.entry,
     required this.builder,
   });
 
-  final _ItemEntry<T> entry;
-  final AnimatedListItemBuilder<T> builder;
+  final _ActiveItem<T> entry;
+  final AnimatedItemBuilder<T> builder;
 
   @override
   Widget build(BuildContext context) {
-    return builder(context, entry.data, entry.animation);
+    return builder(context, entry.data!, entry.controller!);
   }
 }
 

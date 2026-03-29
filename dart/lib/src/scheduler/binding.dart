@@ -25,6 +25,7 @@ mixin SchedulerBinding on BindingBase {
 
   Duration _currentFrameTimestamp = Duration.zero;
   SchedulerPhase _schedulerPhase = .idle;
+  SchedulerPhase get schedulerPhase => _schedulerPhase;
   bool _hasScheduledFrame = false;
 
   final Map<int, FrameCallback> _transientCallbacks = {};

@@ -36,7 +36,7 @@ class RenderSequence extends RenderBox with ContainerRenderObjectMixin<RenderBox
     activeChild = childAfter(activeChild!);
     _sequenceCompleted = activeChild == null;
     markNeedsLayout();
-    markNeedsPaint();
+    //markNeedsPaint();
   }
 
   void _stealActiveChildLayout() {

@@ -2,13 +2,14 @@ import '../foundation/geometry.dart';
 import 'box.dart';
 import 'object.dart';
 
-class RenderStack extends RenderBox with ContainerRenderObjectMixin {
+// todo: positioned parent data
+class RenderStack extends RenderBox with ContainerRenderObjectMixin<RenderBox,ContainerParentDataMixin<RenderBox>> {
   @override
   void performLayout() {
     final parentConstraints = constraints;
     double maxWidth = 0;
     double maxHeight = 0;
-    for (final child in children) {
+    visitChildren((child) {
       child.layout(BoxConstraints(
         minWidth: 0,
         maxWidth: parentConstraints.maxWidth,
@@ -17,7 +18,7 @@ class RenderStack extends RenderBox with ContainerRenderObjectMixin {
       ));
       if (child.size.width > maxWidth) maxWidth = child.size.width;
       if (child.size.height > maxHeight) maxHeight = child.size.height;
-    }
+    });
     size = Size(
       maxWidth.isFinite ? maxWidth : parentConstraints.maxWidth,
       maxHeight.isFinite ? maxHeight : parentConstraints.maxHeight,
@@ -26,8 +27,8 @@ class RenderStack extends RenderBox with ContainerRenderObjectMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    for (final child in children) {
+    visitChildren((child) {
       context.paintChild(child, offset);
-    }
+    });
   }
 }

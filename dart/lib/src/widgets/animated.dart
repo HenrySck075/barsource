@@ -1,3 +1,6 @@
+import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:tennoji/src/painting/alignment.dart';
+
 import '../animation/animation.dart';
 import '../rendering/animated_render.dart';
 import '../rendering/object.dart';
@@ -22,17 +25,15 @@ import 'framework.dart';
 class FadeTransition extends SingleChildRenderObjectWidget {
   const FadeTransition({
     super.key,
-    required this.animation,
-    this.opacity = const Tween(begin: 0.0, end: 1.0),
+    required this.opacity,
     super.child,
   });
 
-  final AnimationController animation;
-  final Tween<double> opacity;
+  final Animation<double> opacity;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderAnimatedOpacity(animation: animation, opacity: opacity);
+      RenderAnimatedOpacity(opacity: opacity);
 
   @override
   void updateRenderObject(
@@ -61,17 +62,15 @@ class FadeTransition extends SingleChildRenderObjectWidget {
 class SlideTransition extends SingleChildRenderObjectWidget {
   const SlideTransition({
     super.key,
-    required this.animation,
     required this.offset,
     super.child,
   });
 
-  final AnimationController animation;
-  final OffsetTween offset;
+  final Animation<Offset> offset;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderAnimatedTranslation(animation: animation, offset: offset);
+      RenderAnimatedTranslation(offset: offset);
 
   @override
   void updateRenderObject(BuildContext context,
@@ -97,23 +96,19 @@ class SlideTransition extends SingleChildRenderObjectWidget {
 class ScaleTransition extends SingleChildRenderObjectWidget {
   const ScaleTransition({
     super.key,
-    required this.animation,
-    this.scale = const Tween(begin: 0.0, end: 1.0),
-    this.alignment = const (0.5, 0.5),
+    required this.scale,
+    this.alignment = Alignment.center,
     super.child,
   });
 
-  final AnimationController animation;
-  final Tween<double> scale;
+  final Animation<double> scale;
 
-  /// Alignment of the scale origin as (x, y) fractions of child size.
-  /// (0.5, 0.5) = center, (0, 0) = top~left, (1, 1) = bottom~right.
-  final (double, double) alignment;
+  /// Alignment of the scale origin
+  final Alignment alignment;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
       RenderAnimatedScale(
-        animation: animation,
         scale: scale,
         alignment: alignment,
       );
@@ -144,22 +139,19 @@ class ScaleTransition extends SingleChildRenderObjectWidget {
 class RotationTransition extends SingleChildRenderObjectWidget {
   const RotationTransition({
     super.key,
-    required this.animation,
-    this.turns = const Tween(begin: 0.0, end: 1.0),
-    this.alignment = const (0.5, 0.5),
+    required this.turns,
+    this.alignment = Alignment.center,
     super.child,
   });
 
-  final AnimationController animation;
-  final Tween<double> turns;
+  final Animation<double> turns;
 
   /// Alignment of the rotation origin as (x, y) fractions of child size.
-  final (double, double) alignment;
+  final Alignment alignment;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
       RenderAnimatedRotation(
-        animation: animation,
         turns: turns,
         alignment: alignment,
       );

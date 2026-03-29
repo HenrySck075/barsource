@@ -1,6 +1,5 @@
 import 'object.dart';
 import 'box.dart';
-import 'time_box.dart';
 import '../foundation/geometry.dart';
 
 class ViewConfiguration {
@@ -24,7 +23,7 @@ class ViewConfiguration {
   int get hashCode => Object.hash(size, currentTime);
 }
 
-class RenderView extends RenderObject with ContainerRenderObjectMixin {
+class RenderView extends RenderObject with RenderObjectWithChildMixin {
   RenderView({
     RenderBox? child,
     required ViewConfiguration configuration,
@@ -40,18 +39,6 @@ class RenderView extends RenderObject with ContainerRenderObjectMixin {
     if (_configuration == value) return;
     _configuration = value;
     markNeedsLayout();
-  }
-
-  RenderBox? get child => children.isNotEmpty ? children.first as RenderBox? : null;
-  set child(RenderBox? value) {
-    if (children.isNotEmpty) {
-      final oldChild = children.first;
-      if (oldChild == value) return;
-      remove(oldChild);
-    }
-    if (value != null) {
-      add(value);
-    }
   }
 
   @override

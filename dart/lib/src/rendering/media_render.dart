@@ -14,25 +14,32 @@ class RenderVideoClip extends RenderBox {
     this.trimStart = Duration.zero,
     this.trimEnd,
     this.playbackSpeed = 1.0,
-  });
+  }) {
+    _ticker = Ticker(onTick);
+  }
 
   final String source;
   final Duration trimStart;
   final Duration? trimEnd;
   final double playbackSpeed;
-  @override
-  bool get isRepaintBoundary => true;
+  late final Ticker _ticker;
 
   Pointer<TennojiDecoder>? _decoder;
   Pointer<TennojiCanvasImage>? _texture;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
 
+  Duration _position = Duration.zero;
+
+  void onTick(Duration elapsed) {
+    _position = elapsed;
+  }
+
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
     final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = rina_decoder_open(
+    _decoder ??= rina_decoder_open(
       Engine.instance.nativePtr,
       uri.cast(),
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
@@ -41,6 +48,7 @@ class RenderVideoClip extends RenderBox {
     if (_decoder != null) {
       Engine.instance.registerAudioDecoder(_decoder!);
     }
+    if (!_ticker.isTicking) _ticker.start();
   }
 
   @override
@@ -50,12 +58,18 @@ class RenderVideoClip extends RenderBox {
       rina_texture_destroy(_texture!);
       _texture = null;
     }
+    super.detach();
+    // TODO: we could also let user specify if playback is stopped if the object is detached
+  }
+
+  @override
+  void dispose() {
     if (_decoder != null) {
       Engine.instance.unregisterAudioDecoder(_decoder!);
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
-    super.detach();
+    _ticker.stop();
   }
 
   @override
@@ -66,7 +80,7 @@ class RenderVideoClip extends RenderBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     if (_decoder == null) return;
-    final clipTime = constraints.currentTime - trimStart;
+    final clipTime = _position - trimStart;
     final timeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
 
     // Release previous texture before acquiring a new one

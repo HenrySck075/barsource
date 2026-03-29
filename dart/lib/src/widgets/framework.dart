@@ -14,6 +14,10 @@ abstract class Widget {
   const Widget({this.key});
   final Key? key;
   elements.Element createElement();
+
+  static bool canUpdate(Widget oldWidget, Widget newWidget) {
+    return oldWidget.runtimeType == newWidget.runtimeType && oldWidget.key == newWidget.key;
+  }
 }
 
 abstract class StatelessWidget extends Widget {
@@ -66,11 +70,15 @@ abstract class RenderObjectWidget extends Widget {
 
 abstract class LeafRenderObjectWidget extends RenderObjectWidget {
   const LeafRenderObjectWidget({super.key});
+  @override
+  elements.LeafRenderObjectElement createElement() => elements.LeafRenderObjectElement(this);
 }
 
 abstract class SingleChildRenderObjectWidget extends RenderObjectWidget {
   const SingleChildRenderObjectWidget({super.key, this.child});
   final Widget? child;
+  @override
+  elements.SingleChildRenderObjectElement createElement() => elements.SingleChildRenderObjectElement(this);
 }
 
 abstract class MultiChildRenderObjectWidget extends RenderObjectWidget {
