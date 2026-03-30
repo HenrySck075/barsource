@@ -107,7 +107,7 @@ class Container extends StatelessWidget {
       current = Padding(padding: margin as EdgeInsets, child: current);
     }
 
-    return current!;
+    return current;
   }
 }
 
@@ -140,7 +140,7 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 
 enum DecorationPosition { background, foreground }
 
-class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
+class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderDecoratedBox({
     required Decoration decoration,
     DecorationPosition position = DecorationPosition.background,
@@ -156,7 +156,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
     _painter?.dispose();
     _painter = null;
     _decoration = value;
-    markNeedsPaint();
+    //markNeedsPaint();
   }
 
   DecorationPosition _position;
@@ -164,7 +164,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
   set position(DecorationPosition value) {
     if (_position == value) return;
     _position = value;
-    markNeedsPaint();
+    //markNeedsPaint();
   }
 
   ImageConfiguration _configuration;
@@ -172,7 +172,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
   set configuration(ImageConfiguration value) {
     if (_configuration == value) return;
     _configuration = value;
-    markNeedsPaint();
+    //markNeedsPaint();
   }
 
   BoxPainter? _painter;
@@ -190,7 +190,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    _painter ??= _decoration.createBoxPainter(markNeedsPaint);
+    _painter ??= _decoration.createBoxPainter(/*markNeedsPaint*/(){});
     final ImageConfiguration filledConfiguration = configuration.copyWith(size: size);
     
     if (position == DecorationPosition.background) {
@@ -249,7 +249,7 @@ class Padding extends SingleChildRenderObjectWidget {
 
 // Render objects for basic widgets
 
-class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin {
+class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderSizedBox({
     double? width,
     double? height,
@@ -303,7 +303,7 @@ class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin {
   }
 }
 
-class RenderPadding extends RenderBox with RenderObjectWithChildMixin {
+class RenderPadding extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderPadding({
     required EdgeInsetsGeometry padding,
     TextDirection? textDirection,

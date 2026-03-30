@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'package:logging/logging.dart';
 
 import 'package:tennoji/src/foundation/binding_base.dart';

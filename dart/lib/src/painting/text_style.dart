@@ -15,7 +15,6 @@ import 'package:tennoji/src/painting/text_scaler.dart';
 
 
 import 'basic_types.dart';
-import 'colors.dart';
 import 'strut_style.dart';
 //import 'text_painter.dart';
 //import 'text_scaler.dart';

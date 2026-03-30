@@ -16,7 +16,7 @@ fi
 
 cmake --build .
 
-find . -name "*.so" -exec cp {} "${SCRIPT_DIR}/dart/blob/" \;
+find . -name "*.so" -exec cp {} "${SCRIPT_DIR}/dart/lib/blob/" \;
 
 cd "${SCRIPT_DIR}/example"
 dart run 

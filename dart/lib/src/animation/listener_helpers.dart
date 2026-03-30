@@ -237,7 +237,7 @@ mixin AnimationLocalStatusListenersMixin {
         if (_statusListeners.contains(listener)) {
           listener(status);
         }
-      } catch (exception, stack) {
+      } catch (exception) {
         /*
         InformationCollector? collector;
         assert(() {

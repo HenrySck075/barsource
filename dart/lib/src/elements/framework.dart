@@ -1,5 +1,6 @@
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/foundation/key.dart';
 import 'package:tennoji/src/painting/basic_types.dart' show VoidCallback;
 import 'package:tennoji/src/rendering/parent_data.dart';
 import 'dart:collection';
@@ -689,7 +690,7 @@ abstract class RenderObjectElement extends Element {
         return true;
       }());
       */
-      ancestor = ancestor?._parent;
+      ancestor = ancestor._parent;
     }
     /*
     assert(() {
@@ -1017,6 +1018,371 @@ class SingleChildRenderObjectElement extends RenderObjectElement {
     renderObject.child = null;
     assert(renderObject == this.renderObject);
   }
+}
+class MultiChildRenderObjectElement extends RenderObjectElement {
+  /// Creates an element that uses the given widget as its configuration.
+  MultiChildRenderObjectElement(MultiChildRenderObjectWidget super.widget);
+    //: assert(!debugChildrenHaveDuplicateKeys(widget, widget.children));
+
+  @override
+  ContainerRenderObjectMixin<RenderObject, ContainerParentDataMixin<RenderObject>>
+  get renderObject {
+    return super.renderObject
+        as ContainerRenderObjectMixin<RenderObject, ContainerParentDataMixin<RenderObject>>;
+  }
+
+  /// The current list of children of this element.
+  ///
+  /// This list is filtered to hide elements that have been forgotten (using
+  /// [forgetChild]).
+  @protected
+  @visibleForTesting
+  Iterable<Element> get children =>
+      _children.where((Element child) => !_forgottenChildren.contains(child));
+
+  late List<Element> _children;
+  // We keep a set of forgotten children to avoid O(n^2) work walking _children
+  // repeatedly to remove children.
+  final Set<Element> _forgottenChildren = HashSet<Element>();
+
+  @override
+  void insertRenderObjectChild(RenderObject child, IndexedSlot<Element?> slot) {
+    final ContainerRenderObjectMixin<RenderObject, ContainerParentDataMixin<RenderObject>>
+    renderObject = this.renderObject;
+    //assert(renderObject.debugValidateChild(child));
+    renderObject.insert(child, after: slot.value?.renderObject);
+    assert(renderObject == this.renderObject);
+  }
+
+  @override
+  void moveRenderObjectChild(
+    RenderObject child,
+    IndexedSlot<Element?> oldSlot,
+    IndexedSlot<Element?> newSlot,
+  ) {
+    final ContainerRenderObjectMixin<RenderObject, ContainerParentDataMixin<RenderObject>>
+    renderObject = this.renderObject;
+    assert(child.parent == renderObject);
+    renderObject.move(child, after: newSlot.value?.renderObject);
+    assert(renderObject == this.renderObject);
+  }
+
+  @override
+  void removeRenderObjectChild(RenderObject child, Object? slot) {
+    final ContainerRenderObjectMixin<RenderObject, ContainerParentDataMixin<RenderObject>>
+    renderObject = this.renderObject;
+    assert(child.parent == renderObject);
+    renderObject.remove(child);
+    assert(renderObject == this.renderObject);
+  }
+
+  @override
+  void visitChildren(ElementVisitor visitor) {
+    for (final Element child in _children) {
+      if (!_forgottenChildren.contains(child)) {
+        visitor(child);
+      }
+    }
+  }
+
+  @override
+  void forgetChild(Element child) {
+    assert(_children.contains(child));
+    assert(!_forgottenChildren.contains(child));
+    _forgottenChildren.add(child);
+    super.forgetChild(child);
+  }
+
+/*
+  bool _debugCheckHasAssociatedRenderObject(Element newChild) {
+    assert(() {
+      if (newChild.renderObject == null) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: FlutterError.fromParts(<DiagnosticsNode>[
+              ErrorSummary(
+                'The children of `MultiChildRenderObjectElement` must each has an associated render object.',
+              ),
+              ErrorHint(
+                'This typically means that the `${newChild.widget}` or its children\n'
+                'are not a subtype of `RenderObjectWidget`.',
+              ),
+              newChild.describeElement(
+                'The following element does not have an associated render object',
+              ),
+              DiagnosticsDebugCreator(DebugCreator(newChild)),
+            ]),
+          ),
+        );
+      }
+      return true;
+    }());
+    return true;
+  }
+  */
+
+  @override
+  Element inflateWidget(Widget newWidget, Object? newSlot) {
+    final Element newChild = super.inflateWidget(newWidget, newSlot);
+    //assert(_debugCheckHasAssociatedRenderObject(newChild));
+    return newChild;
+  }
+
+  @override
+  void mount(Element? parent, Object? newSlot) {
+    super.mount(parent, newSlot);
+    final multiChildRenderObjectWidget = widget as MultiChildRenderObjectWidget;
+    final children = List<Element>.filled(
+      multiChildRenderObjectWidget.children.length,
+      _NullElement.instance,
+    );
+    Element? previousChild;
+    for (var i = 0; i < children.length; i += 1) {
+      final Element newChild = inflateWidget(
+        multiChildRenderObjectWidget.children[i],
+        IndexedSlot<Element?>(i, previousChild),
+      );
+      children[i] = newChild;
+      previousChild = newChild;
+    }
+    _children = children;
+  }
+
+  @override
+  void update(MultiChildRenderObjectWidget newWidget) {
+    super.update(newWidget);
+    final multiChildRenderObjectWidget = widget as MultiChildRenderObjectWidget;
+    assert(widget == newWidget);
+    //assert(!debugChildrenHaveDuplicateKeys(widget, multiChildRenderObjectWidget.children));
+    _children = updateChildren(
+      _children,
+      multiChildRenderObjectWidget.children,
+      forgottenChildren: _forgottenChildren,
+    );
+    _forgottenChildren.clear();
+  }
+
+  @protected
+  List<Element> updateChildren(
+    List<Element> oldChildren,
+    List<Widget> newWidgets, {
+    Set<Element>? forgottenChildren,
+    List<Object?>? slots,
+  }) {
+    assert(slots == null || newWidgets.length == slots.length);
+
+    Element? replaceWithNullIfForgotten(Element child) {
+      return (forgottenChildren?.contains(child) ?? false) ? null : child;
+    }
+
+    Object? slotFor(int newChildIndex, Element? previousChild) {
+      return slots != null
+          ? slots[newChildIndex]
+          : IndexedSlot<Element?>(newChildIndex, previousChild);
+    }
+
+    // This attempts to diff the new child list (newWidgets) with
+    // the old child list (oldChildren), and produce a new list of elements to
+    // be the new list of child elements of this element. The called of this
+    // method is expected to update this render object accordingly.
+
+    // The cases it tries to optimize for are:
+    //  - the old list is empty
+    //  - the lists are identical
+    //  - there is an insertion or removal of one or more widgets in
+    //    only one place in the list
+    // If a widget with a key is in both lists, it will be synced.
+    // Widgets without keys might be synced but there is no guarantee.
+
+    // The general approach is to sync the entire new list backwards, as follows:
+    // 1. Walk the lists from the top, syncing nodes, until you no longer have
+    //    matching nodes.
+    // 2. Walk the lists from the bottom, without syncing nodes, until you no
+    //    longer have matching nodes. We'll sync these nodes at the end. We
+    //    don't sync them now because we want to sync all the nodes in order
+    //    from beginning to end.
+    // At this point we narrowed the old and new lists to the point
+    // where the nodes no longer match.
+    // 3. Walk the narrowed part of the old list to get the list of
+    //    keys and sync null with non-keyed items.
+    // 4. Walk the narrowed part of the new list forwards:
+    //     * Sync non-keyed items with null
+    //     * Sync keyed items with the source if it exists, else with null.
+    // 5. Walk the bottom of the list again, syncing the nodes.
+    // 6. Sync null with any items in the list of keys that are still
+    //    mounted.
+
+    var newChildrenTop = 0;
+    var oldChildrenTop = 0;
+    int newChildrenBottom = newWidgets.length - 1;
+    int oldChildrenBottom = oldChildren.length - 1;
+
+    final newChildren = List<Element>.filled(newWidgets.length, _NullElement.instance);
+
+    Element? previousChild;
+
+    // Update the top of the list.
+    while ((oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom)) {
+      final Element? oldChild = replaceWithNullIfForgotten(oldChildren[oldChildrenTop]);
+      final Widget newWidget = newWidgets[newChildrenTop];
+      assert(oldChild == null || oldChild._lifecycleState == _ElementLifecycle.active);
+      if (oldChild == null || !Widget.canUpdate(oldChild.widget, newWidget)) {
+        break;
+      }
+      final Element newChild = updateChild(
+        oldChild,
+        newWidget,
+        slotFor(newChildrenTop, previousChild),
+      )!;
+      assert(newChild._lifecycleState == _ElementLifecycle.active);
+      newChildren[newChildrenTop] = newChild;
+      previousChild = newChild;
+      newChildrenTop += 1;
+      oldChildrenTop += 1;
+    }
+
+    // Scan the bottom of the list.
+    while ((oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom)) {
+      final Element? oldChild = replaceWithNullIfForgotten(oldChildren[oldChildrenBottom]);
+      final Widget newWidget = newWidgets[newChildrenBottom];
+      assert(oldChild == null || oldChild._lifecycleState == _ElementLifecycle.active);
+      if (oldChild == null || !Widget.canUpdate(oldChild.widget, newWidget)) {
+        break;
+      }
+      oldChildrenBottom -= 1;
+      newChildrenBottom -= 1;
+    }
+
+    // Scan the old children in the middle of the list.
+    final bool haveOldChildren = oldChildrenTop <= oldChildrenBottom;
+    Map<Key, Element>? oldKeyedChildren;
+    if (haveOldChildren) {
+      oldKeyedChildren = <Key, Element>{};
+      while (oldChildrenTop <= oldChildrenBottom) {
+        final Element? oldChild = replaceWithNullIfForgotten(oldChildren[oldChildrenTop]);
+        assert(oldChild == null || oldChild._lifecycleState == _ElementLifecycle.active);
+        if (oldChild != null) {
+          if (oldChild.widget.key != null) {
+            oldKeyedChildren[oldChild.widget.key!] = oldChild;
+          } else {
+            deactivateChild(oldChild);
+          }
+        }
+        oldChildrenTop += 1;
+      }
+    }
+
+    // Update the middle of the list.
+    while (newChildrenTop <= newChildrenBottom) {
+      Element? oldChild;
+      final Widget newWidget = newWidgets[newChildrenTop];
+      if (haveOldChildren) {
+        final Key? key = newWidget.key;
+        if (key != null) {
+          oldChild = oldKeyedChildren![key];
+          if (oldChild != null) {
+            if (Widget.canUpdate(oldChild.widget, newWidget)) {
+              // we found a match!
+              // remove it from oldKeyedChildren so we don't unsync it later
+              oldKeyedChildren.remove(key);
+            } else {
+              // Not a match, let's pretend we didn't see it for now.
+              oldChild = null;
+            }
+          }
+        }
+      }
+      assert(oldChild == null || Widget.canUpdate(oldChild.widget, newWidget));
+      final Element newChild = updateChild(
+        oldChild,
+        newWidget,
+        slotFor(newChildrenTop, previousChild),
+      )!;
+      assert(newChild._lifecycleState == _ElementLifecycle.active);
+      assert(
+        oldChild == newChild ||
+            oldChild == null ||
+            oldChild._lifecycleState != _ElementLifecycle.active,
+      );
+      newChildren[newChildrenTop] = newChild;
+      previousChild = newChild;
+      newChildrenTop += 1;
+    }
+
+    // We've scanned the whole list.
+    assert(oldChildrenTop == oldChildrenBottom + 1);
+    assert(newChildrenTop == newChildrenBottom + 1);
+    assert(newWidgets.length - newChildrenTop == oldChildren.length - oldChildrenTop);
+    newChildrenBottom = newWidgets.length - 1;
+    oldChildrenBottom = oldChildren.length - 1;
+
+    // Update the bottom of the list.
+    while ((oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom)) {
+      final Element oldChild = oldChildren[oldChildrenTop];
+      assert(replaceWithNullIfForgotten(oldChild) != null);
+      assert(oldChild._lifecycleState == _ElementLifecycle.active);
+      final Widget newWidget = newWidgets[newChildrenTop];
+      assert(Widget.canUpdate(oldChild.widget, newWidget));
+      final Element newChild = updateChild(
+        oldChild,
+        newWidget,
+        slotFor(newChildrenTop, previousChild),
+      )!;
+      assert(newChild._lifecycleState == _ElementLifecycle.active);
+      assert(oldChild == newChild || oldChild._lifecycleState != _ElementLifecycle.active);
+      newChildren[newChildrenTop] = newChild;
+      previousChild = newChild;
+      newChildrenTop += 1;
+      oldChildrenTop += 1;
+    }
+
+    // Clean up any of the remaining middle nodes from the old list.
+    if (haveOldChildren && oldKeyedChildren!.isNotEmpty) {
+      for (final Element oldChild in oldKeyedChildren.values) {
+        if (forgottenChildren == null || !forgottenChildren.contains(oldChild)) {
+          deactivateChild(oldChild);
+        }
+      }
+    }
+    assert(newChildren.every((Element element) => element is! _NullElement));
+    return newChildren;
+  }
+}
+/// Used as a placeholder in [List<Element>] objects when the actual
+/// elements are not yet determined.
+class _NullElement extends Element {
+  _NullElement() : super(const _NullWidget());
+
+  static _NullElement instance = _NullElement();
+}
+class _NullWidget extends Widget {
+  const _NullWidget();
+
+  @override
+  Element createElement() => throw UnimplementedError();
+}
+@immutable
+class IndexedSlot<T extends Element?> {
+  /// Creates an [IndexedSlot] with the provided [index] and slot [value].
+  const IndexedSlot(this.index, this.value);
+
+  /// Information to define where the child occupying this slot fits in its
+  /// parent's child list.
+  final T value;
+
+  /// The index of this slot in the parent's child list.
+  final int index;
+
+  @override
+  bool operator ==(Object other) {
+    if (other.runtimeType != runtimeType) {
+      return false;
+    }
+    return other is IndexedSlot && index == other.index && value == other.value;
+  }
+
+  @override
+  int get hashCode => Object.hash(index, value);
 }
 /// An [Element] that uses a [ProxyWidget] as its configuration.
 abstract class ProxyElement extends ComponentElement {

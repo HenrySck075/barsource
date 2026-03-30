@@ -32,3 +32,4 @@ native/.cache
 dart/build/
 
 Session.vim
+hooks_runner/

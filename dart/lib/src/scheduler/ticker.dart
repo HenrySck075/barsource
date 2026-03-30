@@ -193,6 +193,3 @@ class Ticker {
   }
 }
 
-abstract class TickerProvider {
-  Ticker createTicker(TickerCallback onTick);
-}

@@ -148,7 +148,7 @@ class TextSpan extends InlineSpan {
     if (text != null) {
       try {
         builder.addText(text!);
-      } on ArgumentError catch (exception, stack) {
+      } on ArgumentError {
         /*
         FlutterError.reportError(
           FlutterErrorDetails(

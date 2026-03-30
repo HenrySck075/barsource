@@ -21,7 +21,7 @@ class RenderSequence extends RenderBox with ContainerRenderObjectMixin<RenderBox
   void performLayout() {
     visitChildren((child) {
       // this assigns the active child to the first object
-      if (!_sequenceCompleted) activeChild ??= child as RenderBox;
+      if (!_sequenceCompleted) activeChild ??= child;
       child.layout(BoxConstraints(
         minWidth: constraints.minWidth,
         maxWidth: constraints.maxWidth,

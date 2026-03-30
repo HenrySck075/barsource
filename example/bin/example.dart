@@ -29,7 +29,7 @@ class _bombState extends State<bomb> {
         VideoClip(source: "sample_video_720p.mp4"),
         Column(children: [
         // Fade in a red box over the first second
-        FadeTransition(
+        AnimatedOpacity(
           animation: AnimationController(
             duration: Duration(seconds: 1),
             curve: Curves.easeIn,

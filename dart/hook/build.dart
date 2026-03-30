@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 
 void main(List<String> args) async {
+  print("hi");
   await build(args, (input, output) async {
     // 1. Determine the library filename based on the target OS
     final targetOS = input.config.code.targetOS;
@@ -11,7 +11,7 @@ void main(List<String> args) async {
                                              'libtennoji.so';
 
     // 2. Locate your prebuilt file
-    final libFile = input.packageRoot.resolve('blob/$libName');
+    final libFile = input.packageRoot.resolve('lib/blob/$libName');
 
     // 3. Register it as an asset
     output.assets.code.add(

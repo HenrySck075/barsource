@@ -3677,10 +3677,8 @@ base class _NativeParagraphBuilder implements ParagraphBuilder {
   @override
   void pushStyle(TextStyle style) {
     final fullFontFamilies = <String>[];
-    if (style._fontFamily != null) {
-      fullFontFamilies.add(style._fontFamily!);
-    }
-    final List<String>? fontFamilyFallback = style._fontFamilyFallback;
+    fullFontFamilies.add(style._fontFamily);
+      final List<String>? fontFamilyFallback = style._fontFamilyFallback;
     if (fontFamilyFallback != null) {
       fullFontFamilies.addAll(fontFamilyFallback);
     }

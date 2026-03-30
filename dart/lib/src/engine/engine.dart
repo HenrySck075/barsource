@@ -93,6 +93,12 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     rina_engine_destroy(_nativePtr);
     _instance = null;
   }
+
+  int? _frameDuration;
+  /// The duration in milliseconds of 1 single frame.
+  ///
+  /// This value is only valid when the engine is currently being [run]
+  int get frameDuration => _frameDuration!;
   
   void run(Widget app, RenderConfig config) {
     _log.info('Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}');
@@ -131,6 +137,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     );
 
     final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
+    _frameDuration = frameDuration.inMilliseconds;
     _currentTime = Duration.zero;
 
     try {
@@ -188,6 +195,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       
       detachRootWidget();
       _log.info('Render run completed.');
+      _frameDuration = null;
     }
   }
 }

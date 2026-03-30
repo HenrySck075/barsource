@@ -19,7 +19,20 @@ enum AnimationStatus {
   reverse,
 
   /// The animation is stopped at the end.
-  completed,
+  completed;
+
+  bool get isDismissed => this == dismissed;
+
+  bool get isCompleted => this == completed;
+
+  bool get isAnimating => switch (this) {
+    forward || reverse => true,
+    completed || dismissed => false,
+  };
+  bool get isForwardOrCompleted => switch (this) {
+    forward || completed => true,
+    reverse || dismissed => false,
+  };
 }
 enum _AnimationDirection {
   forward,
@@ -31,6 +44,11 @@ abstract class Animation<T> extends Listenable implements ValueListenable<T> {
   @override
   T get value;
   AnimationStatus get status;
+
+  bool get isDismissed => status.isDismissed;
+  bool get isCompleted => status.isCompleted;
+  bool get isAnimating => status.isAnimating;
+  bool get isForwardOrCompleted => status.isForwardOrCompleted;
 
   void addStatusListener(AnimationStatusListener listener);
   void removeStatusListener(AnimationStatusListener listener);
@@ -68,11 +86,85 @@ class _AlwaysCompleteAnimation extends Animation<double> {
 /// API expects an animation but you don't actually want to animate anything.
 const Animation<double> kAlwaysCompleteAnimation = _AlwaysCompleteAnimation();
 
+class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<double> {
+  /// Creates a curved animation.
+  CurvedAnimation({required this.parent, required this.curve, this.reverseCurve}) {
+    //assert(debugMaybeDispatchCreated('animation', 'CurvedAnimation', this));
+    _updateCurveDirection(parent.status);
+    parent.addStatusListener(_updateCurveDirection);
+  }
+
+  @override
+  final Animation<double> parent;
+
+  Curve curve;
+  Curve? reverseCurve;
+  AnimationStatus? _curveDirection;
+
+  void _updateCurveDirection(AnimationStatus status) {
+    _curveDirection = status.isAnimating ? _curveDirection ?? status : null;
+  }
+
+  bool get _useForwardCurve {
+    return reverseCurve == null || (_curveDirection ?? parent.status) != AnimationStatus.reverse;
+  }
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+  /// Cleans up any listeners added by this CurvedAnimation.
+  void dispose() {
+    //assert(debugMaybeDispatchDisposed(this));
+    _isDisposed = true;
+    parent.removeStatusListener(_updateCurveDirection);
+  }
+
+  @override
+  double get value {
+    final Curve? activeCurve = _useForwardCurve ? curve : reverseCurve;
+
+    final double t = parent.value;
+    if (activeCurve == null) {
+      return t;
+    }
+    if (t == 0.0 || t == 1.0) {
+      assert(() {
+        final double transformedValue = activeCurve.transform(t);
+        final double roundedTransformedValue = transformedValue.round().toDouble();
+        if (roundedTransformedValue != t) {
+          /*
+          throw FlutterError(
+            'Invalid curve endpoint at $t.\n'
+            'Curves must map 0.0 to near zero and 1.0 to near one but '
+            '${activeCurve.runtimeType} mapped $t to $transformedValue, which '
+            'is near $roundedTransformedValue.',
+          );
+          */
+        }
+        return true;
+      }());
+      return t;
+    }
+    return activeCurve.transform(t);
+  }
+  @override
+  String toString() {
+    if (reverseCurve == null) {
+      return '$parent\u27A9$curve';
+    }
+    if (_useForwardCurve) {
+      return '$parent\u27A9$curve\u2092\u2099/$reverseCurve';
+    }
+    return '$parent\u27A9$curve/$reverseCurve\u2092\u2099';
+  }
+}
 /// A value that changes over a [Duration].
+///
+/// However, said duration will always have a hard cap of 1 frame minimum because of repeating animations. 
+/// And also because flutter team did it
+/// (technically speaking the simulations can and is handling this, however the ticker is always guaranteed to only be called the next frame so)
 class AnimationController extends Animation<double> 
   with AnimationEagerListenerMixin, AnimationLocalListenersMixin, AnimationLocalStatusListenersMixin {
   AnimationController({
-    required this.duration,
+    this.duration,
     this.reverseDuration,
     //required TickerProvider vsync,
     this.lowerBound = 0.0,
@@ -81,10 +173,17 @@ class AnimationController extends Animation<double>
   }) {
     _ticker = Ticker(_tick);//vsync.createTicker(_tick);
     _value = value ?? lowerBound;
+    final fd = Engine.instance.frameDuration;
+    if (duration != null && duration!.inMilliseconds < fd) {
+      duration = Duration(milliseconds: fd);
+    }
+    if (reverseDuration != null && reverseDuration!.inMilliseconds < fd) {
+      reverseDuration = Duration(milliseconds: fd);
+    } 
   }
 
-  final Duration duration;
-  final Duration? reverseDuration;
+  Duration? duration;
+  Duration? reverseDuration;
   final double lowerBound;
   final double upperBound;
   
@@ -96,8 +195,8 @@ class AnimationController extends Animation<double>
   set value(double val) {
     stop();
     _internalSetValue(val);
-    _notify();
-    _notifyStatus();
+    notifyListeners();
+    notifyStatusListeners(status);
   }
   void _internalSetValue(double newValue) {
     _value = clampDouble(newValue, lowerBound, upperBound);
@@ -138,7 +237,7 @@ class AnimationController extends Animation<double>
     _status = (_direction == _AnimationDirection.forward)
         ? AnimationStatus.forward
         : AnimationStatus.reverse;
-    _notifyStatus();
+    notifyStatusListeners(status);
     return result;
   }
   void _tick(Duration elapsed) {
@@ -153,38 +252,167 @@ class AnimationController extends Animation<double>
           : AnimationStatus.dismissed;
       stop(canceled: false);
     }
-    _notify();
-    _notifyStatus();
-  }  
-  TickerFuture forward() {
-    _status = AnimationStatus.forward;
-    return _ticker.start();
+    notifyListeners();
+    notifyStatusListeners(status);
+  } 
+
+  TickerFuture _animateToInternal(
+    double target, {
+    Duration? duration,
+    Curve curve = Curves.linear,
+  }) {
+    var simulationDuration = duration;
+    if (simulationDuration == null) {
+      assert(!(this.duration == null && _direction == _AnimationDirection.forward));
+      assert(
+        !(this.duration == null &&
+            _direction == _AnimationDirection.reverse &&
+            reverseDuration == null),
+      );
+      final double range = upperBound - lowerBound;
+      final double remainingFraction = range.isFinite ? (target - _value).abs() / range : 1.0;
+      final Duration directionDuration =
+          (_direction == _AnimationDirection.reverse && reverseDuration != null)
+          ? reverseDuration!
+          : this.duration!;
+      simulationDuration = directionDuration * remainingFraction;
+    } else if (target == value) {
+      // Already at target, don't animate.
+      simulationDuration = Duration.zero;
+    }
+    stop();
+    if (simulationDuration == Duration.zero) {
+      if (value != target) {
+        _value = clampDouble(target, lowerBound, upperBound);
+        notifyListeners();
+      }
+      _status = (_direction == _AnimationDirection.forward)
+          ? AnimationStatus.completed
+          : AnimationStatus.dismissed;
+      notifyStatusListeners(status);
+      return TickerFuture.complete();
+    }
+    assert(simulationDuration > Duration.zero);
+    assert(!isAnimating);
+    return _startSimulation(
+      _InterpolationSimulation(_value, target, simulationDuration, curve),
+    );
+  }
+  TickerFuture forward({double? from}) {
+    _direction = .forward;
+    if (from != null) {
+      value = from;
+    }
+    return _animateToInternal(upperBound);
   }
 
-  TickerFuture reverse() {
-    _status = AnimationStatus.reverse;
-    return _ticker.start();
+  TickerFuture reverse({double? from}) {
+    _direction = .reverse;
+    if (from != null) {
+      value = from;
+    }
+    return _animateToInternal(lowerBound);
   }
 
-  void stop({bool canceled = true}) => _ticker.stop(canceled: canceled);
+  TickerFuture toggle({double? from}) {
+    Duration? duration = this.duration;
+    assert(
+      duration != null, 
+      'AnimationController.toggle() called with no default duration.\n'
+      'The "duration" property should be set, either in the constructor or later, before '
+      'calling the toggle() function.'
+    );
+    assert(_ticker != null, "Function called after dispose.");
+    _direction = isForwardOrCompleted ? .reverse : .forward;
+    if (from != null) {
+      value = from;
+    }
+    return _animateToInternal(switch (_direction) {
+      _AnimationDirection.forward => upperBound,
+      _AnimationDirection.reverse => lowerBound,
+    });
+  }
 
-  void _complete() {
-    _status = (_status == AnimationStatus.forward) ? AnimationStatus.completed : AnimationStatus.dismissed;
-    _ticker.stop();
+  TickerFuture repeat({
+    double? min,
+    double? max,
+    bool reverse = false,
+    Duration? period,
+    int? count,
+  }) {
+    min ??= lowerBound;
+    max ??= upperBound;
+    period ??= duration;
+    assert(
+      period != null,
+      'AnimationController.repeat() called without an explicit period and with no default Duration.\n'
+      'Either the "period" argument to the repeat() method should be provided, or the '
+      '"duration" property should be set, either in the constructor or later, before '
+      'calling the repeat() function.', 
+    );
+    assert(max >= min);
+    assert(max <= upperBound && min >= lowerBound);
+    assert(count == null || count > 0, 'Count shall be greater than zero if not null');
+    stop();
+    return _startSimulation(
+      _RepeatingSimulation(_value, min, max, reverse, period!, _directionSetter, count),
+    );
+  }
+  void _directionSetter(_AnimationDirection direction) {
+    _direction = direction;
+    _status = (_direction == _AnimationDirection.forward)
+        ? AnimationStatus.forward
+        : AnimationStatus.reverse;
     notifyStatusListeners(status);
   }
 
-  // --- Boilerplate Minimization ---
+  TickerFuture animateTo(double target, {Duration? duration, Curve curve = Curves.linear}) {
+    assert(
+      !(this.duration == null && duration == null),
+      'AnimationController.animateTo() called with no explicit duration and no default duration.\n'
+      'Either the "duration" argument to the animateTo() method should be provided, or the '
+      '"duration" property should be set, either in the constructor or later, before '
+      'calling the animateTo() function.'
+    );
+    assert(_ticker != null, "Function called after dispose.");
+    _direction = .forward;
+    return _animateToInternal(target, duration: duration, curve: curve);
+  }
+  TickerFuture animateBack(double target, {Duration? duration, Curve curve = Curves.linear}) {
+    assert(
+      !(this.duration == null && reverseDuration == null && duration == null),
+      'AnimationController.animateBack() called with no explicit duration and no default duration.\n'
+      'Either the "duration" argument to the animateBack() method should be provided, or the '
+      '"duration" property should be set, either in the constructor or later, before '
+      'calling the animateBack() function.'
+    );
+    assert(_ticker != null, "Function called after dispose.");
+    _direction = .reverse;
+    return _animateToInternal(target, duration: duration, curve: curve);
+  }
+    
 
+  void stop({bool canceled = true}) {
+    assert(_ticker != null);
+    _simulation = null;
+    _ticker!.stop(canceled: canceled);
+  }
+
+  void reset() {
+    value = lowerBound;
+  }
+
+  @override
   void dispose() {
+    super.dispose();
     _ticker?.dispose();
   }
 }
 
 class _InterpolationSimulation extends Simulation {
-  _InterpolationSimulation(this._begin, this._end, Duration duration, this._curve, double scale)
+  _InterpolationSimulation(this._begin, this._end, Duration duration, this._curve)
     : assert(duration.inMicroseconds > 0),
-      _durationInSeconds = (duration.inMicroseconds * scale) / Duration.microsecondsPerSecond;
+      _durationInSeconds = (duration.inMicroseconds) / Duration.microsecondsPerSecond;
 
   final double _durationInSeconds;
   final double _begin;
@@ -211,6 +439,64 @@ class _InterpolationSimulation extends Simulation {
   bool isDone(double timeInSeconds) => timeInSeconds > _durationInSeconds;
 }
 
+typedef _DirectionSetter = void Function(_AnimationDirection direction);
+class _RepeatingSimulation extends Simulation {
+  _RepeatingSimulation(
+    double initialValue,
+    this.min,
+    this.max,
+    this.reverse,
+    Duration period,
+    this.directionSetter,
+    this.count,
+  ) : assert(count == null || count > 0, 'Count shall be greater than zero if not null'),
+      _periodInSeconds = period.inMicroseconds / Duration.microsecondsPerSecond,
+      _initialT = (max == min)
+          ? 0.0
+          : ((clampDouble(initialValue, min, max) - min) / (max - min)) *
+                (period.inMicroseconds / Duration.microsecondsPerSecond) {
+    assert(_periodInSeconds > 0.0);
+    assert(_initialT >= 0.0);
+  }
+
+  final double min;
+  final double max;
+  final bool reverse;
+  final int? count;
+  final _DirectionSetter directionSetter;
+
+  final double _periodInSeconds;
+  final double _initialT;
+
+  late final double _exitTimeInSeconds = (count! * _periodInSeconds) - _initialT;
+
+  @override
+  double x(double timeInSeconds) {
+    assert(timeInSeconds >= 0.0);
+
+    final double totalTimeInSeconds = timeInSeconds + _initialT;
+    final double t = (totalTimeInSeconds / _periodInSeconds) % 1.0;
+    final bool isPlayingReverse = (totalTimeInSeconds ~/ _periodInSeconds).isOdd;
+
+    if (reverse && isPlayingReverse) {
+      directionSetter(_AnimationDirection.reverse);
+      return lerpDouble(max, min, t)!;
+    } else {
+      directionSetter(_AnimationDirection.forward);
+      return lerpDouble(min, max, t)!;
+    }
+  }
+
+  @override
+  double dx(double timeInSeconds) => (max - min) / _periodInSeconds;
+
+  @override
+  bool isDone(double timeInSeconds) {
+    // if [timeInSeconds] elapsed the [_exitTimeInSeconds] && [count] is not null,
+    // consider marking the simulation as "DONE"
+    return count != null && (timeInSeconds >= _exitTimeInSeconds);
+  }
+}
 
 
 mixin AnimationWithParentMixin<T> {
@@ -233,6 +519,16 @@ mixin AnimationWithParentMixin<T> {
   /// Listeners can be added with [addListener].
   void removeListener(VoidCallback listener) => parent.removeListener(listener);
 
+  /// Calls listener every time the status of the animation changes.
+  ///
+  /// Listeners can be removed with [removeStatusListener].
+  void addStatusListener(AnimationStatusListener listener) => parent.addStatusListener(listener);
+
+  /// Stops calling the listener every time the status of the animation changes.
+  ///
+  /// Listeners can be added with [addStatusListener].
+  void removeStatusListener(AnimationStatusListener listener) =>
+      parent.removeStatusListener(listener);
   /// The current status of this animation.
   AnimationStatus get status => parent.status;
 }
@@ -278,10 +574,10 @@ class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<
 
 /// Linearly interpolates between [begin] and [end] given a progress [t].
 class Tween<T> extends Animatable<T> {
-  const Tween({required this.begin, required this.end});
+  Tween({this.begin, this.end});
 
-  final T begin;
-  final T end;
+  T? begin;
+  T? end;
 
   /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
   @override

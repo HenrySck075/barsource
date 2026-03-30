@@ -1,14 +1,8 @@
 import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui;
-import 'package:tennoji/src/elements/framework.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
 import 'package:tennoji/src/painting/inline_span.dart';
 import 'package:tennoji/src/painting/strut_style.dart';
 import 'package:tennoji/src/painting/text_painter.dart';
 import 'package:tennoji/src/painting/text_scaler.dart';
-import 'package:tennoji/src/painting/text_style.dart';
-import 'package:tennoji/src/rendering/object.dart';
-import 'package:tennoji/src/widgets/basic.dart';
-import 'package:tennoji/src/widgets/framework.dart';
 import 'package:tennoji/src/rendering/paragraph.dart';
 import 'package:tennoji/src/widgets/inherited_theme.dart';
 import 'package:tennoji/tennoji.dart';
@@ -133,7 +127,7 @@ class Text extends StatelessWidget {
 }
 
 class _NullWidget extends StatelessWidget {
-  const _NullWidget({super.key});
+  const _NullWidget();
 
   @override
   Widget build(BuildContext context) {

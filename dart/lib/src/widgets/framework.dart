@@ -85,6 +85,8 @@ abstract class MultiChildRenderObjectWidget extends RenderObjectWidget {
   const MultiChildRenderObjectWidget(
       {super.key, this.children = const []});
   final List<Widget> children;
+  @override
+  elements.MultiChildRenderObjectElement createElement() => elements.MultiChildRenderObjectElement(this);
 }
 abstract class ProxyWidget extends Widget {
   /// Creates a widget that has exactly one child widget.

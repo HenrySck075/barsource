@@ -1,4 +1,3 @@
-import 'package:tennoji/src/foundation/geometry.dart';
 import 'package:tennoji/src/painting/basic_types.dart';
 
 abstract class EdgeInsetsGeometry {

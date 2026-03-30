@@ -1,4 +1,3 @@
-import '../foundation/geometry.dart';
 import '../painting/canvas.dart';
 import 'object.dart';
 

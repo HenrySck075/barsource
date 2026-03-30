@@ -5204,7 +5204,7 @@ base class UniformFloatSlot extends UniformType {
   }
 
   final FragmentShader _shader;
-  int _shaderIndex;
+  final int _shaderIndex;
 
   /// The name of the bound uniform.
   final String name;
@@ -5328,7 +5328,7 @@ base class ImageSamplerSlot {
   ImageSamplerSlot._(this._shader, this.name, this._shaderIndex);
 
   final FragmentShader _shader;
-  int _shaderIndex;
+  final int _shaderIndex;
 
   /// Set the [Image] value for the bound sampler associated with this slot.
   void set(Image val) {
@@ -6762,22 +6762,24 @@ Future<T> _futurizeWithError<T>(_CallbackerWithError<T> callbacker) {
 /// maximum 2D texture size allowed by the GPU, or if no GPU surface or context
 /// was available for rasterization at request time.
 class PictureRasterizationException implements Exception {
-  const PictureRasterizationException._(this.message, {this.stack});
+  const PictureRasterizationException._(this.message);
 
   /// A string containing details about the failure.
   final String message;
 
   /// If available, the stack trace at the time [Picture.toImageSync] was called.
-  final StackTrace? stack;
+  //final StackTrace? stack;
 
   @override
   String toString() {
     final buffer = StringBuffer('Failed to rasterize a picture: $message.');
+    /*
     if (stack != null) {
       buffer.writeln();
       buffer.writeln('The callstack when the image was created was:');
       buffer.writeln(stack!.toString());
     }
+    */
     return buffer.toString();
   }
 }
