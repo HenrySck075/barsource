@@ -28,13 +28,3 @@ if you wanted to get technical, it also internally didn't use `Dart_Handle` to p
 ## who is that girl
 rina tennoji
 
-## ew ai slop
-1. no its not
-2. if i did it myself id spend 6 months copying the entire flutter framework over 
-so i let something that knows how to selectively implements stuff to do the work. 
-for a proof see the dart_ui folder
-
-ignore the weird new line stuff the ssh window does not play well
-with neovim
-
-3. i used ai sparingly
