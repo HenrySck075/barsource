@@ -101,6 +101,10 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   int get frameDuration => _frameDuration!;
   
   void run(Widget app, RenderConfig config) {
+    final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
+    _frameDuration = frameDuration.inMilliseconds;
+    _currentTime = Duration.zero;
+
     _log.info('Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}');
     // 1. Initialize RenderView
     initRenderView(ViewConfiguration(
@@ -135,10 +139,6 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       config.resolution.width.toInt(),
       config.resolution.height.toInt(),
     );
-
-    final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
-    _frameDuration = frameDuration.inMilliseconds;
-    _currentTime = Duration.zero;
 
     try {
       while (_currentTime < config.duration) {
