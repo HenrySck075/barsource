@@ -283,6 +283,7 @@ TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_
     return 0;
 }
 
+/// TODO: this will seek ahead by 1 frame on every call where timestamp_us is less than or equal to the last call
 TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* decoder,
                                                 int64_t timestamp_us) {
     if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return nullptr;

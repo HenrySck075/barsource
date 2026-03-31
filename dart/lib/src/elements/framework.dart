@@ -412,16 +412,18 @@ abstract class Element implements BuildContext {
 
   void mount(Element? parent, Object? newSlot) {
     _log.finer('Mounting');
+    _slot = newSlot;
     _parent = parent;
     _owner = parent?.owner;
     _active = true;
     _lifecycleState = _ElementLifecycle.active;
     _updateInheritance();
-    _slot = newSlot;
   }
   
+  // TODO: rootelementmixin, or not, maybe we can let everyone be a root element, idk
   void assignOwner(BuildOwner owner) {
     _owner = owner;
+    _parentBuildScope = BuildScope();
   }
 
   void rebuild({bool force=false}) {
@@ -606,7 +608,7 @@ abstract class ComponentElement extends Element {
   @override
   void performRebuild() {
     Widget built = build();
-    _child = updateChild(_child, built, null);
+    _child = updateChild(_child, built, slot);
     super.performRebuild();
   }
 

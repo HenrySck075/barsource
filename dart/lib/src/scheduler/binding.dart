@@ -12,6 +12,22 @@ enum SchedulerPhase {
 
 typedef FrameCallback = void Function(Duration);
 
+class _FrameCallbackEntry {
+  _FrameCallbackEntry(this.callback, {bool rescheduling = false}) {
+    assert((){
+      if (rescheduling) {
+        debugStack = debugCurrentCallbackStack;
+      } else {
+        debugStack = StackTrace.current;
+      }
+      return true;
+    }());
+  }
+  final FrameCallback callback;
+  StackTrace? debugStack;
+  static StackTrace? debugCurrentCallbackStack;
+}
+
 mixin SchedulerBinding on BindingBase {
   @override
   void initInstances() {
@@ -27,7 +43,7 @@ mixin SchedulerBinding on BindingBase {
   SchedulerPhase get schedulerPhase => _schedulerPhase;
   bool _hasScheduledFrame = false;
 
-  final Map<int, FrameCallback> _transientCallbacks = {};
+  final Map<int, _FrameCallbackEntry> _transientCallbacks = {};
   int _transientCallbackId = 0;
   final List<FrameCallback> _persistentCallbacks = [];
   final List<FrameCallback> _postFrameCallbacks = [];
@@ -40,8 +56,11 @@ mixin SchedulerBinding on BindingBase {
   void addPostFrameCallback(FrameCallback callback) {
     _postFrameCallbacks.add(callback);
   }
-  int scheduleFrameCallback(FrameCallback callback) {
-    _transientCallbacks[_transientCallbackId++] = callback;
+  int scheduleFrameCallback(FrameCallback callback, {bool rescheduling = false}) {
+    _transientCallbacks[_transientCallbackId++] = _FrameCallbackEntry(
+      callback,
+      rescheduling: rescheduling
+    );
     return _transientCallbackId;
   }
   void cancelFrameCallbackWithId(int id) {
@@ -49,14 +68,19 @@ mixin SchedulerBinding on BindingBase {
   }
 
   void handleBeginFrame(Duration? timestamp) {
-    _log.fine('handleBeginFrame $timestamp');
+    //_log.fine('handleBeginFrame $timestamp');
     assert(_schedulerPhase == SchedulerPhase.idle);
+    _schedulerPhase = .transientCallbacks;
     _hasScheduledFrame = false;   
     _currentFrameTimestamp = timestamp ?? _currentFrameTimestamp;
-    for (final cb in _transientCallbacks.values) {
-      cb(_currentFrameTimestamp);
-    }
+    _log.fine("Calling transient callbacks ${_transientCallbacks.values}");
+    final localTransientCallbacks = Map<int, _FrameCallbackEntry>.of(_transientCallbacks);
     _transientCallbacks.clear();
+    for (final cb in localTransientCallbacks.values) {
+      _FrameCallbackEntry.debugCurrentCallbackStack = cb.debugStack;
+      cb.callback(_currentFrameTimestamp);
+      // TODO: report the stack, i'm just putting it here though dart devtools will pick it up
+    }
     _schedulerPhase = .midFrameMicrotasks;
   }
   void handleDrawFrame() {

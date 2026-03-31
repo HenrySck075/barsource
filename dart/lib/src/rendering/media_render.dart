@@ -1,6 +1,7 @@
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+import 'package:logging/logging.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
 import 'package:tennoji/src/rendering/box.dart';
 
@@ -26,10 +27,12 @@ class RenderVideoClip extends RenderBox {
 
   Pointer<TennojiDecoder>? _decoder;
   Pointer<TennojiCanvasImage>? _texture;
+  int? _textureTimestamp;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
 
   Duration _position = Duration.zero;
+  final _log = Logger('RenderVideoClip');
 
   void onTick(Duration elapsed) {
     _position = elapsed;
@@ -48,7 +51,10 @@ class RenderVideoClip extends RenderBox {
     if (_decoder != null) {
       Engine.instance.registerAudioDecoder(_decoder!);
     }
-    if (!_ticker.isTicking) _ticker.start();
+    print(!_ticker.isTicking);
+    if (!_ticker.isTicking) {
+      _ticker.start();
+    }
   }
 
   @override
@@ -81,14 +87,17 @@ class RenderVideoClip extends RenderBox {
   void paint(PaintingContext context, Offset offset) {
     if (_decoder == null) return;
     final clipTime = _position - trimStart;
+
+    print("rendering on position $clipTime i think");
     final timeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
 
     // Release previous texture before acquiring a new one
-    if (_texture != null) {
+    if (_texture != null && timeUs != _textureTimestamp) {
       rina_texture_destroy(_texture!);
     }
 
     _texture = rina_decoder_get_texture(_decoder!, timeUs);
+    _textureTimestamp = timeUs;
 
     if (_texture != nullptr) {
       context.canvas.drawImage(_texture!, offset, Paint());

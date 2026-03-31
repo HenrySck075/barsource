@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:meta/meta.dart';
+import 'package:tennoji/src/engine/engine.dart';
 import 'package:tennoji/src/painting/basic_types.dart';
 import 'package:tennoji/src/scheduler/binding.dart';
 
@@ -154,6 +155,7 @@ class Ticker {
     assert(!isTicking, "nuh uh you arent starting this twice");
     _future = TickerFuture._();
     scheduleTick();
+    _startTime = Engine.instance.currentTime;
     return _future!;
   }
 
@@ -171,11 +173,9 @@ class Ticker {
   }
 
   void _tick(Duration timeStamp) {
-    if (!isTicking) return;
-    _startTime ??= timeStamp;
-    _onTick(timeStamp - _startTime!);
+    if (!muted) _onTick(timeStamp - _startTime!);
     // We request the next tick
-    if (isTicking) {
+    if (isActive) {
        scheduleTick();
     }
   }

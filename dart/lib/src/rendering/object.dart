@@ -185,7 +185,7 @@ abstract class RenderObject {
   Constraints? _constraints;
   void layout(Constraints constraints, {bool parentUsesSize = false}) {
     assert(!_debugDisposed);
-    _log.finer('layout with $constraints');
+    //_log.finer('layout with $constraints');
     _constraints = constraints;
     _isRelayoutBoundary = !parentUsesSize || sizedByParent || constraints.isTight || parent == null;
     _needsLayout = false;

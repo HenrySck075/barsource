@@ -22,7 +22,7 @@ class _bombState extends State<bomb> {
     _controller = ListController<String>([]);
     _fadeCtrl = AnimationController(
       duration: Duration(seconds: 1),
-    );
+    )..forward();
     _slideCtrl = AnimationController(
       duration: Duration(milliseconds: 500),
     );
@@ -30,9 +30,10 @@ class _bombState extends State<bomb> {
       parent: _slideCtrl,
       curve: Curves.easeOut,
     );
+    _slideCtrl.forward();
     _rotateCtrl = AnimationController(
       duration: Duration(seconds: 2),
-    );
+    )..forward();
 
     EngineTimer(Duration(seconds: 1), ()=>_controller.insert(0, "hi"));
     EngineTimer(Duration(seconds: 2), ()=>_controller.insert(1, "hello"));

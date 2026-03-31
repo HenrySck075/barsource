@@ -95,6 +95,9 @@ target_link_libraries(tennoji PRIVATE
   ${SKIA_DIR}/out/Release/libskunicode_core.a
   ${SKIA_DIR}/out/Release/libskshaper.a
 )
+# address sanitize
+#target_compile_options(tennoji PUBLIC "-fsanitize=address" "-fno-omit-frame-pointer" "-g")
+#target_link_options(tennoji PUBLIC "-fsanitize=address")
 
 if(WIN32)
   target_link_libraries(tennoji PRIVATE d3d11 dxgi)

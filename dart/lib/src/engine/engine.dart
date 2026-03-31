@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
@@ -99,7 +100,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   ///
   /// This value is only valid when the engine is currently being [run]
   int get frameDuration => _frameDuration!;
-  
+
   void run(Widget app, RenderConfig config) {
     final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
     _frameDuration = frameDuration.inMilliseconds;
