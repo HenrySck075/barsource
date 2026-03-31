@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
+import 'package:meta/meta.dart';
 import 'package:tennoji/src/animation/listener_helpers.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
 import 'package:tennoji/src/engine/render_controller.dart';
 import 'package:tennoji/src/foundation/listenable.dart';
+import 'package:tennoji/src/foundation/object.dart';
 import 'package:tennoji/src/painting/basic_types.dart';
 import 'package:tennoji/src/physics/simulation.dart';
 
@@ -52,6 +54,12 @@ abstract class Animation<T> extends Listenable implements ValueListenable<T> {
 
   void addStatusListener(AnimationStatusListener listener);
   void removeStatusListener(AnimationStatusListener listener);
+
+  @optionalTypeArgs
+  Animation<U> drive<U>(Animatable<U> child) {
+    assert(this is Animation<double>);
+    return child.animate(this as Animation<double>);
+  }
 }
 
 class _AlwaysCompleteAnimation extends Animation<double> {
@@ -545,6 +553,9 @@ abstract class Animatable<T> {
   T evaluate(Animation<double> animation) => transform(animation.value);
   /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
   T transform(double t);
+  Animatable<T> chain(Animatable<double> parent)
+    => _ChainedEvaluation<T>(parent, this);
+  
 }
 
 class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<double> {
@@ -570,7 +581,22 @@ class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<
   }
 */
 }
+class _ChainedEvaluation<T> extends Animatable<T> {
+  _ChainedEvaluation(this._parent, this._evaluatable);
 
+  final Animatable<double> _parent;
+  final Animatable<T> _evaluatable;
+
+  @override
+  T transform(double t) {
+    return _evaluatable.transform(_parent.transform(t));
+  }
+
+  @override
+  String toString() {
+    return '$_parent\u27A9$_evaluatable';
+  }
+}
 
 /// Linearly interpolates between [begin] and [end] given a progress [t].
 class Tween<T> extends Animatable<T> {
@@ -580,8 +606,7 @@ class Tween<T> extends Animatable<T> {
   T? end;
 
   /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
-  @override
-  T transform(double t) {
+  T lerp(double t) {
     try {
       return (begin as dynamic) + ((end as dynamic) - (begin as dynamic)) * t;
     } on NoSuchMethodError {
@@ -590,8 +615,75 @@ class Tween<T> extends Animatable<T> {
       throw ArgumentError("Cannot lerp between $begin and $end, the return type of the `*` operation with a double (time) returns an incompatibe type");
     }
   }
+  @override
+  T transform(double t) {
+    if (t == 0.0) {
+      return begin as T;
+    }
+    if (t == 1.0) {
+      return end as T;
+    }
+    return lerp(t);
+  }
 }
+class CurveTween extends Animatable<double> {
+  /// Creates a curve tween.
+  CurveTween({required this.curve});
 
+  /// The curve to use when transforming the value of the animation.
+  Curve curve;
+
+  @override
+  double transform(double t) {
+    if (t == 0.0 || t == 1.0) {
+      assert(curve.transform(t).round() == t);
+      return t;
+    }
+    return curve.transform(t);
+  }
+
+  @override
+  String toString() => '${objectRuntimeType(this, 'CurveTween')}(curve: $curve)';
+}
+class StepTween extends Tween<int> {
+  /// Creates an [int] tween that floors.
+  ///
+  /// The [begin] and [end] properties must be non-null before the tween is
+  /// first used, but the arguments can be null if the values are going to be
+  /// filled in later.
+  StepTween({super.begin, super.end});
+
+  // The inherited lerp() function doesn't work with ints because it multiplies
+  // the begin and end types by a double, and int * double returns a double.
+  @override
+  int lerp(double t) => (begin! + (end! - begin!) * t).floor();
+}
+/// A tween with a constant value.
+class ConstantTween<T> extends Tween<T> {
+  /// Create a tween whose [begin] and [end] values equal [value].
+  ConstantTween(T value) : super(begin: value, end: value);
+
+  /// This tween doesn't interpolate, it always returns the same value.
+  @override
+  T lerp(double t) => begin as T;
+
+  @override
+  String toString() => '${objectRuntimeType(this, 'ConstantTween')}(value: $begin)';
+}
+class ReverseTween<T extends Object?> extends Tween<T> {
+  /// Construct a [Tween] that evaluates its [parent] in reverse.
+  ReverseTween(this.parent) : super(begin: parent.end, end: parent.begin);
+
+  /// This tween's value is the same as the parent's value evaluated in reverse.
+  ///
+  /// This tween's [begin] is the parent's [end] and its [end] is the parent's
+  /// [begin]. The [lerp] method returns `parent.lerp(1.0 - t)` and its
+  /// [evaluate] method is similar.
+  final Tween<T> parent;
+
+  @override
+  T lerp(double t) => parent.lerp(1.0 - t);
+}
 // ---------------------------------------------------------------------------
 // Curves
 // ---------------------------------------------------------------------------
