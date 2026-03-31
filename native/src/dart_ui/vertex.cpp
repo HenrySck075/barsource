@@ -44,6 +44,12 @@ TENNOJI_EXPORT TennojiCanvasVertices* rina_vertices_init(
   }
 
   auto p = SkVertices::MakeCopy((SkVertices::VertexMode)mode, length/2, skPoints, skTexCoords, skColors, iLength, indices);
+  
+  // Clean up temporary arrays after MakeCopy has copied the data
+  delete[] skPoints;
+  if (skTexCoords) delete[] skTexCoords;
+  if (skColors) delete[] skColors;
+  
   return new TennojiCanvasVertices{
     .vertices = p
   };

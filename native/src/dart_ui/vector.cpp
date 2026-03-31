@@ -317,7 +317,10 @@ TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
   if (contourIndex >= measure->computedContours.size()) return nullptr;
   auto builder = new SkPathBuilder();
   auto extracted = measure->computedContours[contourIndex]->getSegment(start,end, builder, startWithMoveTo);
-  if (!extracted) return nullptr;
+  if (!extracted) {
+    delete builder;
+    return nullptr;
+  }
   return new TennojiCanvasPath {
     .builder = std::unique_ptr<SkPathBuilder>(builder)
   };
