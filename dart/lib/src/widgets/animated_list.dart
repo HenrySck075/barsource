@@ -193,7 +193,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     }
   }
   // TODO(henrysck) technically builder is already available as AnimatedList.removedItemBuilder
-  void removeItem(int index, AnimatedRemovedItemBuilder<T> builder, {Duration duration = _kDuration}) {
+  void removeItem(int index, {AnimatedRemovedItemBuilder<T>? builder, Duration duration = _kDuration}) {
     assert(index >= 0);
 
     final int itemIndex = _indexToItemIndex(index);
@@ -204,7 +204,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     final AnimationController controller =
         incomingItem?.controller ??
         AnimationController(duration: duration, value: 1.0/*, vsync: this*/);
-    final outgoingItem = _ActiveItem.outgoing(_items[index], controller, itemIndex, builder);
+    final outgoingItem = _ActiveItem.outgoing(_items[index], controller, itemIndex, builder ?? widget.removedItemBuilder ?? widget.itemBuilder);
     setState(() {
       _outgoingItems
         ..add(outgoingItem)
@@ -240,7 +240,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
           }
         } else if (op.type == _ListOpType.remove) {
           if (op.index >= 0 && op.index < _incomingItems.length) {
-            removeItem(op.index, widget.removedItemBuilder ?? widget.itemBuilder, duration: op.duration);
+            removeItem(op.index, duration: op.duration);
           }
         }
       }
@@ -249,6 +249,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
 
   @override
   Widget build(BuildContext context) {
+    print("me rebuilt");
     return Column(
       children: List.generate(
         _items.length, (int itemIndex) {

@@ -73,7 +73,7 @@ mixin SchedulerBinding on BindingBase {
     _schedulerPhase = .transientCallbacks;
     _hasScheduledFrame = false;   
     _currentFrameTimestamp = timestamp ?? _currentFrameTimestamp;
-    _log.fine("Calling transient callbacks ${_transientCallbacks.values}");
+    //_log.fine("Calling transient callbacks ${_transientCallbacks.values}");
     final localTransientCallbacks = Map<int, _FrameCallbackEntry>.of(_transientCallbacks);
     _transientCallbacks.clear();
     for (final cb in localTransientCallbacks.values) {

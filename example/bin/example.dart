@@ -15,6 +15,11 @@ class _bombState extends State<bomb> {
   late final AnimationController _slideCtrl;
   late final CurvedAnimation _slideCurve;
   late final AnimationController _rotateCtrl;
+
+  void _timerCallback(int index, String data) {
+    print("hey");
+    _controller.insert(index, data);
+  }
   @override
   void initState() {
     super.initState();
@@ -35,8 +40,8 @@ class _bombState extends State<bomb> {
       duration: Duration(seconds: 2),
     )..forward();
 
-    EngineTimer(Duration(seconds: 1), ()=>_controller.insert(0, "hi"));
-    EngineTimer(Duration(seconds: 2), ()=>_controller.insert(1, "hello"));
+    EngineTimer(Duration(seconds: 1), ()=>_timerCallback(0, "hi"));
+    EngineTimer(Duration(seconds: 2), ()=>_timerCallback(1, "hello"));
   }
 
   @override
@@ -85,6 +90,7 @@ class _bombState extends State<bomb> {
           turns: _rotateCtrl.drive(
             CurveTween(curve: Curves.easeInOut)
           ),
+          alignment: Alignment.center,
           child: Container(
             width: 80,
             height: 80,
@@ -98,9 +104,11 @@ class _bombState extends State<bomb> {
           listController: _controller,
           itemBuilder: (context, data, anim){
             return SlideTransition(
-              offset: anim.drive(Tween<Offset>(
-                begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
-              )),
+              offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
+                Tween<Offset>(
+                  begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
+                )
+              ),
               child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: data))
             );
           }
@@ -115,6 +123,6 @@ void main(){
     duration: Duration(seconds: 5), 
     fps: 30, 
     resolution: Size(1280,720),
-    logLevel: Level.ALL
+    logLevel: Level.OFF
   ));
 }

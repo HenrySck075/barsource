@@ -283,16 +283,30 @@ TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_
     return 0;
 }
 
-/// TODO: this will seek ahead by 1 frame on every call where timestamp_us is less than or equal to the last call
 TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* decoder,
                                                 int64_t timestamp_us) {
     if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return nullptr;
 
-    // Seek if the requested timestamp is far from the last seek
     AVRational tb = decoder->fmtCtx->streams[decoder->videoStreamIdx]->time_base;
     int64_t target_pts = av_rescale_q(timestamp_us,
                                        AVRational{1, 1000000},
                                        tb);
+    
+    // Check if we need to seek backwards or to the same position
+    // NOTE: Assuming H.264 codec - for other codecs, GOP structure may differ
+    if (decoder->lastSeekTs > timestamp_us || decoder->lastSeekTs == timestamp_us) {
+        // Seek back to the nearest keyframe before target timestamp
+        int ret = av_seek_frame(decoder->fmtCtx, decoder->videoStreamIdx, target_pts,
+                                AVSEEK_FLAG_BACKWARD);
+        if (ret >= 0) {
+            if (decoder->videoCodecCtx) avcodec_flush_buffers(decoder->videoCodecCtx);
+            if (decoder->audioCodecCtx) avcodec_flush_buffers(decoder->audioCodecCtx);
+            if (decoder->framePool) decoder->framePool->flush();
+            decoder->flush_audio_queue();
+        }
+    }
+    
+    decoder->lastSeekTs = timestamp_us;
 
     // Decode frames until we reach or pass the target PTS
     AVPacket* pkt = av_packet_alloc();

@@ -20,7 +20,9 @@ mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
   void attachRootWidget(Widget app) {
     _renderViewElement = app.createElement();
     _renderViewElement!.assignOwner(_buildOwner!);
-    _renderViewElement!.mount(null, null);
+    _buildOwner!.buildScope(_renderViewElement!, (){
+      _renderViewElement!.mount(null, null);
+    });
     
     // Attach render object
     final renderObject = _renderViewElement!.renderObject;

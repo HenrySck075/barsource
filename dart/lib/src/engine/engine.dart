@@ -168,6 +168,8 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         final timeUs = _currentTime.inMicroseconds;
         
         // Read from manual-read sources (e.g. audio-only clips)
+        // Note: For video files with audio, audio packets are already collected
+        // during rina_decoder_get_texture, so we only need to read from audio-only sources
         for (final decoder in manualReadAudioDecoders) {
            rina_decoder_read_audio(decoder, timeUs);
         }
@@ -234,6 +236,7 @@ class EngineTimer implements Timer {
       if (_isPeriodic) {
         _accumulated += _duration;
         // Catch up if multiple durations passed in one frame?
+        // user input: no.
         while (elapsed >= _accumulated + _duration) {
           _callback();
           _accumulated += _duration;

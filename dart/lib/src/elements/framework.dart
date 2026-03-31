@@ -134,6 +134,7 @@ final class BuildScope {
   }
   @pragma('vm:notify-debugger-on-exception')
   void _flushDirtyElements({required Element debugBuildRoot}) {
+    print("$_dirtyElements");
     assert(_dirtyElementsNeedsResorting == null, '_flushDirtyElements must be non-reentrant');
     _dirtyElements.sort(Element._sort);
     _dirtyElementsNeedsResorting = false;
@@ -212,11 +213,12 @@ class BuildOwner {
     element.buildScope._scheduleBuildFor(element);
   }
 
-  void buildScope(Element context) {
+  void buildScope(Element context, [VoidCallback? callback]) {
     assert(context.owner == this);
     assert(context._parentBuildScope != null);
     final scope = context.buildScope;
     scope._building = true;
+    callback?.call();
     scope._flushDirtyElements(debugBuildRoot: context);
     scope._building = false;
   }
@@ -414,9 +416,13 @@ abstract class Element implements BuildContext {
     _log.finer('Mounting');
     _slot = newSlot;
     _parent = parent;
-    _owner = parent?.owner;
+    if (parent != null) {
+      _owner = parent.owner;
+      _parentBuildScope = parent.buildScope;
+    }
     _active = true;
     _lifecycleState = _ElementLifecycle.active;
+    assert(owner != null);
     _updateInheritance();
   }
   
@@ -463,8 +469,9 @@ abstract class Element implements BuildContext {
 
   void markNeedsBuild() {
     if (_dirty && _active) return;
+    assert(_owner != null);
     _dirty = true;
-    _owner?.scheduleBuildFor(this);
+    _owner!.scheduleBuildFor(this);
   }
 
   void _activateWithParent(Element parent, Object? newSlot) {
