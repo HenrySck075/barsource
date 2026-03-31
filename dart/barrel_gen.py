@@ -20,7 +20,8 @@ for folder in os.listdir(srcdir):
         # create a barrel file in the lib dir named after the folder
         barrel_file = os.path.join(libdir, f'{folder}.dart')
         with open(barrel_file, 'w') as f:
-            everything_barrel.write(f"export '{folder}.dart';\n")
+            if folder != 'dart_ui':
+                everything_barrel.write(f"export '{folder}.dart';\n")
             f.write("// AUTO-GENERATED BARREL FILE. DO NOT EDIT BY HAND\n")
             # if its dart_ui, we will just reexport a file with the same name in that folder out, since other files was defined as "part" of dart_ui.dart
             if folder == 'dart_ui':

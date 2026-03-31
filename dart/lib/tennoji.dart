@@ -1,6 +1,5 @@
 // AUTO-GENERATED BARREL FILE. DO NOT EDIT BY HAND
 export 'animation.dart';
-export 'dart_ui.dart';
 export 'elements.dart';
 export 'engine.dart';
 export 'foundation.dart';
