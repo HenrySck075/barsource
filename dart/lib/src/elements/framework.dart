@@ -417,6 +417,7 @@ abstract class Element implements BuildContext {
     _active = true;
     _lifecycleState = _ElementLifecycle.active;
     _updateInheritance();
+    _slot = newSlot;
   }
   
   void assignOwner(BuildOwner owner) {
