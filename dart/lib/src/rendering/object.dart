@@ -38,6 +38,12 @@ class BoxConstraints extends Constraints {
         minHeight = 0.0,
         maxHeight = size.height;
 
+  const BoxConstraints.tightFor({double? width, double? height})
+      : minWidth = width ?? 0.0,
+        maxWidth = width ?? double.infinity,
+        minHeight = height ?? 0.0,
+        maxHeight = height ?? double.infinity;
+
   @override
   bool get isTight => minWidth == maxWidth && minHeight == maxHeight;
 
@@ -561,3 +567,6 @@ mixin ContainerRenderObjectMixin<
     return childParentData.nextSibling;
   }
 }
+
+abstract class ContainerBoxParentData<ChildType extends RenderObject> extends BoxParentData
+    with ContainerParentDataMixin<ChildType> {}
