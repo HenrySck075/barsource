@@ -3,11 +3,13 @@ import 'package:tennoji/src/painting/inline_span.dart';
 import 'package:tennoji/src/painting/strut_style.dart';
 import 'package:tennoji/src/painting/text_painter.dart';
 import 'package:tennoji/src/painting/text_scaler.dart';
+import 'package:tennoji/src/painting/text_span.dart';
+import 'package:tennoji/src/painting/text_style.dart';
 import 'package:tennoji/src/rendering/paragraph.dart';
+import 'package:tennoji/src/widgets/framework.dart';
 import 'package:tennoji/src/widgets/inherited_theme.dart';
-import 'package:tennoji/tennoji.dart';
 
-class RichText extends MultiChildRenderObjectWidget {
+class RichText extends LeafRenderObjectWidget {
   const RichText({
     super.key,
     required this.text,
