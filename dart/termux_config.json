@@ -1,0 +1,10 @@
+{
+  "out_dir": "build/native_assets/android",
+  "package_name": "tennoji",
+  "package_root": "./",
+  "target_os": "android",
+  "target_architecture": "arm64", 
+  "link_mode_preference": "dynamic",
+  "working_directory": "./",
+  "version": "1.0.0"
+}
