@@ -49,6 +49,8 @@ class BoxConstraints extends Constraints {
 
   bool get hasBoundedWidth => maxWidth < double.infinity;
   bool get hasBoundedHeight => maxHeight < double.infinity;
+  Size get smallest => Size(constrainWidth(0.0), constrainHeight(0.0));
+  Size get biggest => Size(constrainWidth(double.infinity), constrainHeight(double.infinity));
 
   double constrainWidth([double width = double.infinity]) {
     return width.clamp(minWidth, maxWidth);

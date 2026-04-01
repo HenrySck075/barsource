@@ -6828,11 +6828,11 @@ class Canvas {
     );
   }
 
-  void drawImage(Pointer<TennojiCanvasImage> texture, Offset offset, Paint paint) {
+  void drawImage(Image image, Offset offset, Paint paint) {
     using((arena)=>
     rina_canvas_draw_image(
       _nativePtr,
-      texture,
+      image._image._nativePtr,
       offset.dx,
       offset.dy,
       paint._createPaintMetadata(arena)
