@@ -10,6 +10,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
+#include <libswresample/swresample.h>
 }
 
 #include "include/core/SkImage.h"
@@ -422,6 +423,87 @@ TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
 
     av_packet_free(&pkt);
     return 0;
+}
+
+TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
+                                                       int64_t timestamp_us,
+                                                       float* samples_out,
+                                                       int sample_count,
+                                                       int sample_rate) {
+    if (!decoder || !decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return -1;
+    if (!samples_out || sample_count <= 0) return -1;
+
+    // Initialize output buffer to zero (silence) in case we don't decode enough samples
+    int out_channels = 2;
+    memset(samples_out, 0, sample_count * out_channels * sizeof(float));
+
+    // For video files with audio: decode from packets that were already queued
+    // by rina_decoder_get_texture (which stashes audio packets while seeking for video)
+    // This prevents seeking conflicts between video and audio reading.
+
+    AVFrame* frame = av_frame_alloc();
+    
+    // SwrContext for converting to stereo float32
+    SwrContext* swr = nullptr;
+    AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+    
+    int samples_written = 0;
+
+    // Decode from ONE queued audio packet only (not the whole queue)
+    // This prevents cramming all audio into the first frame
+    AVPacket* pkt = nullptr;
+    
+    // Try to get a packet from the queue
+    {
+        std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
+        if (!decoder->audioPacketQueue.empty()) {
+            pkt = decoder->audioPacketQueue.front();
+            decoder->audioPacketQueue.pop_front();
+        }
+    }
+    
+    if (pkt) {
+        // Decode the packet
+        int ret = avcodec_send_packet(decoder->audioCodecCtx, pkt);
+        av_packet_free(&pkt);
+        
+        if (ret >= 0) {
+            while (avcodec_receive_frame(decoder->audioCodecCtx, frame) == 0) {
+                // Initialize resampler if needed
+                if (!swr) {
+                    ret = swr_alloc_set_opts2(&swr,
+                        &out_ch_layout, AV_SAMPLE_FMT_FLT, sample_rate,
+                        &frame->ch_layout, (AVSampleFormat)frame->format, frame->sample_rate,
+                        0, nullptr);
+                    if (ret < 0 || !swr) {
+                        av_frame_unref(frame);
+                        goto cleanup;
+                    }
+                    swr_init(swr);
+                }
+
+                // Convert samples to stereo float32
+                uint8_t* out_buf[1] = { reinterpret_cast<uint8_t*>(samples_out + samples_written * out_channels) };
+                int remaining = sample_count - samples_written;
+                int converted = swr_convert(swr, out_buf, remaining,
+                                            (const uint8_t**)frame->data, frame->nb_samples);
+                
+                if (converted > 0) {
+                    samples_written += converted;
+                }
+
+                av_frame_unref(frame);
+
+                if (samples_written >= sample_count) break;
+            }
+        }
+    }
+
+cleanup:
+    if (swr) swr_free(&swr);
+    av_frame_free(&frame);
+
+    return samples_written;
 }
 
 } // extern "C"

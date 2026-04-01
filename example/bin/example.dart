@@ -120,7 +120,7 @@ class _bombState extends State<bomb> {
 void main(){
   render(bomb(), RenderConfig(
     output: "out.mp4", 
-    duration: Duration(seconds: 5), 
+    duration: Duration(seconds: 3, milliseconds: 500), 
     fps: 30, 
     resolution: Size(1280,720),
     logLevel: Level.OFF

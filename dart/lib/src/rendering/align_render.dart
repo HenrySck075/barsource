@@ -76,7 +76,7 @@ class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
       ));
 
       // Position the child.
-      _childOffset = resolvedAlignment.alongOffset(size, child.size);
+      _childOffset = resolvedAlignment.alongSize(size) - resolvedAlignment.alongSize(child.size);
     } else {
       size = constraints.constrain(Size(
         widthFactor != null ? 0 : double.infinity,

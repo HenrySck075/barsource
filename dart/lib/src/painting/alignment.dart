@@ -41,14 +41,15 @@ class Alignment extends AlignmentGeometry {
   @override
   Alignment resolve(TextDirection? direction) => this;
 
-  /// Computes the offset for a child of [childSize] within a container
-  /// of [containerSize].
-  Offset alongOffset(Size containerSize, Size childSize) {
-    final double dx =
-        (containerSize.width - childSize.width) * ((x + 1) / 2);
-    final double dy =
-        (containerSize.height - childSize.height) * ((y + 1) / 2);
-    return Offset(dx, dy);
+  Offset alongSize(Size size) {
+    final double centerX = size.width / 2;
+    final double centerY = size.height / 2;
+    return Offset(centerX + x * centerX, centerY + y * centerY);
+  }
+  Offset alongOffset(Offset other) {
+    final double centerX = other.dx / 2;
+    final double centerY = other.dy / 2;
+    return Offset(centerX + x * centerX, centerY + y * centerY);
   }
 
   @override

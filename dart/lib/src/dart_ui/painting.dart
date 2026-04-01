@@ -6828,6 +6828,20 @@ class Canvas {
     );
   }
 
+  /// this is specifically used by RenderVideoClip.paint 
+  /// because it has the pointer 
+  void drawImageNative(Pointer<TennojiCanvasImage> image, Offset offset, Paint paint) {
+    using((arena)=>
+    rina_canvas_draw_image(
+      _nativePtr,
+      image,
+      offset.dx,
+      offset.dy,
+      paint._createPaintMetadata(arena)
+    )
+    );
+  }
+
   void drawImage(Image image, Offset offset, Paint paint) {
     using((arena)=>
     rina_canvas_draw_image(

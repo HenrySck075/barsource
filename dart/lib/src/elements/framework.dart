@@ -134,7 +134,6 @@ final class BuildScope {
   }
   @pragma('vm:notify-debugger-on-exception')
   void _flushDirtyElements({required Element debugBuildRoot}) {
-    print("$_dirtyElements");
     assert(_dirtyElementsNeedsResorting == null, '_flushDirtyElements must be non-reentrant');
     _dirtyElements.sort(Element._sort);
     _dirtyElementsNeedsResorting = false;

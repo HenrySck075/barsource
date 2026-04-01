@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:ffi';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:tennoji/src/dart_ui/dart_ui.dart';
@@ -10,6 +11,7 @@ import 'package:tennoji/src/rendering/binding.dart';
 import 'package:tennoji/src/scheduler/binding.dart';
 import 'package:tennoji/src/widgets/binding.dart';
 import 'package:tennoji/src/engine/audio_binding.dart';
+import 'package:tennoji/src/engine/audio_contributor.dart';
 import 'package:logging/logging.dart';
 import 'package:tennoji/src/widgets/framework.dart';
 import 'package:tennoji/src/rendering/view.dart';
@@ -18,6 +20,7 @@ import 'package:tennoji/src/scheduler/ticker.dart';
 
 export 'bindings.dart';
 export 'audio_binding.dart';
+export 'audio_contributor.dart';
 export '../scheduler/ticker.dart';
 
 class RenderConfig {
@@ -164,29 +167,80 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         // Encode video
         rina_encoder_write_frame(encoder, nativeCanvas);
 
-        // Audio
-        final timeUs = _currentTime.inMicroseconds;
+        // NEW Audio Submission System: ALWAYS write audio for every video frame
+        // to maintain sync (even if it's silence)
+        const sampleRate = 44100;
+        final samplesPerFrame = (sampleRate / config.fps).round();
         
-        // Read from manual-read sources (e.g. audio-only clips)
-        // Note: For video files with audio, audio packets are already collected
-        // during rina_decoder_get_texture, so we only need to read from audio-only sources
-        for (final decoder in manualReadAudioDecoders) {
-           rina_decoder_read_audio(decoder, timeUs);
+        final audioBuffers = <Float32List>[];
+        
+        for (final contributor in _contributors) {
+          final samples = contributor.theActualValue.getAudioForFrame(
+            _currentTime,
+            samplesPerFrame,
+            sampleRate,
+          );
+          if (samples != null && samples.isNotEmpty) {
+            audioBuffers.add(samples);
+          }
         }
         
-        // Drain all audio queues into encoder
-        for (final decoder in allAudioDecoders) {
-           rina_encoder_drain_audio_queue(encoder, decoder);
+        Float32List audioToWrite;
+        if (audioBuffers.isNotEmpty) {
+          audioToWrite = _mixAudioSamples(audioBuffers);
+        } else {
+          // No audio available - write silence to maintain sync
+          audioToWrite = Float32List(samplesPerFrame * 2); // stereo, initialized to 0
+        }
+        
+        // Ensure we always have exactly the right number of samples for this frame
+        // Pad with silence if needed to maintain perfect A/V sync
+        if (audioToWrite.length < samplesPerFrame * 2) {
+          final padded = Float32List(samplesPerFrame * 2);
+          for (int i = 0; i < audioToWrite.length; i++) {
+            padded[i] = audioToWrite[i];
+          }
+          // Rest is already zero-initialized
+          audioToWrite = padded;
+        } else if (audioToWrite.length > samplesPerFrame * 2) {
+          // Truncate if somehow we got too many samples
+          audioToWrite = Float32List.sublistView(audioToWrite, 0, samplesPerFrame * 2);
+        }
+        
+        // Validate no NaN/Inf values
+        bool hasInvalidSamples = false;
+        for (int i = 0; i < audioToWrite.length; i++) {
+          if (!audioToWrite[i].isFinite) {
+            hasInvalidSamples = true;
+            audioToWrite[i] = 0.0; // Replace with silence
+          }
+        }
+        
+        if (hasInvalidSamples) {
+          _log.warning('Invalid audio samples detected at $_currentTime, replaced with silence');
+        }
+        
+        // Write audio to encoder
+        final sampleBuffer = calloc<Float>(audioToWrite.length);
+        try {
+          for (int i = 0; i < audioToWrite.length; i++) {
+            sampleBuffer[i] = audioToWrite[i];
+          }
+          
+          rina_encoder_write_audio_samples(
+            encoder,
+            sampleBuffer,
+            samplesPerFrame,  // Always write the expected frame size
+            sampleRate,
+            2, // stereo
+          );
+        } finally {
+          calloc.free(sampleBuffer);
         }
 
         _currentTime += frameDuration;
       }
     } finally {
-      // Final drain
-      for (final decoder in allAudioDecoders) {
-        rina_encoder_drain_audio_queue(encoder, decoder);
-      }
-      
       rina_encoder_finalize(encoder);
       rina_encoder_destroy(encoder);
       rina_canvas_destroy(nativeCanvas);
@@ -200,6 +254,38 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       _log.info('Render run completed.');
       _frameDuration = null;
     }
+  }
+
+  final LinkedList<AudioContributorEntry> _contributors = LinkedList();
+  void registerAudioContributor(AudioContributor contributor) {
+    _contributors.add(AudioContributorEntry(contributor));
+  }
+  void unregisterAudioContributor(AudioContributor contributor) {
+    for (final entry in _contributors) {
+      if (entry.theActualValue == contributor) {
+        entry.unlink();
+        break;
+      }
+    }
+  }
+
+  /// Mixes multiple audio buffers into one
+  Float32List _mixAudioSamples(List<Float32List> buffers) {
+    if (buffers.isEmpty) return Float32List(0);
+    if (buffers.length == 1) return buffers[0];
+    
+    final result = Float32List(buffers[0].length);
+    for (int i = 0; i < result.length; i++) {
+      double sum = 0.0;
+      for (var buffer in buffers) {
+        if (i < buffer.length) {
+          sum += buffer[i];
+        }
+      }
+      // Clamp to prevent clipping
+      result[i] = sum.clamp(-1.0, 1.0);
+    }
+    return result;
   }
 }
 

@@ -142,6 +142,23 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(
   TennojiEncoder* encoder,
   TennojiDecoder* decoder
 );
+
+// Sample-based audio API (for new submission system)
+TENNOJI_EXPORT int rina_decoder_read_audio_samples(
+  TennojiDecoder* decoder,
+  int64_t timestamp_us,
+  float* samples_out,
+  int sample_count,
+  int sample_rate
+);
+TENNOJI_EXPORT int rina_encoder_write_audio_samples(
+  TennojiEncoder* encoder,
+  const float* samples,
+  int sample_count,
+  int sample_rate,
+  int channels
+);
+
 TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder);
 TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder);
 

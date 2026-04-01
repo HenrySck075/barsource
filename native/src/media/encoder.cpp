@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <vector>
+#include <cstring>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -768,6 +769,93 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
     }
 
     delete encoder;
+}
+
+TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
+                                                        const float* samples,
+                                                        int sample_count,
+                                                        int sample_rate,
+                                                        int channels) {
+    if (!encoder || !encoder->audioCodecCtx) return -1;
+    if (!samples || sample_count <= 0 || channels <= 0) return -1;
+
+    // AAC and other codecs have a fixed frame size
+    // We need to match this exactly, padding with silence if needed
+    int encoder_frame_size = encoder->audioCodecCtx->frame_size;
+    int actual_sample_count = 1024;// encoder_frame_size > 0 ? encoder_frame_size : sample_count;
+
+    AVFrame* frame = av_frame_alloc();
+    if (!frame) return -1;
+
+    // Configure the frame
+    frame->format = AV_SAMPLE_FMT_FLTP; // planar float (encoder's native format)
+    frame->ch_layout = encoder->audioCodecCtx->ch_layout;
+    frame->sample_rate = encoder->audioCodecCtx->sample_rate;
+    frame->nb_samples = actual_sample_count;
+
+    int ret = av_frame_get_buffer(frame, 0);
+    if (ret < 0) {
+        av_frame_free(&frame);
+        return -1;
+    }
+
+    // Convert interleaved input to planar format
+    // Input: [L, R, L, R, ...] -> Output: [L, L, L, ...] [R, R, R, ...]
+    float* left = reinterpret_cast<float*>(frame->data[0]);
+    float* right = channels > 1 ? reinterpret_cast<float*>(frame->data[1]) : nullptr;
+
+    // Initialize with silence first
+    memset(left, 0, actual_sample_count * sizeof(float));
+    if (right) memset(right, 0, actual_sample_count * sizeof(float));
+
+    // Copy samples (taking care not to go out of bounds)
+    int samples_to_copy = std::min(sample_count, actual_sample_count);
+    
+    for (int i = 0; i < samples_to_copy; i++) {
+        int src_left_idx = i * channels;
+        int src_right_idx = i * channels + 1;
+        
+        if (src_left_idx < sample_count * channels) {
+            left[i] = samples[src_left_idx];
+        }
+        if (right && channels > 1 && src_right_idx < sample_count * channels) {
+            right[i] = samples[src_right_idx];
+        }
+    }
+
+    // Set presentation timestamp
+    frame->pts = encoder->audioPts;
+    encoder->audioPts += frame->nb_samples;
+
+    // Encode the frame
+    ret = avcodec_send_frame(encoder->audioCodecCtx, frame);
+    av_frame_free(&frame);
+    if (ret < 0) return -1;
+
+    // Retrieve encoded packets and write to file
+    AVPacket* pkt = av_packet_alloc();
+    while (true) {
+        ret = avcodec_receive_packet(encoder->audioCodecCtx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        if (ret < 0) {
+            av_packet_free(&pkt);
+            return -1;
+        }
+
+        av_packet_rescale_ts(pkt, encoder->audioCodecCtx->time_base,
+                             encoder->audioStream->time_base);
+        pkt->stream_index = encoder->audioStream->index;
+
+        ret = av_interleaved_write_frame(encoder->fmtCtx, pkt);
+        av_packet_unref(pkt);
+        if (ret < 0) {
+            av_packet_free(&pkt);
+            return -1;
+        }
+    }
+
+    av_packet_free(&pkt);
+    return 0;
 }
 
 } // extern "C"

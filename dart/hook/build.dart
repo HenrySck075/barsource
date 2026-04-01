@@ -1,10 +1,9 @@
 import 'dart:io';
 
-//import 'package:code_assets/code_assets.dart';
+import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 
 void main(List<String> args) async {
-  return;
   await build(args, (input, output) async {
     // 1. Determine the library filename based on the target OS
     final targetOS = input.config.code.targetOS;

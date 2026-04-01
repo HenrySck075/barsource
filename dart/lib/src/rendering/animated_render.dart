@@ -147,14 +147,12 @@ class RenderAnimatedRotation extends RenderProxyBox {
     if (child == null) return;
     final degrees = turns.value * 360.0;
 
-    final childSize = child.size;
-    final cx = offset.dx + childSize.width * alignment.x;
-    final cy = offset.dy + childSize.height * alignment.y;
+    final off = offset + alignment.alongSize(child.size);
 
     context.canvas.save();
-    context.canvas.translate(cx, cy);
+    context.canvas.translate(off.dx, off.dy);
     context.canvas.rotate(degrees);
-    context.canvas.translate(-cx, -cy);
+    context.canvas.translate(-off.dx, -off.dy);
     context.paintChild(child, offset);
     context.canvas.restore();
   }

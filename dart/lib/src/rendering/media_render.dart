@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
@@ -9,7 +10,7 @@ import '../engine/engine.dart';
 import 'object.dart';
 import 'pipeline_owner.dart';
 
-class RenderVideoClip extends RenderBox {
+class RenderVideoClip extends RenderBox implements AudioContributor {
   RenderVideoClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -41,6 +42,7 @@ class RenderVideoClip extends RenderBox {
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
+    Engine.instance.registerAudioContributor(this);
     final uri = source.toNativeUtf8(allocator: calloc);
     _decoder ??= rina_decoder_open(
       Engine.instance.nativePtr,
@@ -48,9 +50,7 @@ class RenderVideoClip extends RenderBox {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
-    if (_decoder != null) {
-      Engine.instance.registerAudioDecoder(_decoder!);
-    }
+    // Audio is now handled via AudioContributor interface
     print(!_ticker.isTicking);
     if (!_ticker.isTicking) {
       _ticker.start();
@@ -64,6 +64,7 @@ class RenderVideoClip extends RenderBox {
       rina_texture_destroy(_texture!);
       _texture = null;
     }
+    Engine.instance.unregisterAudioContributor(this);
     super.detach();
     // TODO: we could also let user specify if playback is stopped if the object is detached
   }
@@ -71,7 +72,6 @@ class RenderVideoClip extends RenderBox {
   @override
   void dispose() {
     if (_decoder != null) {
-      Engine.instance.unregisterAudioDecoder(_decoder!);
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
@@ -88,7 +88,6 @@ class RenderVideoClip extends RenderBox {
     if (_decoder == null) return;
     final clipTime = _position - trimStart;
 
-    print("rendering on position $clipTime i think");
     final timeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
 
     // Release previous texture before acquiring a new one
@@ -100,14 +99,57 @@ class RenderVideoClip extends RenderBox {
     _textureTimestamp = timeUs;
 
     if (_texture != nullptr) {
-      context.canvas.drawImage(_texture!, offset, Paint());
+      context.canvas.drawImageNative(_texture!, offset, Paint());
     } else {
       _texture = null;
     }
   }
+
+  @override
+  Float32List? getAudioForFrame(Duration frameTime, int sampleCount, int sampleRate) {
+    if (_decoder == null) return null;
+
+    final clipTime = frameTime - trimStart;
+    
+    // Check if we're within the clip bounds
+    if (clipTime < Duration.zero) return null;
+    if (trimEnd != null && clipTime > trimEnd!) return null;
+
+    // Calculate scaled time based on playback speed
+    final scaledTimeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
+
+    // Allocate buffer for interleaved stereo samples
+    final sampleBufferSize = sampleCount * 2; // stereo
+    final sampleBuffer = calloc<Float>(sampleBufferSize);
+
+    try {
+      final samplesRead = rina_decoder_read_audio_samples(
+        _decoder!,
+        scaledTimeUs,
+        sampleBuffer,
+        sampleCount,
+        sampleRate,
+      );
+
+      if (samplesRead <= 0) {
+        // No audio available - return null (silence will be filled by engine)
+        return null;
+      }
+
+      // Copy to Float32List (only the samples that were actually read)
+      final result = Float32List(samplesRead * 2);
+      for (int i = 0; i < samplesRead * 2; i++) {
+        result[i] = sampleBuffer[i];
+      }
+
+      return result;
+    } finally {
+      calloc.free(sampleBuffer);
+    }
+  }
 }
 
-class RenderAudioClip extends RenderBox {
+class RenderAudioClip extends RenderBox implements AudioContributor {
   RenderAudioClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -134,15 +176,12 @@ class RenderAudioClip extends RenderBox {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
-    if (_decoder != null) {
-      Engine.instance.registerAudioDecoder(_decoder!, needsManualRead: true);
-    }
+    // Audio is now handled via AudioContributor interface
   }
 
   @override
   void detach() {
     if (_decoder != null) {
-      Engine.instance.unregisterAudioDecoder(_decoder!);
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
@@ -156,7 +195,48 @@ class RenderAudioClip extends RenderBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    // Audio is handled by the encoder via rina_encoder_write_audio,
+    // Audio is handled by the encoder via getAudioForFrame,
     // not through the canvas paint path.
+  }
+
+  @override
+  Float32List? getAudioForFrame(Duration frameTime, int sampleCount, int sampleRate) {
+    if (_decoder == null) return null;
+
+    final clipTime = frameTime - trimStart;
+    
+    // Check if we're within the clip bounds
+    if (clipTime < Duration.zero) return null;
+    if (trimEnd != null && clipTime > trimEnd!) return null;
+
+    final timeUs = clipTime.inMicroseconds;
+
+    // Allocate buffer for interleaved stereo samples
+    final sampleBufferSize = sampleCount * 2; // stereo
+    final sampleBuffer = calloc<Float>(sampleBufferSize);
+
+    try {
+      final samplesRead = rina_decoder_read_audio_samples(
+        _decoder!,
+        timeUs,
+        sampleBuffer,
+        sampleCount,
+        sampleRate,
+      );
+
+      if (samplesRead <= 0) {
+        return null;
+      }
+
+      // Copy to Float32List and apply volume
+      final result = Float32List(samplesRead * 2);
+      for (int i = 0; i < samplesRead * 2; i++) {
+        result[i] = sampleBuffer[i] * volume;
+      }
+
+      return result;
+    } finally {
+      calloc.free(sampleBuffer);
+    }
   }
 }

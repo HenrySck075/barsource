@@ -375,6 +375,40 @@ external int rina_encoder_drain_audio_queue(
   ffi.Pointer<TennojiDecoder> decoder,
 );
 
+@ffi.Native<
+  ffi.Int Function(
+    ffi.Pointer<TennojiDecoder>,
+    ffi.Int64,
+    ffi.Pointer<ffi.Float>,
+    ffi.Int,
+    ffi.Int,
+  )
+>(isLeaf: true)
+external int rina_decoder_read_audio_samples(
+  ffi.Pointer<TennojiDecoder> decoder,
+  int timestamp_us,
+  ffi.Pointer<ffi.Float> samples_out,
+  int sample_count,
+  int sample_rate,
+);
+
+@ffi.Native<
+  ffi.Int Function(
+    ffi.Pointer<TennojiEncoder>,
+    ffi.Pointer<ffi.Float>,
+    ffi.Int,
+    ffi.Int,
+    ffi.Int,
+  )
+>(isLeaf: true)
+external int rina_encoder_write_audio_samples(
+  ffi.Pointer<TennojiEncoder> encoder,
+  ffi.Pointer<ffi.Float> samples,
+  int sample_count,
+  int sample_rate,
+  int channels,
+);
+
 @ffi.Native<ffi.Int Function(ffi.Pointer<TennojiEncoder>)>(isLeaf: true)
 external int rina_encoder_finalize(ffi.Pointer<TennojiEncoder> encoder);
 
