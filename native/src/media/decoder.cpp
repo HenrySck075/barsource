@@ -426,84 +426,72 @@ TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
 }
 
 TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
-                                                       int64_t timestamp_us,
-                                                       float* samples_out,
-                                                       int sample_count,
-                                                       int sample_rate) {
-    if (!decoder || !decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return -1;
-    if (!samples_out || sample_count <= 0) return -1;
+                                                   int64_t timestamp_us,
+                                                   float* samples_out,
+                                                   int sample_count,
+                                                   int sample_rate) {
+    if (!decoder || !decoder->audioCodecCtx) return -1;
 
-    // Initialize output buffer to zero (silence) in case we don't decode enough samples
     int out_channels = 2;
-    memset(samples_out, 0, sample_count * out_channels * sizeof(float));
-
-    // For video files with audio: decode from packets that were already queued
-    // by rina_decoder_get_texture (which stashes audio packets while seeking for video)
-    // This prevents seeking conflicts between video and audio reading.
+    // Initialize FIFO if it doesn't exist
+    if (!decoder->audioFifo) {
+        decoder->audioFifo = av_audio_fifo_alloc(AV_SAMPLE_FMT_FLT, out_channels, sample_rate);
+    }
 
     AVFrame* frame = av_frame_alloc();
     
-    // SwrContext for converting to stereo float32
-    SwrContext* swr = nullptr;
-    AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
-    
-    int samples_written = 0;
-
-    // Decode from ONE queued audio packet only (not the whole queue)
-    // This prevents cramming all audio into the first frame
-    AVPacket* pkt = nullptr;
-    
-    // Try to get a packet from the queue
-    {
-        std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
-        if (!decoder->audioPacketQueue.empty()) {
+    // 1. Keep decoding packets until we have enough samples in the FIFO
+    while (av_audio_fifo_size(decoder->audioFifo) < sample_count) {
+        AVPacket* pkt = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
+            if (decoder->audioPacketQueue.empty()) break; 
             pkt = decoder->audioPacketQueue.front();
             decoder->audioPacketQueue.pop_front();
         }
-    }
-    
-    if (pkt) {
-        // Decode the packet
-        int ret = avcodec_send_packet(decoder->audioCodecCtx, pkt);
-        av_packet_free(&pkt);
-        
-        if (ret >= 0) {
+
+        if (avcodec_send_packet(decoder->audioCodecCtx, pkt) >= 0) {
             while (avcodec_receive_frame(decoder->audioCodecCtx, frame) == 0) {
-                // Initialize resampler if needed
-                if (!swr) {
-                    ret = swr_alloc_set_opts2(&swr,
+                // Initialize/Update Resampler
+                if (!decoder->swrCtx) {
+                    AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+                    swr_alloc_set_opts2(&decoder->swrCtx,
                         &out_ch_layout, AV_SAMPLE_FMT_FLT, sample_rate,
                         &frame->ch_layout, (AVSampleFormat)frame->format, frame->sample_rate,
                         0, nullptr);
-                    if (ret < 0 || !swr) {
-                        av_frame_unref(frame);
-                        goto cleanup;
-                    }
-                    swr_init(swr);
+                    swr_init(decoder->swrCtx);
                 }
 
-                // Convert samples to stereo float32
-                uint8_t* out_buf[1] = { reinterpret_cast<uint8_t*>(samples_out + samples_written * out_channels) };
-                int remaining = sample_count - samples_written;
-                int converted = swr_convert(swr, out_buf, remaining,
+                // Convert to a temporary float buffer
+                float* swr_buf = nullptr;
+                av_samples_alloc((uint8_t**)&swr_buf, nullptr, out_channels, frame->nb_samples, AV_SAMPLE_FMT_FLT, 0);
+                
+                int converted = swr_convert(decoder->swrCtx, (uint8_t**)&swr_buf, frame->nb_samples,
                                             (const uint8_t**)frame->data, frame->nb_samples);
                 
+                // Push converted samples into FIFO
                 if (converted > 0) {
-                    samples_written += converted;
+                    av_audio_fifo_write(decoder->audioFifo, (void**)&swr_buf, converted);
                 }
-
+                
+                av_freep(&swr_buf);
                 av_frame_unref(frame);
-
-                if (samples_written >= sample_count) break;
             }
         }
+        av_packet_free(&pkt);
     }
 
-cleanup:
-    if (swr) swr_free(&swr);
-    av_frame_free(&frame);
+    // 2. Pull the exact requested amount from FIFO
+    int available = av_audio_fifo_size(decoder->audioFifo);
+    int to_read = std::min(available, sample_count);
+    
+    if (to_read > 0) {
+        av_audio_fifo_read(decoder->audioFifo, (void**)&samples_out, to_read);
+    }
 
-    return samples_written;
+    av_frame_free(&frame);
+    return to_read; // Return actual samples written to avoid "glitches"
 }
+
 
 } // extern "C"

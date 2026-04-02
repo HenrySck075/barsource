@@ -5,6 +5,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/pixfmt.h>
+#include <libavutil/audio_fifo.h>
+#include <libswresample/swresample.h>
 }
 
 #include <deque>
@@ -24,6 +26,8 @@ struct TennojiDecoder {
     enum AVPixelFormat hwPixFmt = AV_PIX_FMT_NONE;
     tennoji::FramePool* framePool = nullptr;
     TennojiEngine* engine = nullptr;
+    AVAudioFifo* audioFifo = nullptr;
+    SwrContext* swrCtx = nullptr;
     int64_t lastSeekTs = INT64_MIN;
 
     // Audio packet queue: video decode stashes audio packets here
