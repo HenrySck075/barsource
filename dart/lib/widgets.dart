@@ -15,3 +15,4 @@ export 'src/widgets/binding.dart';
 export 'src/widgets/stack.dart';
 export 'src/widgets/flex.dart';
 export 'src/widgets/animated.dart';
+export 'src/widgets/clip_rect.dart';

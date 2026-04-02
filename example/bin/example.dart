@@ -91,7 +91,7 @@ class _bombState extends State<bomb> {
             CurveTween(curve: Curves.easeInOut)
           ),
           alignment: Alignment.center,
-          child: Image.file("kaho.webp"),
+          child: Image.file("kaho.webp", targetWidth: 80, targetHeight: 80),
         ),
         Text(text: "Hello World"),
         ]),
@@ -99,13 +99,15 @@ class _bombState extends State<bomb> {
         AnimatedList<String>(
           listController: _controller,
           itemBuilder: (context, data, anim){
-            return SlideTransition(
-              offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
-                Tween<Offset>(
-                  begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
-                )
-              ),
-              child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: data))
+            return ClipRect(
+              child: SlideTransition(
+                offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
+                  Tween<Offset>(
+                    begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
+                  )
+                ),
+                child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: data))
+              )
             );
           }
         )

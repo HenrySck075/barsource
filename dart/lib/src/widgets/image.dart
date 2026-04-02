@@ -24,9 +24,17 @@ abstract class Image extends LeafRenderObjectWidget {
   final int? targetHeight;
   final ResizeImagePolicy resizePolicy;
 
-  factory Image.file(String src, {Key? key}) => _LocalImage(
+  factory Image.file(String src, {
+    Key? key,
+    int? targetWidth,
+    int? targetHeight,
+    ResizeImagePolicy resizePolicy = .exact
+  }) => _LocalImage(
     key: key,
-    source: src
+    source: src,
+    targetWidth: targetWidth,
+    targetHeight: targetHeight,
+    resizePolicy: resizePolicy
   );
 }
 
@@ -35,7 +43,10 @@ class _LocalImage extends Image {
 
   const _LocalImage({
     super.key,
-    required this.source
+    required this.source,
+    super.targetWidth,
+    super.targetHeight,
+    super.resizePolicy = .exact
   });
 
   @override
@@ -95,6 +106,7 @@ class _RenderLocalImage extends RenderBox {
     final file = File(source);
     final bytes = file.readAsBytesSync();
     final descriptor = ImageDescriptor.encoded(bytes);
+
     codec = descriptor.instantiateCodec();
 
     currentFrameInfo = codec.getNextFrame();
@@ -105,15 +117,15 @@ class _RenderLocalImage extends RenderBox {
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    ticker.start();
+    if (currentFrameInfo!.duration != Duration.zero) ticker.start();
   }
   @override
   void performLayout() {
     final image = currentFrameInfo?.image;
-    size = image != null 
-           ? Size(image.width.toDouble(), image.height.toDouble())
-           : constraints.smallest;
     computeRenderDimension();
+    size = image != null 
+           ? Size((targetWidth ?? image.width).toDouble(), (targetHeight ?? image.height).toDouble())
+           : constraints.smallest;
   }
   void _tick(Duration elapsed) {
     if (currentFrameInfo == null) return;
@@ -133,13 +145,19 @@ class _RenderLocalImage extends RenderBox {
         offset.dx + (size.width - renderWidth) / 2,
         offset.dy + (size.height - renderHeight) / 2,
       );
+      context.canvas.drawImageRect(
+        frame.image,
+        Rect.fromLTWH(0, 0, frame.image.width.toDouble(), frame.image.height.toDouble()),
+        Rect.fromLTWH(imageOffset.dx, imageOffset.dy, renderWidth.toDouble(), renderHeight.toDouble()),
+        Paint(),
+      );
     }
   }
 
   @override
   void dispose() {
     currentFrameInfo?.image.dispose();
-    ticker.stop();
+    if (ticker.isActive) ticker.stop();
     ticker.dispose();
     super.dispose();
   }

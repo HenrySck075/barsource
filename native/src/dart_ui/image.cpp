@@ -125,7 +125,7 @@ TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_encoded(const uint8_t* da
       .alphaType = codec->codec->getInfo().alphaType(),
       .colorSpace = sk_sp(codec->codec->getInfo().colorSpace()),
     },
-    .fromRaw = true
+    .fromRaw = false
   };
   
   rina_codec_destroy(codec);
@@ -168,7 +168,7 @@ TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(
   TennojiImageDescriptor* descriptor,
   uint32_t targetWidth, uint32_t targetHeight, uint8_t targetPixelFormat
 ) {
-  if (!descriptor->fromRaw) return nullptr;
+  if (!descriptor->fromRaw) return rina_codec_from_encoded_skdata(descriptor->buffer);
 
   return new TennojiCodec{
     .codec = nullptr,

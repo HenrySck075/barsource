@@ -249,7 +249,7 @@ external int rina_canvas_save_layer(
 external void rina_texture_destroy(ffi.Pointer<TennojiCanvasImage> texture);
 
 @ffi.Native<
-  ffi.Pointer<TennojiCodec> Function(ffi.Pointer<ffi.Uint8>, ffi.Uint32)
+  ffi.Pointer<TennojiCodec> Function(ffi.Pointer<ffi.Uint8>, ffi.Uint64)
 >(isLeaf: true)
 external ffi.Pointer<TennojiCodec> rina_codec_from_encoded(
   ffi.Pointer<ffi.Uint8> data,
