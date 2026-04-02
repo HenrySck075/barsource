@@ -16,10 +16,6 @@ class _bombState extends State<bomb> {
   late final CurvedAnimation _slideCurve;
   late final AnimationController _rotateCtrl;
 
-  void _timerCallback(int index, String data) {
-    print("hey");
-    _controller.insert(index, data);
-  }
   @override
   void initState() {
     super.initState();
@@ -40,8 +36,9 @@ class _bombState extends State<bomb> {
       duration: Duration(seconds: 2),
     )..forward();
 
-    EngineTimer(Duration(seconds: 1), ()=>_timerCallback(0, "hi"));
-    EngineTimer(Duration(seconds: 2), ()=>_timerCallback(1, "hello"));
+    EngineTimer(Duration(seconds: 1), ()=>_controller.insert(0, "hi"));
+    EngineTimer(Duration(seconds: 2), ()=>_controller.insert(1, "hello"));
+    EngineTimer(Duration(seconds: 3), ()=>_controller.removeAt(0));
   }
 
   @override
@@ -98,16 +95,15 @@ class _bombState extends State<bomb> {
         Text(text: "g"),
         AnimatedList<String>(
           listController: _controller,
+          clipBehavior: .hardEdge,
           itemBuilder: (context, data, anim){
-            return ClipRect(
-              child: SlideTransition(
-                offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
-                  Tween<Offset>(
-                    begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
-                  )
-                ),
-                child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: data))
-              )
+            return SlideTransition(
+              offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
+                Tween<Offset>(
+                  begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)
+                )
+              ),
+              child: Container(width: 200, height: 80,color:Color(0xFF363636), child: Text(text: data))
             );
           }
         )
@@ -118,7 +114,7 @@ class _bombState extends State<bomb> {
 void main(){
   render(bomb(), RenderConfig(
     output: "out.mp4", 
-    duration: Duration(seconds: 3, milliseconds: 500), 
+    duration: Duration(seconds: 4, milliseconds: 500), 
     fps: 30, 
     resolution: Size(1280,720),
     logLevel: Level.OFF

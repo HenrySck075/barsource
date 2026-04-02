@@ -12,6 +12,7 @@ class Flex extends MultiChildRenderObjectWidget {
     this.mainAxisAlignment = MainAxisAlignment.start,
     this.crossAxisAlignment = CrossAxisAlignment.center,
     this.mainAxisSize = MainAxisSize.max,
+    this.clipBehavior = .none,
     super.children,
   });
 
@@ -19,6 +20,7 @@ class Flex extends MultiChildRenderObjectWidget {
   final MainAxisAlignment mainAxisAlignment;
   final CrossAxisAlignment crossAxisAlignment;
   final MainAxisSize mainAxisSize;
+  final Clip clipBehavior;
 
   @override
   RenderObject createRenderObject(BuildContext context) => RenderFlex(
@@ -36,6 +38,7 @@ class Row extends Flex {
     super.mainAxisAlignment,
     super.crossAxisAlignment,
     super.mainAxisSize,
+    super.clipBehavior,
     super.children,
   }) : super(direction: Axis.horizontal);
 }
@@ -47,6 +50,7 @@ class Column extends Flex {
     super.mainAxisAlignment,
     super.crossAxisAlignment,
     super.mainAxisSize,
+    super.clipBehavior,
     super.children,
   }) : super(direction: Axis.vertical);
 }

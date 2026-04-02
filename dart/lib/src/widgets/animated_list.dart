@@ -1,3 +1,4 @@
+import 'package:tennoji/dart_ui.dart';
 import 'package:tennoji/src/foundation/collections.dart';
 import 'package:tennoji/src/widgets/flex.dart';
 
@@ -91,11 +92,13 @@ class AnimatedList<T extends Object> extends StatefulWidget {
     required this.itemBuilder,
     required this.listController,
     this.removedItemBuilder,
+    this.clipBehavior = .hardEdge
   });
 
   final AnimatedItemBuilder<T> itemBuilder;
   final ListController<T> listController;
   final AnimatedRemovedItemBuilder<T>? removedItemBuilder;
+  final Clip clipBehavior;
 
   @override
   State<AnimatedList<T>> createState() => _AnimatedListState<T>();
@@ -182,6 +185,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     });
 
     controller.forward().then<void>((_) {
+      print("boom");
       _removeActiveItemAt(_incomingItems, incomingItem.itemIndex)!.controller!.dispose();
     });
   }
@@ -263,7 +267,8 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
           final T data = incomingItem?.data ?? _items[_itemIndexToIndex(itemIndex)];
           return widget.itemBuilder(context, data, animation);
         }
-      )
+      ),
+      clipBehavior: widget.clipBehavior
     );
   }
 }

@@ -51,15 +51,17 @@ enum FlexFit {
 class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, FlexParentData> {
   RenderFlex({
     required this.direction,
-    this.mainAxisAlignment = MainAxisAlignment.start,
-    this.crossAxisAlignment = CrossAxisAlignment.center,
-    this.mainAxisSize = MainAxisSize.max,
+    this.mainAxisAlignment = .start,
+    this.crossAxisAlignment = .center,
+    this.mainAxisSize = .max,
+    this.clipBehavior = .none
   });
 
   final Axis direction;
   final MainAxisAlignment mainAxisAlignment;
   final CrossAxisAlignment crossAxisAlignment;
   final MainAxisSize mainAxisSize;
+  final Clip clipBehavior;
 
   double _getMainAxisExtent(Size size) =>
       direction == Axis.horizontal ? size.width : size.height;
@@ -242,6 +244,10 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, Fl
 
   @override
   void paint(PaintingContext context, Offset offset) {
+    if (clipBehavior != .none) {
+      context.canvas.save();
+      context.canvas.clipRect(offset & size, clipBehavior == .antiAlias);
+    }
     visitChildren((child) {
       final childOffset = _childOffsets[child] ?? Offset.zero;
       context.paintChild(child, Offset(
@@ -249,6 +255,9 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, Fl
         offset.dy + childOffset.dy,
       ));
     });
+    if (clipBehavior != .none) {
+      context.canvas.restore();
+    }
   }
 
   @override

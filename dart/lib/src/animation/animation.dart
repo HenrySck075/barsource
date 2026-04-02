@@ -444,7 +444,10 @@ class _InterpolationSimulation extends Simulation {
   }
 
   @override
-  bool isDone(double timeInSeconds) => timeInSeconds > _durationInSeconds;
+  bool isDone(double timeInSeconds) => {
+    print("$timeInSeconds $_durationInSeconds");
+    return timeInSeconds > _durationInSeconds;
+  }
 }
 
 typedef _DirectionSetter = void Function(_AnimationDirection direction);

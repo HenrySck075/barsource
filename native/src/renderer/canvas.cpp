@@ -203,11 +203,14 @@ TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees) {
     canvas->canvas->rotate(degrees);
 }
 
-TENNOJI_EXPORT void rina_canvas_clip_rect(TennojiCanvas* canvas,
-                                              float left, float top,
-                                              float width, float height) {
+TENNOJI_EXPORT void rina_canvas_clip_rect(
+    TennojiCanvas* canvas,
+    float left, float top,
+    float width, float height, 
+    bool doAntiAlias
+) {
     if (!canvas || !canvas->canvas) return;
-    canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height));
+    canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), doAntiAlias);
 }
 
 TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha) {

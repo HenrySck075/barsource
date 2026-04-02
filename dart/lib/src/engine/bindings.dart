@@ -229,6 +229,7 @@ external void rina_canvas_rotate(
     ffi.Float,
     ffi.Float,
     ffi.Float,
+    ffi.Bool,
   )
 >(isLeaf: true)
 external void rina_canvas_clip_rect(
@@ -237,6 +238,7 @@ external void rina_canvas_clip_rect(
   double top,
   double width,
   double height,
+  bool doAntiAlias,
 );
 
 @ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvas>, ffi.Int)>(isLeaf: true)

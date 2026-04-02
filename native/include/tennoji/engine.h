@@ -93,7 +93,8 @@ TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees);
 TENNOJI_EXPORT void rina_canvas_clip_rect(
   TennojiCanvas* canvas,
   float left, float top,
-  float width, float height
+  float width, float height,
+  bool doAntiAlias
 );
 TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha);
 

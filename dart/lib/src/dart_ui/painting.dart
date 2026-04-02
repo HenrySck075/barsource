@@ -1237,31 +1237,6 @@ enum Clip {
   ///    edge artifacts.
   ///  * [Paint.isAntiAlias], which is the anti-aliasing switch for general draw operations.
   antiAlias,
-
-  /// Clip with anti-aliasing and `saveLayer` immediately following the clip.
-  ///
-  /// This mode not only clips with anti-aliasing, but also allocates an offscreen
-  /// buffer. All subsequent paints are carried out on that buffer before finally
-  /// being clipped and composited back.
-  ///
-  /// This is very slow. It has no bleeding edge artifacts, unlike [antiAlias],
-  /// but it changes the semantics as it introduces an offscreen buffer.
-  /// For example, see this
-  /// [Skia Fiddle without `saveLayer`](https://fiddle.skia.org/c/83ed46ceadaf90f36a4df3b98cbe1c35)
-  /// and this
-  /// [Skia Fiddle with `saveLayer`](https://fiddle.skia.org/c/704acfa049a7e99fbe685232c45d1582).
-  ///
-  /// Use this mode only if necessary. For example, if you have an
-  /// image overlaid on a very different background color. In these
-  /// cases, consider if you can avoid overlaying multiple colors in one
-  /// location (e.g. by having the background color only present where the image is
-  /// absent). If possible, prefer [antiAlias] as it is much faster.
-  ///
-  /// See also:
-  ///
-  ///  * [antiAlias], which is much faster, and has similar clipping results.
-  ///  * [Canvas.saveLayer].
-  antiAliasWithSaveLayer,
 }
 
 /// A description of the style to use when drawing on a [Canvas].
@@ -6892,13 +6867,14 @@ class Canvas {
     rina_canvas_rotate(_nativePtr, degrees);
   }
 
-  void clipRect(Rect rect) {
+  void clipRect(Rect rect, bool doAntiAlias) {
     rina_canvas_clip_rect(
       _nativePtr,
       rect.left,
       rect.top,
       rect.width,
       rect.height,
+      doAntiAlias
     );
   }
 

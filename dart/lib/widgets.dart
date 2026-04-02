@@ -13,6 +13,6 @@ export 'src/widgets/timeline_position_mixin.dart';
 export 'src/widgets/framework.dart';
 export 'src/widgets/binding.dart';
 export 'src/widgets/stack.dart';
+export 'src/widgets/clip_rect.dart';
 export 'src/widgets/flex.dart';
 export 'src/widgets/animated.dart';
-export 'src/widgets/clip_rect.dart';
