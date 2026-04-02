@@ -115,19 +115,21 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
     if (clipTime < Duration.zero) return null;
     if (trimEnd != null && clipTime > trimEnd!) return null;
 
-    // Calculate scaled time based on playback speed
-    final scaledTimeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
+    // Apply playback speed by adjusting sample count, not timestamp
+    // For 2x speed, we need to read 2x samples; for 0.5x speed, 0.5x samples
+    final adjustedSampleCount = (sampleCount * playbackSpeed).round();
+    final timeUs = clipTime.inMicroseconds;
 
     // Allocate buffer for interleaved stereo samples
-    final sampleBufferSize = sampleCount * 2; // stereo
+    final sampleBufferSize = adjustedSampleCount * 2; // stereo
     final sampleBuffer = calloc<Float>(sampleBufferSize);
 
     try {
       final samplesRead = rina_decoder_read_audio_samples(
         _decoder!,
-        scaledTimeUs,
+        timeUs,
         sampleBuffer,
-        sampleCount,
+        adjustedSampleCount,
         sampleRate,
       );
 

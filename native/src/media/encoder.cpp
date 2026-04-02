@@ -1,4 +1,5 @@
 #include "../engine_internal.h"
+#include <iostream>
 #include <thread>
 #include <queue>
 #include <mutex>
@@ -14,6 +15,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/audio_fifo.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <libavutil/hwcontext_drm.h>
@@ -65,6 +67,9 @@ struct TennojiEncoder {
     int32_t width = 0;
     int32_t height = 0;
     int32_t fps = 0;
+
+    // Audio buffering for frame size mismatch
+    AVAudioFifo* audioFifo = nullptr;
 
     // Pipeline
     std::thread renderThread;
@@ -714,6 +719,39 @@ TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
     }
 
     if (encoder->audioCodecCtx) {
+        // Flush any remaining samples in the FIFO
+        if (encoder->audioFifo && av_audio_fifo_size(encoder->audioFifo) > 0) {
+            int remaining = av_audio_fifo_size(encoder->audioFifo);
+            int frame_size = encoder->audioCodecCtx->frame_size;
+            
+            // Pad with silence to complete the frame
+            if (remaining < frame_size) {
+                std::vector<float> silence_left(frame_size - remaining, 0.0f);
+                std::vector<float> silence_right(frame_size - remaining, 0.0f);
+                void* silence_data[2] = { silence_left.data(), silence_right.data() };
+                av_audio_fifo_write(encoder->audioFifo, silence_data, frame_size - remaining);
+            }
+            
+            // Encode the final frame
+            AVFrame* frame = av_frame_alloc();
+            if (frame) {
+                frame->format = AV_SAMPLE_FMT_FLTP;
+                frame->ch_layout = encoder->audioCodecCtx->ch_layout;
+                frame->sample_rate = encoder->audioCodecCtx->sample_rate;
+                frame->nb_samples = frame_size;
+                
+                if (av_frame_get_buffer(frame, 0) >= 0) {
+                    if (av_audio_fifo_read(encoder->audioFifo, (void**)frame->data, frame_size) == frame_size) {
+                        frame->pts = encoder->audioPts;
+                        encoder->audioPts += frame->nb_samples;
+                        avcodec_send_frame(encoder->audioCodecCtx, frame);
+                    }
+                }
+                av_frame_free(&frame);
+            }
+        }
+        
+        // Flush the encoder
         avcodec_send_frame(encoder->audioCodecCtx, nullptr);
         AVPacket* pkt = av_packet_alloc();
         while (true) {
@@ -750,6 +788,10 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
         encoder->allSurfaces.clear();
     }
 
+    if (encoder->audioFifo) {
+        av_audio_fifo_free(encoder->audioFifo);
+    }
+
     if (encoder->audioMixer) {
         tennoji::audio_mixer_destroy(encoder->audioMixer);
     }
@@ -779,82 +821,90 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
     if (!encoder || !encoder->audioCodecCtx) return -1;
     if (!samples || sample_count <= 0 || channels <= 0) return -1;
 
-    // AAC and other codecs have a fixed frame size
-    // We need to match this exactly, padding with silence if needed
+    // Initialize FIFO if needed
+    if (!encoder->audioFifo) {
+        encoder->audioFifo = av_audio_fifo_alloc(
+            AV_SAMPLE_FMT_FLTP,
+            encoder->audioCodecCtx->ch_layout.nb_channels,
+            encoder->audioCodecCtx->frame_size * 4  // Buffer for multiple frames
+        );
+        if (!encoder->audioFifo) return -1;
+    }
+
+    // AAC encoder has a fixed frame size (typically 1024)
     int encoder_frame_size = encoder->audioCodecCtx->frame_size;
-    int actual_sample_count = 1024;// encoder_frame_size > 0 ? encoder_frame_size : sample_count;
+    if (encoder_frame_size <= 0) encoder_frame_size = sample_count;
 
-    AVFrame* frame = av_frame_alloc();
-    if (!frame) return -1;
-
-    // Configure the frame
-    frame->format = AV_SAMPLE_FMT_FLTP; // planar float (encoder's native format)
-    frame->ch_layout = encoder->audioCodecCtx->ch_layout;
-    frame->sample_rate = encoder->audioCodecCtx->sample_rate;
-    frame->nb_samples = actual_sample_count;
-
-    int ret = av_frame_get_buffer(frame, 0);
-    if (ret < 0) {
-        av_frame_free(&frame);
-        return -1;
-    }
-
-    // Convert interleaved input to planar format
-    // Input: [L, R, L, R, ...] -> Output: [L, L, L, ...] [R, R, R, ...]
-    float* left = reinterpret_cast<float*>(frame->data[0]);
-    float* right = channels > 1 ? reinterpret_cast<float*>(frame->data[1]) : nullptr;
-
-    // Initialize with silence first
-    memset(left, 0, actual_sample_count * sizeof(float));
-    if (right) memset(right, 0, actual_sample_count * sizeof(float));
-
-    // Copy samples (taking care not to go out of bounds)
-    int samples_to_copy = std::min(sample_count, actual_sample_count);
+    // Convert interleaved input to planar format and add to FIFO
+    // Input: [L, R, L, R, ...] -> Planar: [L, L, L, ...] [R, R, R, ...]
+    std::vector<float> left_channel(sample_count);
+    std::vector<float> right_channel(sample_count);
     
-    for (int i = 0; i < samples_to_copy; i++) {
-        int src_left_idx = i * channels;
-        int src_right_idx = i * channels + 1;
-        
-        if (src_left_idx < sample_count * channels) {
-            left[i] = samples[src_left_idx];
-        }
-        if (right && channels > 1 && src_right_idx < sample_count * channels) {
-            right[i] = samples[src_right_idx];
-        }
+    for (int i = 0; i < sample_count; i++) {
+        left_channel[i] = samples[i * channels];
+        right_channel[i] = (channels > 1) ? samples[i * channels + 1] : samples[i * channels];
     }
+    
+    void* channel_data[2] = { left_channel.data(), right_channel.data() };
+    int ret = av_audio_fifo_write(encoder->audioFifo, channel_data, sample_count);
+    if (ret < sample_count) return -1;
 
-    // Set presentation timestamp
-    frame->pts = encoder->audioPts;
-    encoder->audioPts += frame->nb_samples;
+    // Encode all complete frames available in the FIFO
+    while (av_audio_fifo_size(encoder->audioFifo) >= encoder_frame_size) {
+        AVFrame* frame = av_frame_alloc();
+        if (!frame) return -1;
 
-    // Encode the frame
-    ret = avcodec_send_frame(encoder->audioCodecCtx, frame);
-    av_frame_free(&frame);
-    if (ret < 0) return -1;
+        frame->format = AV_SAMPLE_FMT_FLTP;
+        frame->ch_layout = encoder->audioCodecCtx->ch_layout;
+        frame->sample_rate = encoder->audioCodecCtx->sample_rate;
+        frame->nb_samples = encoder_frame_size;
 
-    // Retrieve encoded packets and write to file
-    AVPacket* pkt = av_packet_alloc();
-    while (true) {
-        ret = avcodec_receive_packet(encoder->audioCodecCtx, pkt);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        ret = av_frame_get_buffer(frame, 0);
         if (ret < 0) {
-            av_packet_free(&pkt);
+            av_frame_free(&frame);
             return -1;
         }
 
-        av_packet_rescale_ts(pkt, encoder->audioCodecCtx->time_base,
-                             encoder->audioStream->time_base);
-        pkt->stream_index = encoder->audioStream->index;
-
-        ret = av_interleaved_write_frame(encoder->fmtCtx, pkt);
-        av_packet_unref(pkt);
-        if (ret < 0) {
-            av_packet_free(&pkt);
+        // Read from FIFO directly into frame
+        ret = av_audio_fifo_read(encoder->audioFifo, (void**)frame->data, encoder_frame_size);
+        if (ret < encoder_frame_size) {
+            av_frame_free(&frame);
             return -1;
         }
+
+        // Set presentation timestamp
+        frame->pts = encoder->audioPts;
+        encoder->audioPts += frame->nb_samples;
+
+        // Encode the frame
+        ret = avcodec_send_frame(encoder->audioCodecCtx, frame);
+        av_frame_free(&frame);
+        if (ret < 0) return -1;
+
+        // Retrieve encoded packets and write to file
+        AVPacket* pkt = av_packet_alloc();
+        while (true) {
+            ret = avcodec_receive_packet(encoder->audioCodecCtx, pkt);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+            if (ret < 0) {
+                av_packet_free(&pkt);
+                return -1;
+            }
+
+            av_packet_rescale_ts(pkt, encoder->audioCodecCtx->time_base,
+                                 encoder->audioStream->time_base);
+            pkt->stream_index = encoder->audioStream->index;
+
+            ret = av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            av_packet_unref(pkt);
+            if (ret < 0) {
+                av_packet_free(&pkt);
+                return -1;
+            }
+        }
+        av_packet_free(&pkt);
     }
 
-    av_packet_free(&pkt);
     return 0;
 }
 
