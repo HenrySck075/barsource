@@ -135,6 +135,30 @@ TENNOJI_EXPORT void rina_canvas_draw_rect(
   );
 }
 
+TENNOJI_EXPORT void rina_canvas_draw_image_rect(
+  TennojiCanvas* canvas,
+  TennojiCanvasImage* image,
+  float srcLeft, float srcTop,
+  float srcWidth, float srcHeight,
+  float dstLeft, float dstTop,
+  float dstWidth, float dstHeight,
+  TennojiCanvasPaintMetadata* paintData
+) {
+  if (!canvas || !canvas->canvas || !image) return;
+
+  sk_sp<SkImage> img = image->image;
+  if (!img) return;
+
+  auto paint = paint_create_from_encoded(paintData);
+  auto samplingOpt = sampling_from_quality_enum(paintData->encodedData[_kFilterQualityIndex]);
+  canvas->canvas->drawImageRect(
+    img, 
+    SkRect::MakeXYWH(srcLeft, srcTop, srcWidth, srcHeight),
+    SkRect::MakeXYWH(dstLeft, dstTop, dstWidth, dstHeight),
+    samplingOpt, &paint, SkCanvas::kFast_SrcRectConstraint
+  );
+}
+
 TENNOJI_EXPORT void rina_canvas_draw_image(
   TennojiCanvas* canvas,
   TennojiCanvasImage* texture,

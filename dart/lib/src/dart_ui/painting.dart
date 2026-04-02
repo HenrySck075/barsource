@@ -6854,6 +6854,24 @@ class Canvas {
     );
   }
 
+  void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
+    using((arena)=>
+    rina_canvas_draw_image_rect(
+      _nativePtr,
+      image._image._nativePtr,
+      src.left,
+      src.top,
+      src.width,
+      src.height,
+      dst.left,
+      dst.top,
+      dst.width,
+      dst.height,
+      paint._createPaintMetadata(arena),
+    )
+    );
+  }
+
   void save() {
     rina_canvas_save(_nativePtr);
   }

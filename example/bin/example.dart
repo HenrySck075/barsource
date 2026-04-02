@@ -91,11 +91,7 @@ class _bombState extends State<bomb> {
             CurveTween(curve: Curves.easeInOut)
           ),
           alignment: Alignment.center,
-          child: Container(
-            width: 80,
-            height: 80,
-            color: Color(0xFF0000FF),
-          ),
+          child: Image.file("kaho.webp"),
         ),
         Text(text: "Hello World"),
         ]),

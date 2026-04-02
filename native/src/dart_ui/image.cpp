@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <map>
 
+extern "C" {
 
 TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture) {
     delete texture;
@@ -33,7 +34,7 @@ TennojiCodec* rina_codec_from_encoded_skdata(sk_sp<SkData>& d) {
   };
 }
 
-TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const size_t length) {
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const uint64_t length) {
   auto d = SkData::MakeWithCopy(data, length);
   return rina_codec_from_encoded_skdata(d);
 };
@@ -163,7 +164,10 @@ TENNOJI_EXPORT uint32_t rina_idesc_get_height(TennojiImageDescriptor* descriptor
   return descriptor->imageInfo.height;
 }
 
-TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(TennojiImageDescriptor* descriptor) {
+TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(
+  TennojiImageDescriptor* descriptor,
+  uint32_t targetWidth, uint32_t targetHeight, uint8_t targetPixelFormat
+) {
   if (!descriptor->fromRaw) return nullptr;
 
   return new TennojiCodec{
@@ -183,4 +187,4 @@ TENNOJI_EXPORT bool rina_texture_equals(
   TennojiCanvasImage* tex1,
   TennojiCanvasImage* tex2
 );
-
+}

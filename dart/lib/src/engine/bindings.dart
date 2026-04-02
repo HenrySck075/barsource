@@ -135,6 +135,35 @@ external void rina_canvas_draw_rect(
     ffi.Pointer<TennojiCanvasImage>,
     ffi.Float,
     ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+  )
+>(isLeaf: true)
+external void rina_canvas_draw_image_rect(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiCanvasImage> image,
+  double srcLeft,
+  double srcTop,
+  double srcWidth,
+  double srcHeight,
+  double dstLeft,
+  double dstTop,
+  double dstWidth,
+  double dstHeight,
+  ffi.Pointer<TennojiCanvasPaintMetadata> paintData,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Pointer<TennojiCanvasImage>,
+    ffi.Float,
+    ffi.Float,
     ffi.Pointer<TennojiCanvasPaintMetadata>,
   )
 >(isLeaf: true)

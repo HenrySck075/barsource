@@ -64,6 +64,15 @@ TENNOJI_EXPORT void rina_canvas_draw_rect(
   float width, float height,
   TennojiCanvasPaintMetadata* paintData
 );
+TENNOJI_EXPORT void rina_canvas_draw_image_rect(
+  TennojiCanvas* canvas,
+  TennojiCanvasImage* image,
+  float srcLeft, float srcTop,
+  float srcWidth, float srcHeight,
+  float dstLeft, float dstTop,
+  float dstWidth, float dstHeight,
+  TennojiCanvasPaintMetadata* paintData
+);
 TENNOJI_EXPORT void rina_canvas_draw_image(
   TennojiCanvas* canvas,
   TennojiCanvasImage* image,
@@ -92,7 +101,7 @@ TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha);
 // no longer true
 TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture);
 
-TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const uint32_t length);
+TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const uint64_t length);
 TENNOJI_EXPORT TennojiCodec* rina_codec_from_file(const char* path);
 TENNOJI_EXPORT void rina_codec_destroy(TennojiCodec* codec);
 TENNOJI_EXPORT int rina_codec_get_frame_count(TennojiCodec* codec);

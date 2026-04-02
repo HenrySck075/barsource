@@ -104,7 +104,10 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   /// This value is only valid when the engine is currently being [run]
   int get frameDuration => _frameDuration!;
 
-  void run(Widget app, RenderConfig config) {
+  /// Render the video.
+  /// The entire operation is designed to be synchronous. The function was set to async to give room for event queues
+  /// (otherwise all of them will run after the loop ends)
+  Future<void> run(Widget app, RenderConfig config) async {
     final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
     _frameDuration = frameDuration.inMilliseconds;
     _currentTime = Duration.zero;
