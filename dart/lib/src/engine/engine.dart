@@ -18,6 +18,8 @@ import 'package:barsource/src/rendering/view.dart';
 import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/scheduler/ticker.dart';
 
+import 'package:cli_progress_bar/cli_progress_bar.dart';
+
 export 'bindings.dart';
 export 'audio_binding.dart';
 export 'audio_contributor.dart';
@@ -32,6 +34,7 @@ class RenderConfig {
     this.codec = const VideoCodec.h264(),
     this.audioCodec = const AudioCodec.aac(),
     this.logLevel = Level.INFO,
+    this.showProgressBar = true,
   });
   final String output;
   final Duration duration;
@@ -40,6 +43,7 @@ class RenderConfig {
   final VideoCodec codec;
   final AudioCodec audioCodec;
   final Level logLevel;
+  final bool showProgressBar;
 }
 
 class VideoCodec {
@@ -146,6 +150,15 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       config.resolution.width.toInt(),
       config.resolution.height.toInt(),
     );
+
+/*
+    final progressBar = ProgressBar(
+      schema: "[#bar] #after",
+      settings: ProgressBarSettings(
+        max: config.duration.in
+      )
+    );
+    */
 
     try {
       while (_currentTime < config.duration) {

@@ -2,6 +2,7 @@ name: example
 description: A sample command-line application.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
+publish_to: none
 
 environment:
   sdk: ">=3.11.1 <4.0.0"
@@ -9,7 +10,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   path: ^1.9.0
-  tennoji:
+  barsource:
     path: ../dart
   logging: ^1.3.0
 

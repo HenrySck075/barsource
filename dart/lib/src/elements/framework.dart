@@ -1,3 +1,4 @@
+import 'package:barsource/src/widgets/binding.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import 'package:barsource/src/foundation/key.dart';
@@ -7,6 +8,59 @@ import 'dart:collection';
 
 import '../widgets/framework.dart';
 import '../rendering/object.dart';
+
+
+@immutable
+abstract class Key {
+  const Key();
+}
+
+
+abstract class LocalKey {
+  const LocalKey();
+}
+
+class ValueKey<T> extends LocalKey {
+  const ValueKey(this.value);
+  final T value;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ValueKey<T> && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+}
+
+class ObjectKey extends LocalKey {
+  const ObjectKey(this.value);
+  final Object value;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ObjectKey && identical(other.value, value);
+
+  @override
+  int get hashCode => identityHashCode(value);
+}
+
+
+abstract class GlobalKey<T extends State<StatefulWidget>> extends Key {
+  const GlobalKey();
+
+  Element? get _currentElement => WidgetsBinding.instance.buildOwner._globalKeyRegistry[this];
+
+  BuildContext? get currentContext => _currentElement;
+  Widget? get currentWidget => _currentElement?._widget;
+  T? get currentState => switch (_currentElement) {
+    StatefulElement(:final T _state) => _state,
+    _ => null,
+  };
+}
+
+
 typedef ElementVisitor = void Function(Element element);
 class _InactiveElements {
   bool _locked = false;
@@ -190,6 +244,8 @@ final class BuildScope {
 class BuildOwner {
   final _InactiveElements _inactiveElements = _InactiveElements();
   int _debugStateLockLevel = 0;
+
+  Map<GlobalKey, Element> _globalKeyRegistry = {};
   void lockState(VoidCallback callback) {
     assert(_debugStateLockLevel >= 0);
     assert(() {
@@ -447,6 +503,48 @@ abstract class Element implements BuildContext {
 
   void update(covariant Widget newWidget) {
     _widget = newWidget;
+  }
+  @protected
+  @pragma('dart2js:tryInline')
+  @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
+  Element? updateChild(Element? child, Widget? newWidget, Object? newSlot) {
+    // 1. If the new widget is null, the child is gone.
+    if (newWidget == null) {
+      if (child != null) {
+        deactivateChild(child);
+      }
+      return null;
+    }
+
+    final Element newChild;
+
+    // 2. If we have an existing child, try to update it.
+    if (child != null) {
+      if (child.widget == newWidget) {
+        // The widget hasn't changed, just ensure the slot is correct.
+        if (child.slot != newSlot) {
+          updateSlotForChild(child, newSlot);
+        }
+        newChild = child;
+      } else if (Widget.canUpdate(child.widget, newWidget)) {
+        // The widget changed but is compatible (same Type and Key).
+        if (child.slot != newSlot) {
+          updateSlotForChild(child, newSlot);
+        }
+        child.update(newWidget);
+        newChild = child;
+      } else {
+        // Incompatible: throw away the old element and create a new one.
+        deactivateChild(child);
+        newChild = inflateWidget(newWidget, newSlot);
+      }
+    } else {
+      // 3. No existing child, so we create it.
+      newChild = inflateWidget(newWidget, newSlot);
+    }
+
+    return newChild;
   }
 
   void unmount() {
@@ -865,54 +963,13 @@ abstract class RenderObjectElement extends Element {
     newWidget.updateRenderObject(this, _renderObject!);
   }
 
+  @override
   Element inflateWidget(Widget newWidget, Object? newSlot) {
+    final Key? key = newWidget.key;
     final Element newChild = newWidget.createElement();
     newChild.mount(this, newSlot);
     return newChild;
-  }
- 
-  @protected
-  @pragma('dart2js:tryInline')
-  @pragma('vm:prefer-inline')
-  @pragma('wasm:prefer-inline')
-  Element? updateChild(Element? child, Widget? newWidget, Object? newSlot) {
-    // 1. If the new widget is null, the child is gone.
-    if (newWidget == null) {
-      if (child != null) {
-        deactivateChild(child);
-      }
-      return null;
-    }
-
-    final Element newChild;
-
-    // 2. If we have an existing child, try to update it.
-    if (child != null) {
-      if (child.widget == newWidget) {
-        // The widget hasn't changed, just ensure the slot is correct.
-        if (child.slot != newSlot) {
-          updateSlotForChild(child, newSlot);
-        }
-        newChild = child;
-      } else if (Widget.canUpdate(child.widget, newWidget)) {
-        // The widget changed but is compatible (same Type and Key).
-        if (child.slot != newSlot) {
-          updateSlotForChild(child, newSlot);
-        }
-        child.update(newWidget);
-        newChild = child;
-      } else {
-        // Incompatible: throw away the old element and create a new one.
-        deactivateChild(child);
-        newChild = inflateWidget(newWidget, newSlot);
-      }
-    } else {
-      // 3. No existing child, so we create it.
-      newChild = inflateWidget(newWidget, newSlot);
-    }
-
-    return newChild;
-  }
+  } 
 
   @override
   void unmount() {

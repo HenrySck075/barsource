@@ -11,9 +11,13 @@ mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
 
   BuildOwner get buildOwner => _buildOwner!;
 
+  static WidgetsBinding? _instance;
+  static WidgetsBinding get instance => BindingBase.checkInstance(_instance);
+
   @override
   void initInstances() {
     super.initInstances();
+    _instance = this;
     _buildOwner = BuildOwner();
   }
 

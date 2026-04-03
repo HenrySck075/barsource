@@ -1,3 +1,4 @@
+import 'package:barsource/elements.dart';
 import 'package:meta/meta.dart';
 import 'package:barsource/src/painting/basic_types.dart';
 import 'package:barsource/src/rendering/parent_data.dart';

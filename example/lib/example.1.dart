@@ -1,7 +1,7 @@
 // General tests
 
 
-import 'package:tennoji/tennoji.dart';
+import 'package:barsource/barsource.dart';
 
 class bomb extends StatefulWidget {
   @override

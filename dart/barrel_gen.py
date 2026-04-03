@@ -10,7 +10,7 @@ for file in os.listdir(libdir):
     if os.path.isfile(os.path.join(libdir, file)):
         os.remove(os.path.join(libdir, file))
 
-everything_barrel = open(os.path.join(libdir, "tennoji.dart"), "w")
+everything_barrel = open(os.path.join(libdir, "barsource.dart"), "w")
 everything_barrel.write("// AUTO-GENERATED BARREL FILE. DO NOT EDIT BY HAND\n")
 # scan lib/src/ for folders
 srcdir = os.path.join(workdir, 'lib', 'src')
