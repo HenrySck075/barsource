@@ -1,5 +1,5 @@
-import 'package:tennoji/src/rendering/object.dart';
-import 'package:tennoji/src/rendering/timeline_parent_data.dart';
+import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/rendering/timeline_parent_data.dart';
 
 import '../rendering/sequence_render.dart'; 
 import 'framework.dart';

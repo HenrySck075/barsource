@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart' show TextRange;
+import 'package:barsource/src/dart_ui/dart_ui.dart' show TextRange;
 
 import 'text_editing.dart';
 
-export 'package:tennoji/src/dart_ui/dart_ui.dart' show TextPosition, TextRange;
+export 'package:barsource/src/dart_ui/dart_ui.dart' show TextPosition, TextRange;
 
 export 'text_editing.dart' show TextSelection;
 

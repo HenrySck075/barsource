@@ -7,9 +7,9 @@ library;
 
 import 'dart:math' as math;
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart' show Color, clampDouble, lerpDouble;
-import 'package:tennoji/src/foundation/collections.dart';
-import 'package:tennoji/src/foundation/object.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart' show Color, clampDouble, lerpDouble;
+import 'package:barsource/src/foundation/collections.dart';
+import 'package:barsource/src/foundation/object.dart';
 
 double _getHue(double red, double green, double blue, double max, double delta) {
   late double hue;

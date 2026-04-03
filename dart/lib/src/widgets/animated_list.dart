@@ -1,6 +1,6 @@
-import 'package:tennoji/dart_ui.dart';
-import 'package:tennoji/src/foundation/collections.dart';
-import 'package:tennoji/src/widgets/flex.dart';
+import 'package:barsource/dart_ui.dart';
+import 'package:barsource/src/foundation/collections.dart';
+import 'package:barsource/src/widgets/flex.dart';
 
 import '../animation/animation.dart';
 import '../foundation/listenable.dart';

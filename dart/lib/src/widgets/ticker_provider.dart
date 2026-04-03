@@ -1,7 +1,7 @@
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/scheduler/ticker.dart';
-import 'package:tennoji/src/widgets/framework.dart';
+import 'package:barsource/src/scheduler/ticker.dart';
+import 'package:barsource/src/widgets/framework.dart';
 
 abstract class TickerProvider {
   Ticker createTicker(TickerCallback onTick);

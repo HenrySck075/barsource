@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/rendering/parent_data.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/rendering/parent_data.dart';
 
 import '../foundation/key.dart';
 import '../rendering/object.dart';

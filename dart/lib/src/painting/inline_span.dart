@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// @docImport 'package:tennoji/src/dart_ui/dart_ui.dart';
+/// @docImport 'package:barsource/src/dart_ui/dart_ui.dart';
 ///
 /// @docImport 'package:flutter/material.dart';
 ///
 /// @docImport 'placeholder_span.dart';
 library;
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui show ParagraphBuilder, StringAttribute;
+import 'package:barsource/src/dart_ui/dart_ui.dart' as ui show ParagraphBuilder, StringAttribute;
 
 import 'package:meta/meta.dart';
 

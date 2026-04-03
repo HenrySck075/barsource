@@ -1,4 +1,4 @@
-name: tennoji
+name: barsource
 description: A declarative, Flutter-inspired video editor library with a C++ backend.
 version: 0.0.1
 
@@ -24,9 +24,9 @@ dev_dependencies:
 ffigen:
   output: 'lib/src/engine/bindings.dart'
   name: 'TennojiBindings'
-  description: 'Bindings for tennoji native library'
+  description: 'native renderer backend bindings'
   ffi-native:
-    asset-id: 'package:tennoji/rina'
+    asset-id: 'package:barsource/rina'
   headers:
     entry-points:
       - '../native/include/tennoji/engine.h'

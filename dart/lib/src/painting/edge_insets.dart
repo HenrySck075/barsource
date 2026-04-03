@@ -1,4 +1,4 @@
-import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 
 abstract class EdgeInsetsGeometry {
   const EdgeInsetsGeometry();

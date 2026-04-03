@@ -1,6 +1,6 @@
-import 'package:tennoji/src/foundation/binding_base.dart';
-import 'package:tennoji/src/rendering/pipeline_owner.dart';
-import 'package:tennoji/src/rendering/view.dart';
+import 'package:barsource/src/foundation/binding_base.dart';
+import 'package:barsource/src/rendering/pipeline_owner.dart';
+import 'package:barsource/src/rendering/view.dart';
 
 mixin RendererBinding on BindingBase {
   PipelineOwner? _pipelineOwner;

@@ -9,9 +9,9 @@
 /// @docImport 'text_style.dart';
 library;
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart' show TextDirection;
+import 'package:barsource/src/dart_ui/dart_ui.dart' show TextDirection;
 
-export 'package:tennoji/src/dart_ui/dart_ui.dart'
+export 'package:barsource/src/dart_ui/dart_ui.dart'
     show
         BlendMode,
         BlurStyle,

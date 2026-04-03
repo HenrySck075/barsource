@@ -1,4 +1,4 @@
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
 import 'basic_types.dart';
 
 /// Base class for [Alignment] and [AlignmentDirectional].

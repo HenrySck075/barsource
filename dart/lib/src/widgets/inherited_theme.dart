@@ -1,4 +1,4 @@
-import 'package:tennoji/tennoji.dart';
+import 'package:barsource/tennoji.dart';
 
 abstract class InheritedTheme extends InheritedWidget {
   const InheritedTheme({

@@ -6,12 +6,12 @@ library;
 
 import 'dart:collection';
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart'
+import 'package:barsource/src/dart_ui/dart_ui.dart'
     as ui
     show ParagraphStyle, Shadow, StrutStyle, TextStyle, kTextHeightNone, lerpDouble, Paint;
-import 'package:tennoji/src/foundation/collections.dart';
-import 'package:tennoji/src/painting/text_painter.dart';
-import 'package:tennoji/src/painting/text_scaler.dart';
+import 'package:barsource/src/foundation/collections.dart';
+import 'package:barsource/src/painting/text_painter.dart';
+import 'package:barsource/src/painting/text_scaler.dart';
 
 
 import 'basic_types.dart';

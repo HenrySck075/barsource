@@ -3,18 +3,12 @@
 # BarSource Video Editing Library
 The most library of all time
 
-TODO: gpu on the ffmpeg
-
 # Code example
-```dart
-import 'package:barsource/barsource.dart';
-
-```
+see the example folder
 
 # Note
 - All image operations are synchronous. Not because of the way the native library is built (it is) but because in the context of a video renderer it doesnt make sense to have them asynchronous.
 - `RenderObject.paint` is called every frame.
-- Package is named on the GitHub source code as `tennoji`
 
 # FAQ
 ## Is it really that easy if you're familiar with Flutter?
@@ -26,5 +20,10 @@ i have no idea, but it should be fast because it does less work on each cycle th
 if you wanted to get technical, it also internally didn't use `Dart_Handle` to pass around objects between the two worlds unlike flutter, that is the main source of the slowness thumbsup emoji 
 
 ## who is that girl
-rina tennoji
+[:D](https://google.com/search?q=rina+tennoji)
 
+## why is she there
+why not whos stopping me
+
+## does barsource means anything
+[no](https://wikipedia.org/wiki/Thanh_H%C3%B3a)

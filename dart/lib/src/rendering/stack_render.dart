@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/foundation/debug.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/foundation/debug.dart';
 
 import '../foundation/geometry.dart';
 import 'box.dart';

@@ -1,5 +1,5 @@
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
 
 class ParentData {
   @protected

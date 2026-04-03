@@ -2,17 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// @docImport 'package:tennoji/src/dart_ui/dart_ui.dart';
+/// @docImport 'package:barsource/src/dart_ui/dart_ui.dart';
 ///
 /// @docImport 'package:flutter/rendering.dart';
 /// @docImport 'package:flutter/widgets.dart';
 library;
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart'
+import 'package:barsource/src/dart_ui/dart_ui.dart'
     as ui
     show Locale, LocaleStringAttribute, ParagraphBuilder, SpellOutStringAttribute, StringAttribute;
-import 'package:tennoji/src/foundation/collections.dart';
+import 'package:barsource/src/foundation/collections.dart';
 
 import 'basic_types.dart';
 import 'inline_span.dart';

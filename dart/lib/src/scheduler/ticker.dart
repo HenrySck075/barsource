@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/engine/engine.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/scheduler/binding.dart';
+import 'package:barsource/src/engine/engine.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/scheduler/binding.dart';
 
 typedef TickerCallback = void Function(Duration elapsed);
 
@@ -160,7 +160,7 @@ class Ticker {
   }
 
   void stop({bool canceled = false}) {
-    if (!isTicking) return;
+    if (!isActive) return;
     final fut = _future!;
     _future = null;
     _startTime = null;

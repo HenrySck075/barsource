@@ -1,4 +1,4 @@
-import 'package:tennoji/src/rendering/box.dart';
+import 'package:barsource/src/rendering/box.dart';
 
 import '../foundation/geometry.dart';
 import 'object.dart';

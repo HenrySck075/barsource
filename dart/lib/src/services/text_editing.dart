@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart' show TextAffinity, TextPosition, TextRange;
+import 'package:barsource/src/dart_ui/dart_ui.dart' show TextAffinity, TextPosition, TextRange;
 
 import 'package:meta/meta.dart';
 
-export 'package:tennoji/src/dart_ui/dart_ui.dart' show TextAffinity, TextPosition;
+export 'package:barsource/src/dart_ui/dart_ui.dart' show TextAffinity, TextPosition;
 
 /// A range of text that represents a selection.
 @immutable

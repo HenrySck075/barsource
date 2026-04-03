@@ -7,7 +7,7 @@ library;
 
 import 'dart:math' show max;
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart'
+import 'package:barsource/src/dart_ui/dart_ui.dart'
     as ui
     show
         BoxHeightStyle,
@@ -20,7 +20,7 @@ import 'package:tennoji/src/dart_ui/dart_ui.dart'
         ParagraphStyle,
         PlaceholderAlignment,
         TextStyle;
-import 'package:tennoji/src/dart_ui/dart_ui.dart'
+import 'package:barsource/src/dart_ui/dart_ui.dart'
     show
         Size, 
         TextRange,
@@ -30,11 +30,11 @@ import 'package:tennoji/src/dart_ui/dart_ui.dart'
         clampDouble,
         TextBox,
         TextAlign,TextHeightBehavior;
-import 'package:tennoji/src/foundation/collections.dart';
-import 'package:tennoji/src/foundation/const.dart';
-import 'package:tennoji/src/painting/text_scaler.dart';
-import 'package:tennoji/src/services/text_boundary.dart';
-import 'package:tennoji/src/services/text_editing.dart';
+import 'package:barsource/src/foundation/collections.dart';
+import 'package:barsource/src/foundation/const.dart';
+import 'package:barsource/src/painting/text_scaler.dart';
+import 'package:barsource/src/services/text_boundary.dart';
+import 'package:barsource/src/services/text_editing.dart';
 
 import 'basic_types.dart';
 import 'inline_span.dart';
@@ -44,7 +44,7 @@ import 'strut_style.dart';
 import 'text_span.dart';
 import 'text_style.dart';
 
-export 'package:tennoji/src/dart_ui/dart_ui.dart' show LineMetrics, TextRange;
+export 'package:barsource/src/dart_ui/dart_ui.dart' show LineMetrics, TextRange;
 
 /// The default font size if none is specified.
 ///

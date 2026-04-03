@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/rendering/box.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/rendering/box.dart';
 
 import '../engine/engine.dart';
 import 'object.dart';

@@ -1,8 +1,8 @@
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/foundation/key.dart';
-import 'package:tennoji/src/painting/basic_types.dart' show VoidCallback;
-import 'package:tennoji/src/rendering/parent_data.dart';
+import 'package:barsource/src/foundation/key.dart';
+import 'package:barsource/src/painting/basic_types.dart' show VoidCallback;
+import 'package:barsource/src/rendering/parent_data.dart';
 import 'dart:collection';
 
 import '../widgets/framework.dart';

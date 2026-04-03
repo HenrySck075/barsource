@@ -7,7 +7,7 @@ library;
 
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/foundation/collections.dart';
+import 'package:barsource/src/foundation/collections.dart';
 
 import 'basic_types.dart';
 import 'text_style.dart';

@@ -1,5 +1,5 @@
-import 'package:tennoji/src/foundation/object.dart';
-import 'package:tennoji/src/painting/edge_insets.dart';
+import 'package:barsource/src/foundation/object.dart';
+import 'package:barsource/src/painting/edge_insets.dart';
 import 'basic_types.dart';
 
 abstract class Decoration {

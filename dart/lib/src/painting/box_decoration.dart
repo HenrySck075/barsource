@@ -1,6 +1,6 @@
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/painting/decoration.dart';
-import 'package:tennoji/src/painting/edge_insets.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/decoration.dart';
+import 'package:barsource/src/painting/edge_insets.dart';
 
 class BoxDecoration extends Decoration {
   const BoxDecoration({

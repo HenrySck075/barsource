@@ -1,10 +1,10 @@
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/animation/animation.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/rendering/align_render.dart';
-import 'package:tennoji/src/widgets/animated.dart';
-import 'package:tennoji/src/widgets/framework.dart';
-import 'package:tennoji/src/widgets/ticker_provider.dart';
+import 'package:barsource/src/animation/animation.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/rendering/align_render.dart';
+import 'package:barsource/src/widgets/animated.dart';
+import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/src/widgets/ticker_provider.dart';
 
 abstract class ImplicitlyAnimatedWidget extends StatefulWidget {
   const ImplicitlyAnimatedWidget({

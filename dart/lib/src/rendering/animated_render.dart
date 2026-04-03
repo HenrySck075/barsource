@@ -1,6 +1,6 @@
-import 'package:tennoji/src/painting/alignment.dart';
-import 'package:tennoji/src/rendering/box.dart';
-import 'package:tennoji/src/rendering/pipeline_owner.dart';
+import 'package:barsource/src/painting/alignment.dart';
+import 'package:barsource/src/rendering/box.dart';
+import 'package:barsource/src/rendering/pipeline_owner.dart';
 
 import '../animation/animation.dart';
 import '../foundation/geometry.dart';

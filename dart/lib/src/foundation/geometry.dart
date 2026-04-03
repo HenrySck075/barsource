@@ -1,1 +1,1 @@
-export 'package:tennoji/src/dart_ui/dart_ui.dart' show Offset, Rect, Size;
+export 'package:barsource/src/dart_ui/dart_ui.dart' show Offset, Rect, Size;

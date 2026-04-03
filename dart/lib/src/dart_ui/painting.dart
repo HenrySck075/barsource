@@ -6878,10 +6878,9 @@ class Canvas {
     );
   }
 
-  /// Saves a new layer with the given [alpha] (0~255).
-  /// Everything painted until the matching [restore] will be
-  /// composited with that opacity.
-  void saveLayer(int alpha) {
-    rina_canvas_save_layer(_nativePtr, alpha);
+  void saveLayer(Paint paint) {
+    using((arena)=>
+    rina_canvas_save_layer(_nativePtr,paint._createPaintMetadata(arena))
+    );
   }
 }

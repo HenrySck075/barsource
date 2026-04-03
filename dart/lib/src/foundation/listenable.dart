@@ -1,5 +1,5 @@
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 
 abstract class Listenable {
   /// This constructor enables subclasses to provide const constructors so that

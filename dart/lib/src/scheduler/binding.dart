@@ -1,6 +1,6 @@
 import 'package:logging/logging.dart';
 
-import 'package:tennoji/src/foundation/binding_base.dart';
+import 'package:barsource/src/foundation/binding_base.dart';
 
 enum SchedulerPhase {
   idle,

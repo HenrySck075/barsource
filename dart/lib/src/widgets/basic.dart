@@ -1,8 +1,8 @@
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/painting/box_decoration.dart';
-import 'package:tennoji/src/painting/decoration.dart';
-import 'package:tennoji/src/painting/edge_insets.dart';
-import 'package:tennoji/src/painting/alignment.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/painting/box_decoration.dart';
+import 'package:barsource/src/painting/decoration.dart';
+import 'package:barsource/src/painting/edge_insets.dart';
+import 'package:barsource/src/painting/alignment.dart';
 import 'package:vector_math/vector_math.dart' show Matrix4;
 
 import '../rendering/object.dart';
@@ -10,8 +10,8 @@ import '../rendering/box.dart';
 import '../rendering/align_render.dart' show RenderAlign;
 import 'framework.dart';
 
-export 'package:tennoji/src/painting/edge_insets.dart';
-export 'package:tennoji/src/painting/alignment.dart';
+export 'package:barsource/src/painting/edge_insets.dart';
+export 'package:barsource/src/painting/alignment.dart';
 
 class Directionality extends InheritedWidget {
   const Directionality({

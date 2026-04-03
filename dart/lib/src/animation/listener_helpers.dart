@@ -1,7 +1,7 @@
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/animation/animation.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:barsource/src/animation/animation.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 
 /// A mixin that helps listen to another object only when this object has registered listeners.
 ///

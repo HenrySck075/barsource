@@ -1,13 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/animation/listener_helpers.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/engine/render_controller.dart';
-import 'package:tennoji/src/foundation/listenable.dart';
-import 'package:tennoji/src/foundation/object.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/physics/simulation.dart';
+import 'package:barsource/src/animation/listener_helpers.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/engine/render_controller.dart';
+import 'package:barsource/src/foundation/listenable.dart';
+import 'package:barsource/src/foundation/object.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/physics/simulation.dart';
 
 /// The status of an animation at a given point in time.
 enum AnimationStatus {
@@ -255,6 +255,7 @@ class AnimationController extends Animation<double>
     assert(elapsedInSeconds >= 0.0);
     _value = clampDouble(_simulation!.x(elapsedInSeconds), lowerBound, upperBound);
     if (_simulation!.isDone(elapsedInSeconds)) {
+      print("Stopping animation (completed)");
       _status = (_direction == _AnimationDirection.forward)
           ? AnimationStatus.completed
           : AnimationStatus.dismissed;
@@ -444,8 +445,7 @@ class _InterpolationSimulation extends Simulation {
   }
 
   @override
-  bool isDone(double timeInSeconds) => {
-    print("$timeInSeconds $_durationInSeconds");
+  bool isDone(double timeInSeconds) {
     return timeInSeconds > _durationInSeconds;
   }
 }

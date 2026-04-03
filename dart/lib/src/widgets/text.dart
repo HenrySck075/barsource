@@ -1,13 +1,13 @@
-import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui;
-import 'package:tennoji/src/painting/inline_span.dart';
-import 'package:tennoji/src/painting/strut_style.dart';
-import 'package:tennoji/src/painting/text_painter.dart';
-import 'package:tennoji/src/painting/text_scaler.dart';
-import 'package:tennoji/src/painting/text_span.dart';
-import 'package:tennoji/src/painting/text_style.dart';
-import 'package:tennoji/src/rendering/paragraph.dart';
-import 'package:tennoji/src/widgets/framework.dart';
-import 'package:tennoji/src/widgets/inherited_theme.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart' as ui;
+import 'package:barsource/src/painting/inline_span.dart';
+import 'package:barsource/src/painting/strut_style.dart';
+import 'package:barsource/src/painting/text_painter.dart';
+import 'package:barsource/src/painting/text_scaler.dart';
+import 'package:barsource/src/painting/text_span.dart';
+import 'package:barsource/src/painting/text_style.dart';
+import 'package:barsource/src/rendering/paragraph.dart';
+import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/src/widgets/inherited_theme.dart';
 
 class RichText extends LeafRenderObjectWidget {
   const RichText({

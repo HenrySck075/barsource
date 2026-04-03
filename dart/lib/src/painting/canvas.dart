@@ -1,5 +1,5 @@
 
-export 'package:tennoji/src/dart_ui/dart_ui.dart' show Canvas;
+export 'package:barsource/src/dart_ui/dart_ui.dart' show Canvas;
 
-//import 'package:tennoji/src/foundation/geometry.dart';
+//import 'package:barsource/src/foundation/geometry.dart';
 

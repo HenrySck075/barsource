@@ -1,5 +1,5 @@
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/painting/alignment.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/painting/alignment.dart';
 
 import '../animation/animation.dart';
 import '../rendering/animated_render.dart';

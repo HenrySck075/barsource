@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
-import 'package:tennoji/src/rendering/parent_data.dart';
+import 'package:barsource/src/rendering/parent_data.dart';
 import '../foundation/geometry.dart';
 import '../painting/canvas.dart';
 import '../painting/edge_insets.dart';

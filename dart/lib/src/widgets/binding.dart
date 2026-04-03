@@ -1,9 +1,9 @@
-import 'package:tennoji/src/foundation/binding_base.dart';
-import 'package:tennoji/src/rendering/binding.dart';
-import 'package:tennoji/src/scheduler/binding.dart';
-import 'package:tennoji/src/elements/framework.dart';
-import 'package:tennoji/src/widgets/framework.dart';
-import 'package:tennoji/src/rendering/box.dart';
+import 'package:barsource/src/foundation/binding_base.dart';
+import 'package:barsource/src/rendering/binding.dart';
+import 'package:barsource/src/scheduler/binding.dart';
+import 'package:barsource/src/elements/framework.dart';
+import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/src/rendering/box.dart';
 
 mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
   BuildOwner? _buildOwner;

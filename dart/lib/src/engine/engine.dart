@@ -4,19 +4,19 @@ import 'dart:ffi';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/engine/bindings.dart';
-import 'package:tennoji/src/foundation/binding_base.dart';
-import 'package:tennoji/src/rendering/binding.dart';
-import 'package:tennoji/src/scheduler/binding.dart';
-import 'package:tennoji/src/widgets/binding.dart';
-import 'package:tennoji/src/engine/audio_binding.dart';
-import 'package:tennoji/src/engine/audio_contributor.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/engine/bindings.dart';
+import 'package:barsource/src/foundation/binding_base.dart';
+import 'package:barsource/src/rendering/binding.dart';
+import 'package:barsource/src/scheduler/binding.dart';
+import 'package:barsource/src/widgets/binding.dart';
+import 'package:barsource/src/engine/audio_binding.dart';
+import 'package:barsource/src/engine/audio_contributor.dart';
 import 'package:logging/logging.dart';
-import 'package:tennoji/src/widgets/framework.dart';
-import 'package:tennoji/src/rendering/view.dart';
-import 'package:tennoji/src/rendering/object.dart';
-import 'package:tennoji/src/scheduler/ticker.dart';
+import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/src/rendering/view.dart';
+import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/scheduler/ticker.dart';
 
 export 'bindings.dart';
 export 'audio_binding.dart';
@@ -150,6 +150,9 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     try {
       while (_currentTime < config.duration) {
         handleBeginFrame(_currentTime);
+
+        // execute microtasks
+        await Future.delayed(Duration.zero);
         
         // Update view time
         renderView.configuration = ViewConfiguration(

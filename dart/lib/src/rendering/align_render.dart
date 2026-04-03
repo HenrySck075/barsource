@@ -1,6 +1,6 @@
-import 'package:tennoji/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 
-import 'package:tennoji/src/painting/alignment.dart';
+import 'package:barsource/src/painting/alignment.dart';
 import 'box.dart';
 import 'object.dart';
 

@@ -96,7 +96,10 @@ TENNOJI_EXPORT void rina_canvas_clip_rect(
   float width, float height,
   bool doAntiAlias
 );
-TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha);
+TENNOJI_EXPORT int rina_canvas_save_layer(
+  TennojiCanvas* canvas, 
+  TennojiCanvasPaintMetadata* paint
+);
 
 // Texture (GPU texture handle, opaque int ID)
 // no longer true

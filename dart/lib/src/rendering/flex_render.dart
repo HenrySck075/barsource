@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:tennoji/src/rendering/parent_data.dart';
+import 'package:barsource/src/rendering/parent_data.dart';
 
 import 'box.dart';
 import 'object.dart';

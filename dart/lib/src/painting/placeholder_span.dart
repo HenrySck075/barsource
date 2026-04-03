@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 library;
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui show PlaceholderAlignment;
+import 'package:barsource/src/dart_ui/dart_ui.dart' as ui show PlaceholderAlignment;
 
 import 'basic_types.dart';
 import 'inline_span.dart';

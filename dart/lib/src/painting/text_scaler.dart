@@ -6,7 +6,7 @@ import 'dart:math' show max, min;
 
 import 'package:meta/meta.dart';
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart';
 
 
 /// A class that describes how textual contents should be scaled for better

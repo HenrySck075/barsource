@@ -213,10 +213,12 @@ TENNOJI_EXPORT void rina_canvas_clip_rect(
     canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), doAntiAlias);
 }
 
-TENNOJI_EXPORT int rina_canvas_save_layer(TennojiCanvas* canvas, int alpha) {
+TENNOJI_EXPORT int rina_canvas_save_layer(
+    TennojiCanvas* canvas,
+    TennojiCanvasPaintMetadata* metadata
+) {
     if (!canvas || !canvas->canvas) return -1;
-    SkPaint paint;
-    paint.setAlpha(static_cast<uint8_t>(alpha & 0xFF));
+    auto paint = paint_create_from_encoded(metadata);
     return canvas->canvas->saveLayer(nullptr, &paint);
 }
 

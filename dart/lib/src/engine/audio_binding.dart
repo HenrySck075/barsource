@@ -1,6 +1,6 @@
 import 'dart:ffi';
-import 'package:tennoji/src/engine/bindings.dart';
-import 'package:tennoji/src/foundation/binding_base.dart';
+import 'package:barsource/src/engine/bindings.dart';
+import 'package:barsource/src/foundation/binding_base.dart';
 
 /// @deprecated Legacy audio binding for packet-based audio system.
 /// 

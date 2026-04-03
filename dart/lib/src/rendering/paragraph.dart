@@ -1,13 +1,13 @@
-import 'package:tennoji/src/painting/strut_style.dart';
-import 'package:tennoji/src/painting/text_painter.dart';
-import 'package:tennoji/src/painting/inline_span.dart';
-import 'package:tennoji/src/painting/basic_types.dart';
-import 'package:tennoji/src/painting/text_scaler.dart';
-import 'package:tennoji/src/rendering/box.dart';
-import 'package:tennoji/src/rendering/object.dart';
-import 'package:tennoji/src/dart_ui/dart_ui.dart' as ui;
+import 'package:barsource/src/painting/strut_style.dart';
+import 'package:barsource/src/painting/text_painter.dart';
+import 'package:barsource/src/painting/inline_span.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/text_scaler.dart';
+import 'package:barsource/src/rendering/box.dart';
+import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/dart_ui/dart_ui.dart' as ui;
 
-export 'package:tennoji/src/painting/text_painter.dart' show TextOverflow;
+export 'package:barsource/src/painting/text_painter.dart' show TextOverflow;
 
 class RenderParagraph extends RenderBox {
   RenderParagraph(

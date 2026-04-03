@@ -1,14 +1,14 @@
 import 'dart:io';
 
-import 'package:tennoji/src/dart_ui/dart_ui.dart';
-import 'package:tennoji/src/elements/framework.dart';
-import 'package:tennoji/src/engine/engine.dart';
-import 'package:tennoji/src/foundation/key.dart';
-import 'package:tennoji/src/rendering/box.dart';
-import 'package:tennoji/src/rendering/object.dart';
-import 'package:tennoji/src/rendering/pipeline_owner.dart';
-import 'package:tennoji/src/widgets/framework.dart';
-import 'package:tennoji/dart_ui.dart' as ui;
+import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/elements/framework.dart';
+import 'package:barsource/src/engine/engine.dart';
+import 'package:barsource/src/foundation/key.dart';
+import 'package:barsource/src/rendering/box.dart';
+import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/rendering/pipeline_owner.dart';
+import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/dart_ui.dart' as ui;
 
 // like flutter
 enum ResizeImagePolicy {exact, fit}

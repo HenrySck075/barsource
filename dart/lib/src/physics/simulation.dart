@@ -1,4 +1,4 @@
-import 'package:tennoji/src/foundation/object.dart';
+import 'package:barsource/src/foundation/object.dart';
 
 class Tolerance {
   /// Creates a [Tolerance] object. By default, the distance, time, and velocity
