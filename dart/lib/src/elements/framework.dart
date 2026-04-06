@@ -1,7 +1,7 @@
+import 'package:barsource/src/foundation/const.dart';
 import 'package:barsource/src/widgets/binding.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
-import 'package:barsource/src/foundation/key.dart';
 import 'package:barsource/src/painting/basic_types.dart' show VoidCallback;
 import 'package:barsource/src/rendering/parent_data.dart';
 import 'dart:collection';
@@ -245,7 +245,52 @@ class BuildOwner {
   final _InactiveElements _inactiveElements = _InactiveElements();
   int _debugStateLockLevel = 0;
 
-  Map<GlobalKey, Element> _globalKeyRegistry = {};
+  final Set<Element>? _debugIllFatedElements = kDebugMode ? HashSet<Element>() : null;
+  final Map<GlobalKey, Element> _globalKeyRegistry = {};
+  void _registerGlobalKey(GlobalKey key, Element element) {
+    assert(() {
+      if (_globalKeyRegistry.containsKey(key)) {
+        final Element oldElement = _globalKeyRegistry[key]!;
+        assert(element.widget.runtimeType != oldElement.widget.runtimeType);
+        _debugIllFatedElements?.add(oldElement);
+      }
+      return true;
+    }());
+    _globalKeyRegistry[key] = element;
+  }
+
+  void _unregisterGlobalKey(GlobalKey key, Element element) {
+    assert(() {
+      if (_globalKeyRegistry.containsKey(key) && _globalKeyRegistry[key] != element) {
+        final Element oldElement = _globalKeyRegistry[key]!;
+        assert(element.widget.runtimeType != oldElement.widget.runtimeType);
+      }
+      return true;
+    }());
+    if (_globalKeyRegistry[key] == element) {
+      _globalKeyRegistry.remove(key);
+    }
+  }
+
+
+  Map<Element, Set<GlobalKey>>? _debugElementsThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans;
+
+  void _debugTrackElementThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans(
+    Element node,
+    GlobalKey key,
+  ) {
+    final Map<Element, Set<GlobalKey>> map =
+        _debugElementsThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans ??=
+            HashMap<Element, Set<GlobalKey>>();
+    final Set<GlobalKey> keys = map.putIfAbsent(node, () => HashSet<GlobalKey>());
+    keys.add(key);
+  }
+
+  void _debugElementWasRebuilt(Element node) {
+    _debugElementsThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans?.remove(node);
+  }
+
+
   void lockState(VoidCallback callback) {
     assert(_debugStateLockLevel >= 0);
     assert(() {
@@ -478,6 +523,10 @@ abstract class Element implements BuildContext {
     _active = true;
     _lifecycleState = _ElementLifecycle.active;
     assert(owner != null);
+    final Key? key = widget.key;
+    if (key is GlobalKey) {
+      owner!._registerGlobalKey(key, this);
+    }
     _updateInheritance();
   }
   
@@ -546,6 +595,87 @@ abstract class Element implements BuildContext {
 
     return newChild;
   }
+  Element inflateWidget(Widget newWidget, Object? newSlot) {
+    final Key? key = newWidget.key;
+    final Element? inactiveChild = key is GlobalKey ? _retakeInactiveElement(key, newWidget) : null;
+    final Element newChild = inactiveChild ?? newWidget.createElement();
+    try {
+        if (inactiveChild != null) {
+          assert(inactiveChild._parent == null);
+          inactiveChild._activateWithParent(this, newSlot);
+          final Element? updatedChild = updateChild(inactiveChild, newWidget, newSlot);
+          assert(inactiveChild == updatedChild);
+          return updatedChild!;
+        } else {
+          newChild.mount(this, newSlot);
+          assert(newChild._lifecycleState == _ElementLifecycle.active);
+          return newChild;
+        }
+      } catch (_) {
+        // Attempt to do some clean-up if activation or mount fails
+        // to leave tree in a reasonable state.
+        _deactivateFailedChildSilently(newChild);
+        rethrow;
+      }  } 
+  Element? _retakeInactiveElement(GlobalKey key, Widget newWidget) {
+    // The "inactivity" of the element being retaken here may be forward-looking: if
+    // we are taking an element with a GlobalKey from an element that currently has
+    // it as a child, then we know that element will soon no longer have that
+    // element as a child. The only way that assumption could be false is if the
+    // global key is being duplicated, and we'll try to track that using the
+    // _debugTrackElementThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans call below.
+    final Element? element = key._currentElement;
+    if (element == null) {
+      return null;
+    }
+    if (!Widget.canUpdate(element.widget, newWidget)) {
+      return null;
+    }
+    /*
+    assert(() {
+      if (debugPrintGlobalKeyedWidgetLifecycle) {
+        debugPrint(
+          'Attempting to take $element from ${element._parent ?? "inactive elements list"} to put in $this.',
+        );
+      }
+      return true;
+    }());
+    */
+    final Element? parent = element._parent;
+    if (parent != null) {
+      assert(() {
+        if (parent == this) {
+          /*
+          throw FlutterError.fromParts(<DiagnosticsNode>[
+            ErrorSummary("A GlobalKey was used multiple times inside one widget's child list."),
+            DiagnosticsProperty<GlobalKey>('The offending GlobalKey was', key),
+            parent.describeElement('The parent of the widgets with that key was'),
+            element.describeElement('The first child to get instantiated with that key became'),
+            DiagnosticsProperty<Widget>(
+              'The second child that was to be instantiated with that key was',
+              widget,
+              style: DiagnosticsTreeStyle.errorProperty,
+            ),
+            ErrorDescription(
+              'A GlobalKey can only be specified on one widget at a time in the widget tree.',
+            ),
+          ]);
+          */
+          throw StateError("A GlobalKey was used multiple times inside one widget's child list. The offending GlobalKey was $key. The parent of the widgets with that key was $parent. The first child to get instantiated with that key became $element. The second child that was to be instantiated with that key was $widget. A GlobalKey can only be specified on one widget at a time in the widget tree.");
+        }
+        parent.owner!._debugTrackElementThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans(
+          parent,
+          key,
+        );
+        return true;
+      }());
+      parent.forgetChild(element);
+      parent.deactivateChild(element);
+    }
+    assert(element._parent == null);
+    owner!._inactiveElements.remove(element);
+    return element;
+  }
 
   void unmount() {
     _log.finer('Unmounting');
@@ -559,6 +689,11 @@ abstract class Element implements BuildContext {
       _dependencies = null;
     }
     _inheritedElements = null;
+
+    final Key? key = widget.key;
+    if (key is GlobalKey) {
+      owner!._unregisterGlobalKey(key, this);
+    }
 
     _active = false;
     _lifecycleState = _ElementLifecycle.defunct;
@@ -714,25 +849,6 @@ abstract class ComponentElement extends Element {
     Widget built = build();
     _child = updateChild(_child, built, slot);
     super.performRebuild();
-  }
-
-  Element? updateChild(Element? child, Widget? newWidget, Object? newSlot) {
-    if (newWidget == null) {
-      if (child != null) {
-        child.unmount();
-      }
-      return null;
-    }
-    if (child != null) {
-      if (identical(child.widget, newWidget)) {
-        return child;
-      }
-      child.update(newWidget);
-      return child;
-    }
-    final newChild = newWidget.createElement();
-    newChild.mount(this, newSlot);
-    return newChild;
   }
 
   Widget build();
@@ -962,14 +1078,6 @@ abstract class RenderObjectElement extends Element {
     super.update(newWidget);
     newWidget.updateRenderObject(this, _renderObject!);
   }
-
-  @override
-  Element inflateWidget(Widget newWidget, Object? newSlot) {
-    final Key? key = newWidget.key;
-    final Element newChild = newWidget.createElement();
-    newChild.mount(this, newSlot);
-    return newChild;
-  } 
 
   @override
   void unmount() {

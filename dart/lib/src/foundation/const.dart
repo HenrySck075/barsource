@@ -5,3 +5,5 @@
 /// disregard.
 const double precisionErrorTolerance = 1e-10;
 
+const bool kReleaseMode = bool.fromEnvironment('dart.vm.product');
+const bool kDebugMode = !kReleaseMode;
