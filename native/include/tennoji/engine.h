@@ -41,12 +41,15 @@ TENNOJI_EXPORT int rina_decoder_read_audio(
   int64_t timestamp_us
 );
 
+
 // Canvas (Skia command recording)
 TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
   TennojiEngine* engine,
   int32_t width,
   int32_t height
 );
+TENNOJI_EXPORT TennojiPicture* rina_canvas_finish_recording(TennojiCanvas* canvas);
+
 TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas);
 
 TENNOJI_EXPORT void rina_canvas_draw_color(
@@ -100,6 +103,9 @@ TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paint
 );
+
+TENNOJI_EXPORT TennojiCanvasImage* rina_picture_to_image(TennojiPicture* picture, TennojiEngine* engine);
+TENNOJI_EXPORT void rina_picture_destroy(TennojiPicture* picture);
 
 // Texture (GPU texture handle, opaque int ID)
 // no longer true

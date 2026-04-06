@@ -1,4 +1,15 @@
 import 'package:meta/meta.dart';
+import 'dart:typed_data';
+import '../dart_ui/dart_ui.dart';
+
+class LayerHandle<T extends Layer> {
+  T? _layer;
+  
+  T? get layer => _layer;
+  set layer(T? value) {
+    _layer = value;
+  }
+}
 
 abstract class Layer {
   int _depth = 0;
@@ -17,6 +28,8 @@ abstract class Layer {
   Object? get owner => _owner;
   bool get attached => owner != null;
 
+  final LayerHandle<Layer> _parentHandle = LayerHandle<Layer>();
+
   @mustCallSuper
   void attach(covariant Object owner) {
     assert(_owner == null);
@@ -30,14 +43,26 @@ abstract class Layer {
   }
   @mustCallSuper
   void remove() {
-    //assert(!_debugMutationsLocked);
     parent?._removeChild(this);
   }
 
-  /// i propose pulling another Canvas to pass down to the layer tree
-  /// but you do you i guess
+  /// Subclasses should override to paint themselves.
+  void addToScene(Canvas canvas, Offset offset);
 
   void dispose() {}
+  
+  /// Update the depth of this layer.
+  void updateSubtreeDepth() {
+    final int expectedDepth = parent != null ? parent!.depth + 1 : 0;
+    if (_depth != expectedDepth) {
+      _depth = expectedDepth;
+      redepthChildren();
+    }
+  }
+  
+  /// Override in subclasses to update child depths.
+  @protected
+  void redepthChildren() {}
 }
 
 abstract class ContainerLayer extends Layer {
@@ -53,9 +78,9 @@ abstract class ContainerLayer extends Layer {
     removeAllChildren();
     super.dispose();
   }
+  
   @override
   void attach(Object owner) {
-    //assert(!_debugMutationsLocked);
     super.attach(owner);
     Layer? child = firstChild;
     while (child != null) {
@@ -66,25 +91,28 @@ abstract class ContainerLayer extends Layer {
 
   @override
   void detach() {
-    //assert(!_debugMutationsLocked);
     super.detach();
     Layer? child = firstChild;
     while (child != null) {
       child.detach();
       child = child.nextSibling;
     }
-    // Detach indicates that we may never be composited again. Clients
-    // interested in observing composition need to get an update here because
-    // they might otherwise never get another one even though the layer is no
-    // longer visible.
-    //
-    // Children fired them already in child.detach().
-    //_fireCompositionCallbacks(includeChildren: false);
   }
 
+  @override
+  void addToScene(Canvas canvas, Offset offset) {
+    addChildrenToScene(canvas, offset);
+  }
+
+  void addChildrenToScene(Canvas canvas, Offset offset) {
+    Layer? child = firstChild;
+    while (child != null) {
+      child.addToScene(canvas, offset);
+      child = child.nextSibling;
+    }
+  }
 
   void append(Layer child) {
-    //assert(!_debugMutationsLocked);
     assert(child != this);
     assert(child != firstChild);
     assert(child != lastChild);
@@ -112,16 +140,46 @@ abstract class ContainerLayer extends Layer {
     assert(child.attached == attached);
   }
 
+  void _removeChild(Layer child) {
+    assert(child.parent == this);
+    assert(child._parentHandle.layer == child);
+    
+    child._parentHandle.layer = null;
+    
+    if (child._previousSibling == null) {
+      assert(_firstChild == child);
+      _firstChild = child._nextSibling;
+    } else {
+      child._previousSibling!._nextSibling = child._nextSibling;
+    }
+    
+    if (child._nextSibling == null) {
+      assert(_lastChild == child);
+      _lastChild = child._previousSibling;
+    } else {
+      child._nextSibling!._previousSibling = child._previousSibling;
+    }
+    
+    child._previousSibling = null;
+    child._nextSibling = null;
+    _dropChild(child);
+  }
+
+  void removeAllChildren() {
+    Layer? child = firstChild;
+    while (child != null) {
+      final Layer? next = child.nextSibling;
+      child._previousSibling = null;
+      child._nextSibling = null;
+      child._parentHandle.layer = null;
+      _dropChild(child);
+      child = next;
+    }
+    _firstChild = null;
+    _lastChild = null;
+  }
+
   void _adoptChild(Layer child) {
-    /*
-    assert(!_debugMutationsLocked);
-    if (!alwaysNeedsAddToScene) {
-      markNeedsAddToScene();
-    }
-    if (child._compositionCallbackCount != 0) {
-      _updateSubtreeCompositionObserverCount(child._compositionCallbackCount);
-    }
-    */
     assert(child._parent == null);
     assert(() {
       Layer node = this;
@@ -136,5 +194,115 @@ abstract class ContainerLayer extends Layer {
       child.attach(_owner!);
     }
     redepthChild(child);
+  }
+
+  void _dropChild(Layer child) {
+    assert(child._parent == this);
+    assert(child.attached == attached);
+    child._parent = null;
+    if (attached) {
+      child.detach();
+    }
+  }
+
+  void redepthChild(Layer child) {
+    assert(child.owner == owner);
+    if (child._depth <= _depth) {
+      child._depth = _depth + 1;
+      child.redepthChildren();
+    }
+  }
+
+  @override
+  void redepthChildren() {
+    Layer? child = firstChild;
+    while (child != null) {
+      redepthChild(child);
+      child = child.nextSibling;
+    }
+  }
+}
+
+/// A layer that clips its children.
+class ClipRectLayer extends ContainerLayer {
+  ClipRectLayer({required Rect clipRect}) : _clipRect = clipRect;
+  
+  Rect _clipRect;
+  Rect get clipRect => _clipRect;
+  set clipRect(Rect value) {
+    if (_clipRect != value) {
+      _clipRect = value;
+    }
+  }
+
+  @override
+  void addToScene(Canvas canvas, Offset offset) {
+    canvas.save();
+    canvas.clipRect(_clipRect.shift(offset), true);
+    addChildrenToScene(canvas, offset);
+    canvas.restore();
+  }
+}
+
+/// A layer that transforms its children.
+class TransformLayer extends ContainerLayer {
+  TransformLayer({required Float64List transform}) : _transform = transform;
+  
+  Float64List _transform;
+  Float64List get transform => _transform;
+  set transform(Float64List value) {
+    if (_transform != value) {
+      _transform = value;
+    }
+  }
+
+  @override
+  void addToScene(Canvas canvas, Offset offset) {
+    canvas.save();
+    // TODO: Add canvas.transform() method to support matrix transforms
+    addChildrenToScene(canvas, Offset.zero);
+    canvas.restore();
+  }
+}
+
+/// A layer that applies opacity to its children.
+class OpacityLayer extends ContainerLayer {
+  OpacityLayer({required int alpha}) : _alpha = alpha;
+  
+  int _alpha;
+  int get alpha => _alpha;
+  set alpha(int value) {
+    if (_alpha != value) {
+      _alpha = value;
+    }
+  }
+
+  @override
+  void addToScene(Canvas canvas, Offset offset) {
+    final paint = Paint()..color = Color.fromARGB(_alpha, 255, 255, 255);
+    canvas.saveLayer(paint);
+    addChildrenToScene(canvas, offset);
+    canvas.restore();
+  }
+}
+
+/// A layer that represents a picture to be painted.
+class PictureLayer extends Layer {
+  PictureLayer(this.canvasRect);
+  
+  final Rect canvasRect;
+
+  Picture? picture;
+
+  @override
+  void addToScene(Canvas canvas, Offset offset) {
+    canvas.drawPicture(picture!);
+    // Picture painting will be added once Picture/PictureRecorder are implemented
+    // For now this layer just serves as a marker
+  }
+  
+  @override
+  void dispose() {
+    super.dispose();
   }
 }

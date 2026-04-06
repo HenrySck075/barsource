@@ -35,6 +35,7 @@ trstruct(TennojiFragmentProgram);
 tstruct(TennojiFragmentShader);
 tstruct(TennojiColorFilter);
 tstruct(TennojiImageFilter);
+tstruct(TennojiPicture);
 
 typedef struct {
   int64_t durationMs;

@@ -6027,7 +6027,6 @@ enum ClipOp {
   intersect,
 }
 
-/*
 /// Signature for [Picture] lifecycle events.
 typedef PictureEventCallback = void Function(Picture picture);
 
@@ -6053,12 +6052,6 @@ abstract class Picture {
   /// allows multiple callbacks.
   static PictureEventCallback? onDispose;
 
-  /// Creates an image from this picture.
-  ///
-  /// The returned image will be `width` pixels wide and `height` pixels high.
-  /// The picture is rasterized within the 0 (left), 0 (top), `width` (right),
-  /// `height` (bottom) bounds. Content outside these bounds is clipped.
-  Future<Image> toImage(int width, int height);
 
   /// Synchronously creates a handle to an image of this picture.
   ///
@@ -6081,7 +6074,7 @@ abstract class Picture {
   /// [Image]. If [TargetPixelFormat.dontCare] is specified, the pixel format
   /// will be chosen automatically based on the GPU capabilities.
   /// {@endtemplate}
-  Image toImageSync(
+  Image toImage(
     int width,
     int height, {
     TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
@@ -6104,35 +6097,19 @@ abstract class Picture {
   int get approximateBytesUsed;
 }
 
-base class _NativePicture extends NativeFieldWrapperClass1 implements Picture {
+base class _NativePicture implements Picture {
   /// This class is created by the engine, and should not be instantiated
   /// or extended directly.
   ///
   /// To create a [Picture], use a [PictureRecorder].
-  _NativePicture._();
-
-  @override
-  Future<Image> toImage(int width, int height) {
-    assert(!_disposed);
-    if (width <= 0 || height <= 0) {
-      throw Exception('Invalid image dimensions.');
-    }
-    return _futurize(
-      (_Callback<Image?> callback) => _toImage(width, height, (_Image? image) {
-        if (image == null) {
-          callback(null);
-        } else {
-          callback(Image._(image, image.width, image.height));
-        }
-      }),
-    );
+  _NativePicture._(this._nativePtr) {
+    Picture.onCreate?.call(this);
   }
 
-  @Native<Handle Function(Pointer<Void>, Uint32, Uint32, Handle)>(symbol: 'Picture::toImage')
-  external String? _toImage(int width, int height, void Function(_Image?) callback);
+  final Pointer<TennojiPicture> _nativePtr;
 
   @override
-  Image toImageSync(
+  Image toImage(
     int width,
     int height, {
     TargetPixelFormat targetFormat = TargetPixelFormat.dontCare,
@@ -6142,15 +6119,11 @@ base class _NativePicture extends NativeFieldWrapperClass1 implements Picture {
       throw Exception('Invalid image dimensions.');
     }
 
-    final image = _Image._();
-    _toImageSync(width, height, targetFormat.index, image);
-    return Image._(image, image.width, image.height);
+    return Image._(
+      _Image._(rina_picture_to_image(_nativePtr, Engine.instance.nativePtr)),
+      width, height
+    );
   }
-
-  @Native<Void Function(Pointer<Void>, Uint32, Uint32, Int32, Handle)>(
-    symbol: 'Picture::toImageSync',
-  )
-  external void _toImageSync(int width, int height, int targetFormat, _Image outImage);
 
   @override
   void dispose() {
@@ -6160,13 +6133,8 @@ base class _NativePicture extends NativeFieldWrapperClass1 implements Picture {
       return true;
     }());
     Picture.onDispose?.call(this);
-    _dispose();
+    rina_picture_dispose(_nativePtr);
   }
-
-  /// This can't be a leaf call because the native function calls Dart API
-  /// (Dart_SetNativeInstanceField).
-  @Native<Void Function(Pointer<Void>)>(symbol: 'Picture::dispose')
-  external void _dispose();
 
   bool _disposed = false;
 
@@ -6182,88 +6150,11 @@ base class _NativePicture extends NativeFieldWrapperClass1 implements Picture {
   }
 
   @override
-  @Native<Uint64 Function(Pointer<Void>)>(symbol: 'Picture::GetAllocationSize', isLeaf: true)
-  external int get approximateBytesUsed;
+  int get approximateBytesUsed => 0; // TODO: Implement actual size tracking
 
   @override
   String toString() => 'Picture';
 }
-
-/// Records a [Picture] containing a sequence of graphical operations.
-///
-/// To begin recording, construct a [Canvas] to record the commands.
-/// To end recording, use the [PictureRecorder.endRecording] method.
-///
-/// ## Use with the Flutter framework
-///
-/// The Flutter framework's [RendererBinding] provides a hook for creating
-/// [PictureRecorder] objects ([RendererBinding.createPictureRecorder]) that
-/// allows tests to hook into the scene creation logic. When creating a
-/// [PictureRecorder] and [Canvas] that will be used with a [PictureLayer] as
-/// part of the [Scene] in the context of the Flutter framework, consider
-/// calling [RendererBinding.createPictureRecorder] instead of calling the
-/// [PictureRecorder.new] constructor directly.
-///
-/// This does not apply when using a canvas to generate a bitmap for other
-/// purposes, e.g. for generating a PNG image using [Picture.toImage].
-abstract class PictureRecorder {
-  /// Creates a new idle PictureRecorder. To associate it with a
-  /// [Canvas] and begin recording, pass this [PictureRecorder] to the
-  /// [Canvas] constructor.
-  factory PictureRecorder() = _NativePictureRecorder;
-
-  /// Whether this object is currently recording commands.
-  ///
-  /// Specifically, this returns true if a [Canvas] object has been
-  /// created to record commands and recording has not yet ended via a
-  /// call to [endRecording], and false if either this
-  /// [PictureRecorder] has not yet been associated with a [Canvas],
-  /// or the [endRecording] method has already been called.
-  bool get isRecording;
-
-  /// Finishes recording graphical operations.
-  ///
-  /// Returns a picture containing the graphical operations that have been
-  /// recorded thus far. After calling this function, both the picture recorder
-  /// and the canvas objects are invalid and cannot be used further.
-  Picture endRecording();
-}
-
-base class _NativePictureRecorder extends NativeFieldWrapperClass1 implements PictureRecorder {
-  _NativePictureRecorder() {
-    _constructor();
-  }
-
-  @Native<Void Function(Handle)>(symbol: 'PictureRecorder::Create')
-  external void _constructor();
-
-  @override
-  bool get isRecording => _canvas != null;
-
-  @override
-  Picture endRecording() {
-    if (_canvas == null) {
-      throw StateError('PictureRecorder did not start recording.');
-    }
-    final picture = _NativePicture._();
-    _endRecording(picture);
-    _canvas!._recorder = null;
-    _canvas = null;
-    // We invoke the handler here, not in the Picture constructor, because we want
-    // [picture.approximateBytesUsed] to be available for the handler.
-    Picture.onCreate?.call(picture);
-    return picture;
-  }
-
-  @Native<Void Function(Pointer<Void>, Handle)>(symbol: 'PictureRecorder::endRecording')
-  external void _endRecording(_NativePicture outPicture);
-
-  _NativeCanvas? _canvas;
-
-  @override
-  String toString() => 'PictureRecorder(recording: $isRecording)';
-}
-*/
 /// A single shadow.
 ///
 /// Multiple shadows are stacked together in a [TextStyle].
@@ -6764,15 +6655,17 @@ class PictureRasterizationException implements Exception {
 /// Wrapper around native canvas handle.
 class Canvas {
   Canvas(this._nativePtr);
-  final Pointer<TennojiCanvas> _nativePtr;
+  Pointer<TennojiCanvas> _nativePtr;
 
   Pointer<TennojiCanvas> get nativePtr => _nativePtr;
 
   void drawColor(Color color, BlendMode blendMode) {
+    debugAssertNullPointer();
     rina_canvas_draw_color(_nativePtr, color.value, blendMode.index);
   }
 
   void drawParagraph(Paragraph paragraph, Offset offset) {
+    debugAssertNullPointer();
     rina_canvas_draw_paragraph(
       _nativePtr,
       (paragraph as _NativeParagraph)._nativePtr,
@@ -6782,6 +6675,7 @@ class Canvas {
   }
 
   void drawPaint(Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_draw_paint(
       _nativePtr, 
@@ -6791,6 +6685,7 @@ class Canvas {
   }
 
   void drawRect(Rect rect, Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_draw_rect(
       _nativePtr,
@@ -6806,6 +6701,7 @@ class Canvas {
   /// this is specifically used by RenderVideoClip.paint 
   /// because it has the pointer 
   void drawImageNative(Pointer<TennojiCanvasImage> image, Offset offset, Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_draw_image(
       _nativePtr,
@@ -6818,6 +6714,7 @@ class Canvas {
   }
 
   void drawImage(Image image, Offset offset, Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_draw_image(
       _nativePtr,
@@ -6830,6 +6727,7 @@ class Canvas {
   }
 
   void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_draw_image_rect(
       _nativePtr,
@@ -6847,27 +6745,37 @@ class Canvas {
     );
   }
 
+  void drawPicture(Picture picture) {
+    debugAssertNullPointer();
+  }
+
   void save() {
+    debugAssertNullPointer();
     rina_canvas_save(_nativePtr);
   }
 
   void restore() {
+    debugAssertNullPointer();
     rina_canvas_restore(_nativePtr);
   }
 
   void translate(double dx, double dy) {
+    debugAssertNullPointer();
     rina_canvas_translate(_nativePtr, dx, dy);
   }
 
   void scale(double sx, double sy) {
+    debugAssertNullPointer();
     rina_canvas_scale(_nativePtr, sx, sy);
   }
 
   void rotate(double degrees) {
+    debugAssertNullPointer();
     rina_canvas_rotate(_nativePtr, degrees);
   }
 
   void clipRect(Rect rect, bool doAntiAlias) {
+    debugAssertNullPointer();
     rina_canvas_clip_rect(
       _nativePtr,
       rect.left,
@@ -6879,8 +6787,22 @@ class Canvas {
   }
 
   void saveLayer(Paint paint) {
+    debugAssertNullPointer();
     using((arena)=>
     rina_canvas_save_layer(_nativePtr,paint._createPaintMetadata(arena))
     );
+  }
+
+  /// this [Canvas] is effectively unusable after this call
+  Picture endRecording() {
+    debugAssertNullPointer();
+    final ret = _NativePicture._(rina_canvas_finish_recording(_nativePtr));
+    rina_canvas_destroy(_nativePtr);
+    _nativePtr = nullptr;
+    return ret;
+  }
+
+  void debugAssertNullPointer() {
+    assert(_nativePtr == nullptr);
   }
 }

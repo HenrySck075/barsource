@@ -13,3 +13,4 @@ export 'src/rendering/parent_data.dart';
 export 'src/rendering/binding.dart';
 export 'src/rendering/media_render.dart';
 export 'src/rendering/flex_render.dart';
+export 'src/rendering/layer.dart';

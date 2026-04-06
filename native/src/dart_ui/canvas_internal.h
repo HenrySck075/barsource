@@ -1,6 +1,7 @@
 #pragma once
 
 #include "include/core/SkPaint.h"
+#include "include/core/SkPicture.h"
 #include "include/core/SkSurface.h"
 #include "include/core/SkCanvas.h"
 #include "tennoji/types.h"
@@ -17,3 +18,6 @@ struct TennojiCanvas {
   int height = 0;
 };
 SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata);
+struct TennojiPicture {
+  sk_sp<SkPicture> picture;
+};

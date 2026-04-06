@@ -1,9 +1,10 @@
 #include "../engine_internal.h"
 #include "canvas_internal.h"
-#include "../dart_ui/image_internal.h"
-#include "../dart_ui/shader_internal.h"
-#include "../dart_ui/text/paragraph_internal.h"
-#include "../dart_ui/stuff.h"
+#include "image_internal.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "shader_internal.h"
+#include "text/paragraph_internal.h"
+#include "stuff.h"
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkSurface.h"
@@ -14,7 +15,7 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkMaskFilter.h"
 
-#include "skia_surface.h"
+#include "../renderer/skia_surface.h"
 #include "tennoji/types.h"
 
 // copied straight from the dart file idc
@@ -220,6 +221,37 @@ TENNOJI_EXPORT int rina_canvas_save_layer(
     if (!canvas || !canvas->canvas) return -1;
     auto paint = paint_create_from_encoded(metadata);
     return canvas->canvas->saveLayer(nullptr, &paint);
+}
+
+
+TENNOJI_EXPORT TennojiPicture* rina_canvas_finish_recording(TennojiCanvas* canvas) {
+  return new TennojiPicture {
+    .picture = canvas->recorder->finishRecordingAsPicture()
+  };
+}
+
+TENNOJI_EXPORT TennojiCanvasImage* rina_picture_to_image(
+  TennojiPicture* picture,
+  TennojiEngine* engine // for gpu context
+) {
+  if (!picture || !engine) return nullptr;
+  // 1. Define the dimensions based on the picture's cull rect
+  SkRect bounds = picture->picture->cullRect();
+  SkImageInfo info = SkImageInfo::MakeN32Premul(bounds.width(), bounds.height());
+
+  // 2. Create a GPU-backed surface
+  sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(engine->grContext, skgpu::Budgeted::kYes, info);
+  if (!surface) return nullptr;
+
+  // 3. Draw the picture into the surface's canvas
+  SkCanvas* canvas = surface->getCanvas();
+  canvas->drawPicture(picture->picture);
+
+  // 4. Snap a snapshot. 
+  // Since the surface is GPU-backed, the image stays in GPU memory.
+  return new TennojiCanvasImage{
+    .image = surface->makeImageSnapshot()
+  };
 }
 
 } // extern "C"
