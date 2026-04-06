@@ -57,11 +57,11 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, Fl
     this.clipBehavior = .none
   });
 
-  final Axis direction;
-  final MainAxisAlignment mainAxisAlignment;
-  final CrossAxisAlignment crossAxisAlignment;
-  final MainAxisSize mainAxisSize;
-  final Clip clipBehavior;
+  Axis direction;
+  MainAxisAlignment mainAxisAlignment;
+  CrossAxisAlignment crossAxisAlignment;
+  MainAxisSize mainAxisSize;
+  Clip clipBehavior;
 
   double _getMainAxisExtent(Size size) =>
       direction == Axis.horizontal ? size.width : size.height;

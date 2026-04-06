@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
 
-import 'package:tennoji/tennoji.dart';
+import 'package:barsource/barsource.dart';
 
 import 'package:example/example.1.dart';
 

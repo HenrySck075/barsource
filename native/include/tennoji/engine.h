@@ -103,6 +103,10 @@ TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paint
 );
+TENNOJI_EXPORT int rina_canvas_save_layer_alpha(
+  TennojiCanvas* canvas, 
+  uint8_t alpha
+);
 
 TENNOJI_EXPORT TennojiCanvasImage* rina_picture_to_image(TennojiPicture* picture, TennojiEngine* engine);
 TENNOJI_EXPORT void rina_picture_destroy(TennojiPicture* picture);

@@ -34,7 +34,7 @@ extern "C" {
 #include "include/core/SkPicture.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 
-#include "../renderer/canvas_internal.h"
+#include "../dart_ui/canvas_internal.h"
 #include "../renderer/skia_surface.h"
 #include "decoder_internal.h"
 #include "muxer.h"

@@ -255,7 +255,6 @@ class AnimationController extends Animation<double>
     assert(elapsedInSeconds >= 0.0);
     _value = clampDouble(_simulation!.x(elapsedInSeconds), lowerBound, upperBound);
     if (_simulation!.isDone(elapsedInSeconds)) {
-      print("Stopping animation (completed)");
       _status = (_direction == _AnimationDirection.forward)
           ? AnimationStatus.completed
           : AnimationStatus.dismissed;
@@ -448,6 +447,9 @@ class _InterpolationSimulation extends Simulation {
   bool isDone(double timeInSeconds) {
     return timeInSeconds > _durationInSeconds;
   }
+
+  @override
+  String toString() => "Interpolation from $_begin to $_end over $_durationInSeconds seconds with $_curve"; 
 }
 
 typedef _DirectionSetter = void Function(_AnimationDirection direction);

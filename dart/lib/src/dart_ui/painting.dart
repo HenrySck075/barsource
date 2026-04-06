@@ -6133,7 +6133,7 @@ base class _NativePicture implements Picture {
       return true;
     }());
     Picture.onDispose?.call(this);
-    rina_picture_dispose(_nativePtr);
+    rina_picture_destroy(_nativePtr);
   }
 
   bool _disposed = false;
@@ -6792,6 +6792,11 @@ class Canvas {
     rina_canvas_save_layer(_nativePtr,paint._createPaintMetadata(arena))
     );
   }
+  void saveLayerAlpha(int alpha) {
+    debugAssertNullPointer();
+    rina_canvas_save_layer_alpha(_nativePtr,alpha);
+  }
+
 
   /// this [Canvas] is effectively unusable after this call
   Picture endRecording() {

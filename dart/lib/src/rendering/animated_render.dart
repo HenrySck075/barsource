@@ -41,7 +41,7 @@ class RenderAnimatedOpacity extends RenderProxyBox {
       context.paintChild(child!, offset);
       return;
     }
-    context.canvas.saveLayer(alpha);
+    context.canvas.saveLayerAlpha(alpha);
     context.paintChild(child!, offset);
     context.canvas.restore();
   }

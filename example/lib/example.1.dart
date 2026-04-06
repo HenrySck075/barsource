@@ -38,7 +38,9 @@ class _bombState extends State<bomb> {
 
     EngineTimer(Duration(seconds: 1), ()=>_controller.insert(0, "hi"));
     EngineTimer(Duration(seconds: 2), ()=>_controller.insert(1, "hello"));
-    EngineTimer(Duration(seconds: 3), ()=>_controller.removeAt(0));
+    EngineTimer(Duration(seconds: 3), (){
+      print("hey"); _controller.removeAt(0);
+    });
   }
 
   @override

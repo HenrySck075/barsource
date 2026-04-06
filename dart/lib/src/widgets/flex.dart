@@ -28,7 +28,18 @@ class Flex extends MultiChildRenderObjectWidget {
         mainAxisAlignment: mainAxisAlignment,
         crossAxisAlignment: crossAxisAlignment,
         mainAxisSize: mainAxisSize,
+        clipBehavior: clipBehavior
       );
+  @override
+  void updateRenderObject(BuildContext context, covariant RenderObject renderObject) {
+    final flex = renderObject as RenderFlex;
+    flex
+      ..direction = direction
+      ..mainAxisAlignment = mainAxisAlignment
+      ..crossAxisAlignment = crossAxisAlignment
+      ..mainAxisSize = mainAxisSize
+      ..clipBehavior = clipBehavior;
+  }
 }
 
 /// A widget that lays out children horizontally.

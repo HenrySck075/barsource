@@ -1,5 +1,3 @@
-
-#include <iostream>
 #include <mutex>
 #include "include/core/SkColor.h"
 #include "include/core/SkData.h"
@@ -9,16 +7,13 @@
 #include "modules/skparagraph/include/TypefaceFontProvider.h"
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextStyle.h"
-#include "modules/skunicode/include/SkUnicode.h"
 #include "tennoji/engine.h"
 #include "modules/skparagraph/include/ParagraphBuilder.h"
 #include "modules/skunicode/include/SkUnicode_icu.h"
 #include "tennoji/types.h"
 #include "tennoji/export.h"
-#include "../../renderer/canvas_internal.h"
-#include "paragraph_internal.h"
-#include <execution>
-#include <string>
+#include "../canvas_internal.h"
+#include "paragraph_internal.h" // IWYU pragma: keep
 #include "include/core/SkFontScanner.h"
 
 skia::textlayout::StrutStyle strut_style_from_encoded(

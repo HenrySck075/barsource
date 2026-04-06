@@ -200,27 +200,34 @@ TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy)
 }
 
 TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->rotate(degrees);
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->rotate(degrees);
 }
 
 TENNOJI_EXPORT void rina_canvas_clip_rect(
-    TennojiCanvas* canvas,
-    float left, float top,
-    float width, float height, 
-    bool doAntiAlias
+  TennojiCanvas* canvas,
+  float left, float top,
+  float width, float height, 
+  bool doAntiAlias
 ) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), doAntiAlias);
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), doAntiAlias);
 }
 
 TENNOJI_EXPORT int rina_canvas_save_layer(
-    TennojiCanvas* canvas,
-    TennojiCanvasPaintMetadata* metadata
+  TennojiCanvas* canvas,
+  TennojiCanvasPaintMetadata* metadata
 ) {
-    if (!canvas || !canvas->canvas) return -1;
-    auto paint = paint_create_from_encoded(metadata);
-    return canvas->canvas->saveLayer(nullptr, &paint);
+  if (!canvas || !canvas->canvas) return -1;
+  auto paint = paint_create_from_encoded(metadata);
+  return canvas->canvas->saveLayer(nullptr, &paint);
+}
+TENNOJI_EXPORT int rina_canvas_save_layer_alpha(
+  TennojiCanvas* canvas, 
+  uint8_t alpha
+) {
+  if (!canvas || !canvas->canvas) return -1;
+  return canvas->canvas->saveLayerAlpha(nullptr, alpha);
 }
 
 

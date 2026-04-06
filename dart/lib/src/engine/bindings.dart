@@ -87,6 +87,13 @@ external ffi.Pointer<TennojiCanvas> rina_canvas_create(
   int height,
 );
 
+@ffi.Native<ffi.Pointer<TennojiPicture> Function(ffi.Pointer<TennojiCanvas>)>(
+  isLeaf: true,
+)
+external ffi.Pointer<TennojiPicture> rina_canvas_finish_recording(
+  ffi.Pointer<TennojiCanvas> canvas,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
 external void rina_canvas_destroy(ffi.Pointer<TennojiCanvas> canvas);
 
@@ -251,6 +258,28 @@ external int rina_canvas_save_layer(
   ffi.Pointer<TennojiCanvas> canvas,
   ffi.Pointer<TennojiCanvasPaintMetadata> paint,
 );
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvas>, ffi.Uint8)>(
+  isLeaf: true,
+)
+external int rina_canvas_save_layer_alpha(
+  ffi.Pointer<TennojiCanvas> canvas,
+  int alpha,
+);
+
+@ffi.Native<
+  ffi.Pointer<TennojiCanvasImage> Function(
+    ffi.Pointer<TennojiPicture>,
+    ffi.Pointer<TennojiEngine>,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiCanvasImage> rina_picture_to_image(
+  ffi.Pointer<TennojiPicture> picture,
+  ffi.Pointer<TennojiEngine> engine,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiPicture>)>(isLeaf: true)
+external void rina_picture_destroy(ffi.Pointer<TennojiPicture> picture);
 
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
 external void rina_texture_destroy(ffi.Pointer<TennojiCanvasImage> texture);
@@ -1554,6 +1583,10 @@ class _SymbolAddresses {
   ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>>
   get rina_canvas_destroy => ffi.Native.addressOf(self.rina_canvas_destroy);
   ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiPicture>)>
+  >
+  get rina_picture_destroy => ffi.Native.addressOf(self.rina_picture_destroy);
+  ffi.Pointer<
     ffi.NativeFunction<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>
   >
   get rina_texture_destroy => ffi.Native.addressOf(self.rina_texture_destroy);
@@ -1650,6 +1683,8 @@ final class TennojiFragmentShader extends ffi.Opaque {}
 final class TennojiColorFilter extends ffi.Opaque {}
 
 final class TennojiImageFilter extends ffi.Opaque {}
+
+final class TennojiPicture extends ffi.Opaque {}
 
 final class TennojiFrameInfo extends ffi.Struct {
   @ffi.Int64()

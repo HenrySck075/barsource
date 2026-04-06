@@ -1,4 +1,4 @@
-import 'package:barsource/tennoji.dart';
+import 'package:barsource/src/widgets/framework.dart';
 
 abstract class InheritedTheme extends InheritedWidget {
   const InheritedTheme({

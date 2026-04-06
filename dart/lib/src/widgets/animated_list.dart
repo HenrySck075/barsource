@@ -185,7 +185,6 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     });
 
     controller.forward().then<void>((_) {
-      print("boom");
       _removeActiveItemAt(_incomingItems, incomingItem.itemIndex)!.controller!.dispose();
     });
   }
@@ -215,7 +214,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
         ..sort();
     });
 
-    controller.reverse().then<void>((void value) {
+    controller.reverse().then<void>((void _) {
       _removeActiveItemAt(_outgoingItems, outgoingItem.itemIndex)!.controller!.dispose();
       _items.removeAt(outgoingItem.itemIndex);
 
@@ -238,12 +237,12 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     setState(() {
       final ops = widget.listController._consume();
       for (final op in ops) {
-        if (op.type == _ListOpType.insert) {
+        if (op.type == .insert) {
           if (op.index >= 0 && op.index <= _items.length) {
             insertItem(op.index, op.data!, duration: op.duration);
           }
-        } else if (op.type == _ListOpType.remove) {
-          if (op.index >= 0 && op.index < _incomingItems.length) {
+        } else if (op.type == .remove) {
+          if (op.index >= 0 && op.index < _items.length) {
             removeItem(op.index, duration: op.duration);
           }
         }
@@ -253,11 +252,10 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
 
   @override
   Widget build(BuildContext context) {
-    print("me rebuilt");
     return Column(
       children: List.generate(
         _items.length, (int itemIndex) {
-          final _ActiveItem? outgoingItem = _activeItemAt(_outgoingItems, itemIndex);
+          final _ActiveItem<T>? outgoingItem = _activeItemAt(_outgoingItems, itemIndex);
           if (outgoingItem != null) {
             return outgoingItem.removedItemBuilder!(context, outgoingItem.data!, outgoingItem.controller!);
           }
@@ -295,20 +293,5 @@ class _ActiveItem<T extends Object> implements Comparable<_ActiveItem> {
 
   @override
   int compareTo(_ActiveItem other) => itemIndex - other.itemIndex;
-}
-
-class _AnimatedListChild<T extends Object> extends StatelessWidget {
-  const _AnimatedListChild({
-    required this.entry,
-    required this.builder,
-  });
-
-  final _ActiveItem<T> entry;
-  final AnimatedItemBuilder<T> builder;
-
-  @override
-  Widget build(BuildContext context) {
-    return builder(context, entry.data!, entry.controller!);
-  }
 }
 

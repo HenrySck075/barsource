@@ -1,9 +1,12 @@
-import 'package:barsource/tennoji.dart';
+import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/rendering/box.dart';
+import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/widgets/framework.dart';
 
 class ClipRect extends SingleChildRenderObjectWidget {
   const ClipRect({
     super.key,
-    this.clipBehavior = Clip.hardEdge,
+    this.clipBehavior = .hardEdge,
     super.child,
   });
 
