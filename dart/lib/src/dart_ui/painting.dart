@@ -6654,9 +6654,11 @@ class PictureRasterizationException implements Exception {
 
 /// Wrapper around native canvas handle.
 class Canvas {
-  Canvas(this._nativePtr);
+  Canvas(int width, int height) : _nativePtr = 
+    rina_canvas_create(Engine.instance.nativePtr,width,height);
   Pointer<TennojiCanvas> _nativePtr;
 
+  @protected
   Pointer<TennojiCanvas> get nativePtr => _nativePtr;
 
   void drawColor(Color color, BlendMode blendMode) {
@@ -6764,10 +6766,20 @@ class Canvas {
     rina_canvas_translate(_nativePtr, dx, dy);
   }
 
+  void transform(Matrix4 matrix) {
+    debugAssertNullPointer();
+    rina_canvas_transform(_nativePtr, matrix.storage.address);
+  }
+
   void scale(double sx, double sy) {
     debugAssertNullPointer();
     rina_canvas_scale(_nativePtr, sx, sy);
   }
+  void skew(double sx, double sy) {
+    debugAssertNullPointer();
+    rina_canvas_skew(_nativePtr, sx, sy);
+  }
+
 
   void rotate(double degrees) {
     debugAssertNullPointer();
@@ -6805,6 +6817,11 @@ class Canvas {
     rina_canvas_destroy(_nativePtr);
     _nativePtr = nullptr;
     return ret;
+  }
+
+  void dispose() {
+    rina_canvas_destroy(_nativePtr);
+    _nativePtr = nullptr;
   }
 
   void debugAssertNullPointer() {

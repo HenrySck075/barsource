@@ -1,17 +1,33 @@
 import 'package:meta/meta.dart';
+import 'package:vector_math/vector_math.dart';
 import 'dart:typed_data';
 import '../dart_ui/dart_ui.dart';
 
 class LayerHandle<T extends Layer> {
+  LayerHandle([this._layer]) {
+    if (_layer != null) {
+      _layer!._ref();
+    }
+  }
   T? _layer;
   
   T? get layer => _layer;
   set layer(T? value) {
+    _layer?._unref();
     _layer = value;
+    _layer?._ref();
   }
 }
 
 abstract class Layer {
+  int _refCount = 0;
+  void _ref() => _refCount++;
+  void _unref() {
+    _refCount--;
+    if (_refCount == 0) dispose();
+  }
+
+
   int _depth = 0;
   int get depth => _depth;
 
@@ -47,7 +63,7 @@ abstract class Layer {
   }
 
   /// Subclasses should override to paint themselves.
-  void addToScene(Canvas canvas, Offset offset);
+  void addToScene(Canvas canvas);
 
   void dispose() {}
   
@@ -100,14 +116,14 @@ abstract class ContainerLayer extends Layer {
   }
 
   @override
-  void addToScene(Canvas canvas, Offset offset) {
-    addChildrenToScene(canvas, offset);
+  void addToScene(Canvas canvas) {
+    addChildrenToScene(canvas);
   }
 
-  void addChildrenToScene(Canvas canvas, Offset offset) {
+  void addChildrenToScene(Canvas canvas) {
     Layer? child = firstChild;
     while (child != null) {
-      child.addToScene(canvas, offset);
+      child.addToScene(canvas);
       child = child.nextSibling;
     }
   }
@@ -225,42 +241,48 @@ abstract class ContainerLayer extends Layer {
 
 /// A layer that clips its children.
 class ClipRectLayer extends ContainerLayer {
-  ClipRectLayer({required Rect clipRect}) : _clipRect = clipRect;
+  ClipRectLayer({Rect? clipRect, this.clipBehavior}) : _clipRect = clipRect;
   
-  Rect _clipRect;
-  Rect get clipRect => _clipRect;
-  set clipRect(Rect value) {
+  Rect? _clipRect;
+  Rect? get clipRect => _clipRect;
+  set clipRect(Rect? value) {
     if (_clipRect != value) {
       _clipRect = value;
     }
   }
 
+  Clip? clipBehavior;
+
   @override
-  void addToScene(Canvas canvas, Offset offset) {
-    canvas.save();
-    canvas.clipRect(_clipRect.shift(offset), true);
-    addChildrenToScene(canvas, offset);
-    canvas.restore();
+  void addToScene(Canvas canvas) {
+    assert(_clipRect != null);
+    final clipBehavior2 = clipBehavior ?? .none;
+    if (clipBehavior2 != .none) {
+      canvas.save();
+      canvas.clipRect(_clipRect!, clipBehavior2 == .antiAlias);
+    }
+    addChildrenToScene(canvas);
+    if (clipBehavior2 != .none) canvas.restore();
   }
 }
 
 /// A layer that transforms its children.
 class TransformLayer extends ContainerLayer {
-  TransformLayer({required Float64List transform}) : _transform = transform;
+  TransformLayer({required Matrix4 transform}) : _transform = transform;
   
-  Float64List _transform;
-  Float64List get transform => _transform;
-  set transform(Float64List value) {
+  Matrix4 _transform;
+  Matrix4 get transform => _transform;
+  set transform(Matrix4 value) {
     if (_transform != value) {
       _transform = value;
     }
   }
 
   @override
-  void addToScene(Canvas canvas, Offset offset) {
+  void addToScene(Canvas canvas) {
     canvas.save();
-    // TODO: Add canvas.transform() method to support matrix transforms
-    addChildrenToScene(canvas, Offset.zero);
+    canvas.transform(_transform);
+    addChildrenToScene(canvas);
     canvas.restore();
   }
 }
@@ -278,10 +300,10 @@ class OpacityLayer extends ContainerLayer {
   }
 
   @override
-  void addToScene(Canvas canvas, Offset offset) {
+  void addToScene(Canvas canvas) {
     final paint = Paint()..color = Color.fromARGB(_alpha, 255, 255, 255);
     canvas.saveLayer(paint);
-    addChildrenToScene(canvas, offset);
+    addChildrenToScene(canvas);
     canvas.restore();
   }
 }
@@ -295,14 +317,35 @@ class PictureLayer extends Layer {
   Picture? picture;
 
   @override
-  void addToScene(Canvas canvas, Offset offset) {
+  void addToScene(Canvas canvas) {
     canvas.drawPicture(picture!);
-    // Picture painting will be added once Picture/PictureRecorder are implemented
-    // For now this layer just serves as a marker
   }
   
   @override
   void dispose() {
+    picture?.dispose();
     super.dispose();
+  }
+}
+
+class OffsetLayer extends ContainerLayer {
+  OffsetLayer({required Offset offset}) : _offset = offset;
+  
+  Offset _offset;
+  Offset get offset => _offset;
+  set offset(Offset value) {
+    if (_offset != value) {
+      _offset = value;
+    }
+  }
+
+  @override
+  void addToScene(Canvas canvas) {
+    if (_offset != Offset.zero) {
+      canvas.save();
+      canvas.translate(_offset.dx, _offset.dy);
+    }
+    addChildrenToScene(canvas);
+    if (_offset != Offset.zero) canvas.restore();
   }
 }

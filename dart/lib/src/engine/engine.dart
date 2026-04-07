@@ -16,6 +16,7 @@ import 'package:logging/logging.dart';
 import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/rendering/view.dart';
 import 'package:barsource/src/rendering/object.dart';
+import 'package:barsource/src/rendering/layer.dart';
 import 'package:barsource/src/scheduler/ticker.dart';
 
 import 'package:cli_progress_bar/cli_progress_bar.dart';
@@ -57,6 +58,8 @@ class AudioCodec {
   const AudioCodec.opus() : name = 'opus';
   final String name;
 }
+
+class _NothingBurger extends ContainerLayer {}
 
 class Engine extends BindingBase with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
   Engine._(this._nativePtr);
@@ -142,14 +145,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       ..audio_sample_rate = 44100
       ..audio_channels = 2;
 
-    final encoder = rina_encoder_create(_nativePtr, encConfig);
-    
-    // 4. Create Canvas
-    final nativeCanvas = rina_canvas_create(
-      _nativePtr,
-      config.resolution.width.toInt(),
-      config.resolution.height.toInt(),
-    );
+    final encoder = rina_encoder_create(_nativePtr, encConfig); 
 
 /*
     final progressBar = ProgressBar(
@@ -160,6 +156,11 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     );
     */
 
+    final canvas = Canvas(
+      config.resolution.width.toInt(),
+      config.resolution.height.toInt(),
+    );
+    final canvasRect = Rect.fromLTWH(0, 0, config.resolution.width, config.resolution.height);
     try {
       while (_currentTime < config.duration) {
         handleBeginFrame(_currentTime);
@@ -178,13 +179,18 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         drawFrame();
         
         // Paint phase
+        // ignore: invalid_use_of_protected_member
+        final nativeCanvas = canvas.nativePtr;
         rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
-        final canvas = Canvas(nativeCanvas);
+        // literally nothing happens here
         pipelineOwner.flushPaint(canvas);
-        renderView.paint(PaintingContext(canvas), Offset.zero);
+        final laye = _NothingBurger();
+        renderView.paint(PaintingContext(laye, canvasRect), Offset.zero);
 
         // Encode video
         rina_encoder_write_frame(encoder, nativeCanvas);
+
+        canvas.dispose();
 
         // NEW Audio Submission System: ALWAYS write audio for every video frame
         // to maintain sync (even if it's silence)
@@ -262,7 +268,6 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     } finally {
       rina_encoder_finalize(encoder);
       rina_encoder_destroy(encoder);
-      rina_canvas_destroy(nativeCanvas);
       
       calloc.free(outputPathUtf8);
       calloc.free(videoCodecUtf8);

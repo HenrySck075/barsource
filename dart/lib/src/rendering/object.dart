@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'package:barsource/dart_ui.dart';
+import 'package:barsource/src/rendering/layer.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import 'package:barsource/src/rendering/parent_data.dart';
@@ -107,14 +109,94 @@ class BoxConstraints extends Constraints {
   }
 }
 
+typedef PaintingContextCallback = void Function(PaintingContext context, Offset offset);
 class PaintingContext {
-  PaintingContext(this.canvas);
-  final Canvas canvas;
+  PaintingContext(this._containerLayer, this.estimatedBounds);
+
+  final ContainerLayer _containerLayer;
+  final Rect estimatedBounds;
+  PictureLayer? _currentLayer;
+  Canvas? _canvas;
+
+  bool get _isRecording => _canvas != null;
+  @protected
+  void appendLayer(Layer layer) {
+    assert(!_isRecording);
+    layer.remove();
+    _containerLayer.append(layer);
+  }
+  Canvas get canvas {
+    if (_canvas == null) {
+      _startRecording();
+    }
+    assert(_currentLayer != null);
+    return _canvas!;
+  }
+  void _startRecording() {
+    assert(!_isRecording);
+    _currentLayer = PictureLayer(estimatedBounds);
+    _canvas = Canvas(estimatedBounds.width.toInt(), estimatedBounds.height.toInt());
+    _containerLayer.append(_currentLayer!);
+  }
+  @protected
+  @mustCallSuper
+  void stopRecordingIfNeeded() {
+    if (!_isRecording) {
+      return;
+    }
+    _currentLayer!.picture = _canvas!.endRecording();
+    _currentLayer = null;
+    _canvas = null;
+  }
+  void pushLayer(
+    ContainerLayer childLayer,
+    PaintingContextCallback painter,
+    Offset offset, {
+    Rect? childPaintBounds,
+  }) {
+    // If a layer is being reused, it may already contain children. We remove
+    // them so that `painter` can add children that are relevant for this frame.
+    if (childLayer.hasChildren) {
+      childLayer.removeAllChildren();
+    }
+    stopRecordingIfNeeded();
+    appendLayer(childLayer);
+    final PaintingContext childContext = PaintingContext(
+      childLayer,
+      childPaintBounds ?? estimatedBounds,
+    );
+
+    painter(childContext, offset);
+    childContext.stopRecordingIfNeeded();
+  }
 
   void paintChild(RenderObject child, Offset offset) {
     child.paint(this, offset);
   }
+
+
+  ClipRectLayer? pushClipRect(
+    bool needsCompositing,
+    Offset offset,
+    Rect clipRect,
+    PaintingContextCallback painter, {
+    Clip clipBehavior = Clip.hardEdge,
+    ClipRectLayer? oldLayer,
+  }) {
+    if (clipBehavior == Clip.none) {
+      painter(this, offset);
+      return null;
+    }
+    final Rect offsetClipRect = clipRect.shift(offset);
+      final ClipRectLayer layer = oldLayer ?? ClipRectLayer();
+      layer
+        ..clipRect = offsetClipRect
+        ..clipBehavior = clipBehavior;
+      pushLayer(layer, painter, offset, childPaintBounds: offsetClipRect);
+      return layer;
+  }
 }
+
 
 /// Signature for a function that is called for each [RenderObject].
 ///
@@ -143,6 +225,7 @@ abstract class RenderObject {
   bool get sizedByParent => false;
 
   bool? _isRelayoutBoundary;
+  bool get isRepaintBoundary => false;
   /// Override to setup parent data correctly for your children.
   ///
   /// You can call this function to set up the parent data for child before the
@@ -172,6 +255,11 @@ abstract class RenderObject {
     assert(parent != null);
     parent!.markNeedsLayout();
   }
+
+  void markNeedsPaint() {
+    parent?.markNeedsPaint();
+  }
+
   /// The layout constraints most recently supplied by the parent.
   ///
   /// If layout has not yet happened, accessing this getter will

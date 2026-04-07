@@ -91,7 +91,9 @@ TENNOJI_EXPORT void rina_canvas_draw_paragraph(
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas);
 TENNOJI_EXPORT void rina_canvas_restore(TennojiCanvas* canvas);
 TENNOJI_EXPORT void rina_canvas_translate(TennojiCanvas* canvas, float dx, float dy);
+TENNOJI_EXPORT void rina_canvas_transform(TennojiCanvas* canvas, float* matrix4);
 TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy);
+TENNOJI_EXPORT void rina_canvas_skew(TennojiCanvas* canvas, float sx, float sy);
 TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees);
 TENNOJI_EXPORT void rina_canvas_clip_rect(
   TennojiCanvas* canvas,

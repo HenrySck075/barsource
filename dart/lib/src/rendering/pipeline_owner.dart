@@ -1,16 +1,18 @@
+import 'dart:collection';
+
 import '../painting/canvas.dart';
 import 'object.dart';
 
 class PipelineOwner {
   final List<RenderObject> _nodesNeedingLayout = [];
-  final List<RenderObject> _nodesNeedingPaint = [];
+  final Queue<RenderObject> _nodesNeedingPaint = Queue();
 
   void requestLayout(RenderObject node) {
     _nodesNeedingLayout.add(node);
   }
 
   void requestPaint(RenderObject node) {
-    _nodesNeedingPaint.add(node);
+    _nodesNeedingPaint.addLast(node);
   }
 
   void flushLayout() {
@@ -22,15 +24,12 @@ class PipelineOwner {
     }
   }
 
-  void flushPaint(Canvas canvas) {
-    //final context = PaintingContext(canvas);
-    /*
+  void flushPaint() {
     while (_nodesNeedingPaint.isNotEmpty) {
-      final node = _nodesNeedingPaint.removeAt(0);
+      final node = _nodesNeedingPaint.removeFirst();
       if (node.needsPaint) {
         node.paint(context, Offset.zero);
       }
     }
-    */
   }
 }

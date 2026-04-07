@@ -7,6 +7,8 @@ import 'package:ffi/ffi.dart';
 import 'package:barsource/src/engine/bindings.dart';
 import 'package:barsource/src/engine/engine.dart';
 import 'package:barsource/src/utils/native_data.dart';
+import 'package:meta/meta.dart';
+import 'package:vector_math/vector_math.dart';
 
 part 'geometry.dart';
 part 'lerp.dart';

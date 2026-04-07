@@ -1,6 +1,7 @@
 #include "../engine_internal.h"
 #include "canvas_internal.h"
 #include "image_internal.h"
+#include "include/core/SkM44.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "shader_internal.h"
 #include "text/paragraph_internal.h"
@@ -193,10 +194,19 @@ TENNOJI_EXPORT void rina_canvas_translate(TennojiCanvas* canvas, float dx, float
     if (!canvas || !canvas->canvas) return;
     canvas->canvas->translate(dx, dy);
 }
+TENNOJI_EXPORT void rina_canvas_transform(TennojiCanvas* canvas, float* matrix4) {
+    if (!canvas || !canvas->canvas || !matrix4) return;
+    canvas->canvas->concat(*(SkM44*)(matrix4));
+}
 
 TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy) {
     if (!canvas || !canvas->canvas) return;
     canvas->canvas->scale(sx, sy);
+}
+
+TENNOJI_EXPORT void rina_canvas_skew(TennojiCanvas* canvas, float sx, float sy) {
+    if (!canvas || !canvas->canvas) return;
+    canvas->canvas->skew(sx, sy);
 }
 
 TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees) {
