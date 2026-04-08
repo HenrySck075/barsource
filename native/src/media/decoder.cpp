@@ -37,7 +37,24 @@ static AVCodecContext* open_codec(AVFormatContext* fmtCtx, int streamIdx,
                                    enum AVPixelFormat hwPixFmt,
                                    TennojiDecoder* decoder) {
     AVStream* stream = fmtCtx->streams[streamIdx];
-    const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    const AVCodec* codec = nullptr;
+    
+    // For H.264 video, prefer hardware decoder if available
+    if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && 
+        stream->codecpar->codec_id == AV_CODEC_ID_H264 && hwDeviceCtx) {
+#if defined(__linux__) && !defined(__ANDROID__)
+        codec = avcodec_find_decoder_by_name("h264_vaapi");
+#elif defined(__APPLE__)
+        codec = avcodec_find_decoder_by_name("h264_videotoolbox");
+#elif defined(_WIN32)
+        codec = avcodec_find_decoder_by_name("h264_d3d11va");
+#endif
+    }
+    
+    // Fallback to standard decoder
+    if (!codec) {
+        codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    }
     if (!codec) return nullptr;
 
     AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
@@ -191,23 +208,28 @@ TENNOJI_EXPORT TennojiDecoder* rina_decoder_open(TennojiEngine* engine,
     decoder->audioStreamIdx = av_find_best_stream(
         decoder->fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
 
-    // Setup HW acceleration if requested
+    // Setup HW acceleration if requested - only for H.264
     if (accel == TENNOJI_HW_ACCEL_AUTO && decoder->videoStreamIdx >= 0) {
-        enum AVHWDeviceType hwType = AV_HWDEVICE_TYPE_NONE;
+        AVStream* videoStream = decoder->fmtCtx->streams[decoder->videoStreamIdx];
+        
+        // Lock GPU decoding to H.264 only
+        if (videoStream->codecpar->codec_id == AV_CODEC_ID_H264) {
+            enum AVHWDeviceType hwType = AV_HWDEVICE_TYPE_NONE;
 #if defined(__linux__) && !defined(__ANDROID__)
-        hwType = AV_HWDEVICE_TYPE_VAAPI;
-        decoder->hwPixFmt = AV_PIX_FMT_VAAPI;
+            hwType = AV_HWDEVICE_TYPE_VAAPI;
+            decoder->hwPixFmt = AV_PIX_FMT_VAAPI;
 #elif defined(__APPLE__)
-        hwType = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
-        decoder->hwPixFmt = AV_PIX_FMT_VIDEOTOOLBOX;
+            hwType = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+            decoder->hwPixFmt = AV_PIX_FMT_VIDEOTOOLBOX;
 #elif defined(_WIN32)
-        hwType = AV_HWDEVICE_TYPE_D3D11VA;
-        decoder->hwPixFmt = AV_PIX_FMT_D3D11;
+            hwType = AV_HWDEVICE_TYPE_D3D11VA;
+            decoder->hwPixFmt = AV_PIX_FMT_D3D11;
 #endif
-        if (hwType != AV_HWDEVICE_TYPE_NONE) {
-            ret = av_hwdevice_ctx_create(&decoder->hwDeviceCtx, hwType, nullptr, nullptr, 0);
-            if (ret < 0) {
-                decoder->hwDeviceCtx = nullptr; // Fall back to SW
+            if (hwType != AV_HWDEVICE_TYPE_NONE) {
+                ret = av_hwdevice_ctx_create(&decoder->hwDeviceCtx, hwType, nullptr, nullptr, 0);
+                if (ret < 0) {
+                    decoder->hwDeviceCtx = nullptr; // Fall back to SW
+                }
             }
         }
     }

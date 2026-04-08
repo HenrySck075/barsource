@@ -244,7 +244,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, Fl
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (clipBehavior != .none) {
+    if (clipBehavior != .none && childCount != 0) {
       context.canvas.save();
       context.canvas.clipRect(offset & size, clipBehavior == .antiAlias);
     }
@@ -255,7 +255,7 @@ class RenderFlex extends RenderBox with ContainerRenderObjectMixin<RenderBox, Fl
         offset.dy + childOffset.dy,
       ));
     });
-    if (clipBehavior != .none) {
+    if (clipBehavior != .none && childCount != 0) {
       context.canvas.restore();
     }
   }
