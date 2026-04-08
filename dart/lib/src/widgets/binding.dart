@@ -19,6 +19,8 @@ mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
     super.initInstances();
     _instance = this;
     _buildOwner = BuildOwner();
+
+    addPersistentFrameCallback((_)=>drawFrame());
   }
 
   void attachRootWidget(Widget app) {

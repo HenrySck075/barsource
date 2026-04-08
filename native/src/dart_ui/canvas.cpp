@@ -240,6 +240,9 @@ TENNOJI_EXPORT int rina_canvas_save_layer_alpha(
   return canvas->canvas->saveLayerAlpha(nullptr, alpha);
 }
 
+TENNOJI_EXPORT uint64_t rina_canvas_get_save_count(TennojiCanvas* canvas) {
+  return canvas->canvas->getSaveCount();
+}
 
 TENNOJI_EXPORT TennojiPicture* rina_canvas_finish_recording(TennojiCanvas* canvas) {
   return new TennojiPicture {

@@ -12,6 +12,6 @@ Future<void> main() async {
     duration: Duration(seconds: 4, milliseconds: 500), 
     fps: 30, 
     resolution: Size(1280,720),
-    logLevel: Level.OFF
+    logLevel: Level.ALL
   ));
 }

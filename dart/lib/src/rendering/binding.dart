@@ -1,5 +1,5 @@
 import 'package:barsource/src/foundation/binding_base.dart';
-import 'package:barsource/src/rendering/pipeline_owner.dart';
+import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/rendering/view.dart';
 
 mixin RendererBinding on BindingBase {

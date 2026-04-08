@@ -9,7 +9,8 @@ abstract class RenderBox extends RenderObject {
   Size? _size;
   Size get size => _size??(throw StateError("RenderBox $runtimeType was not laid out"));
   set size(Size value) => _size = value;
-
+  @override
+  Rect get paintBounds => Offset.zero & size;
   @override
   void layout(covariant BoxConstraints constraints,
       {bool parentUsesSize = false}) {

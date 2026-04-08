@@ -1,6 +1,7 @@
 import 'dart:ffi';
 import 'dart:typed_data';
 
+import 'package:barsource/src/rendering/layer.dart';
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
 import 'package:barsource/src/dart_ui/dart_ui.dart';
@@ -9,6 +10,21 @@ import 'package:barsource/src/rendering/box.dart';
 import '../engine/engine.dart';
 import 'object.dart';
 import 'pipeline_owner.dart';
+
+class _NativeImageLayer extends Layer {
+  final Pointer<TennojiCanvasImage> texture;
+  _NativeImageLayer(this.texture);
+
+  @override
+  void dispose() {
+    rina_texture_destroy(texture);
+  }
+
+  @override
+  void addToScene(Canvas canvas) {
+    canvas.drawImageNative(texture, Offset.zero, Paint());
+  }
+}
 
 class RenderVideoClip extends RenderBox implements AudioContributor {
   RenderVideoClip({
@@ -19,6 +35,9 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
   }) {
     _ticker = Ticker(onTick);
   }
+
+  // because the one on RenderObject is for ContainerLayer
+  final LayerHandle<_NativeImageLayer> _layerHandle = LayerHandle();
 
   final String source;
   final Duration trimStart;
@@ -34,6 +53,10 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
 
   Duration _position = Duration.zero;
   final _log = Logger('RenderVideoClip');
+
+  @override
+  // so videos can be repainted independently
+  bool get isRepaintBoundary => true;
 
   void onTick(Duration elapsed) {
     _position = elapsed;
@@ -65,8 +88,8 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       _texture = null;
     }
     Engine.instance.unregisterAudioContributor(this);
+    _layerHandle.layer = null;
     super.detach();
-    // TODO: we could also let user specify if playback is stopped if the object is detached
   }
 
   @override
@@ -99,6 +122,8 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
     _textureTimestamp = timeUs;
 
     if (_texture != nullptr) {
+      final layer = _layerHandle.layer ?? _NativeImageLayer(_texture!);
+      _layerHandle.layer = layer;
       context.canvas.drawImageNative(_texture!, offset, Paint());
     } else {
       _texture = null;

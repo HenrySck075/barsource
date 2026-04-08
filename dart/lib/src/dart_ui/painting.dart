@@ -6819,6 +6819,10 @@ class Canvas {
     return ret;
   }
 
+  int getSaveCount() {
+    return rina_canvas_get_save_count(_nativePtr);
+  }
+
   void dispose() {
     rina_canvas_destroy(_nativePtr);
     _nativePtr = nullptr;

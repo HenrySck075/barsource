@@ -23,7 +23,7 @@ class ViewConfiguration {
   int get hashCode => Object.hash(size, currentTime);
 }
 
-class RenderView extends RenderObject with RenderObjectWithChildMixin {
+class RenderView extends RenderBox with RenderObjectWithChildMixin {
   RenderView({
     RenderBox? child,
     required ViewConfiguration configuration,
@@ -42,7 +42,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin {
   }
 
   @override
-  void layout(Constraints constraints, {bool parentUsesSize = false}) {
+  void performLayout() {
     // RenderView is the root, so it ignores incoming constraints and relies
     // on its configuration.
     
@@ -55,13 +55,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin {
         minHeight: _configuration.size.height,
         maxHeight: _configuration.size.height,
       ));
-    }
-    
-    // In RenderObject, layout() sets _needsLayout = false.
-    // Since we are overriding it, we must do it ourselves or call super.
-    // But RenderObject.layout implementation is just setting flag to false.
-    // We can just call super.layout(constraints) at the end.
-    super.layout(constraints);
+    } 
   }
 
   @override

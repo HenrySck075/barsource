@@ -81,6 +81,8 @@ abstract class Layer {
   void redepthChildren() {}
 }
 
+mixin DontSkipOnEmptyChildren on ContainerLayer {}
+
 abstract class ContainerLayer extends Layer {
   Layer? _firstChild;
   Layer? get firstChild => _firstChild;
@@ -123,6 +125,12 @@ abstract class ContainerLayer extends Layer {
   void addChildrenToScene(Canvas canvas) {
     Layer? child = firstChild;
     while (child != null) {
+      // skip child if its non-leaf and does not have any children
+      // and does not explicitly told the framework to exclude it from this check
+      if (child is ContainerLayer && !child.hasChildren /*&& child is! DontSkipOnEmptyChildren*/) {
+        child = child.nextSibling;
+        continue;
+      }
       child.addToScene(canvas);
       child = child.nextSibling;
     }
@@ -329,7 +337,7 @@ class PictureLayer extends Layer {
 }
 
 class OffsetLayer extends ContainerLayer {
-  OffsetLayer({required Offset offset}) : _offset = offset;
+  OffsetLayer({Offset offset = Offset.zero}) : _offset = offset;
   
   Offset _offset;
   Offset get offset => _offset;
@@ -347,5 +355,27 @@ class OffsetLayer extends ContainerLayer {
     }
     addChildrenToScene(canvas);
     if (_offset != Offset.zero) canvas.restore();
+  }
+}
+
+class ColorFilterLayer extends ContainerLayer {
+  ColorFilterLayer({ColorFilter? colorFilter}) : _colorFilter = colorFilter;
+  
+  ColorFilter? _colorFilter;
+  ColorFilter? get colorFilter => _colorFilter;
+  set colorFilter(ColorFilter value) {
+    if (_colorFilter != value) {
+      _colorFilter = value;
+    }
+  }
+
+  @override
+  void addToScene(Canvas canvas) {
+    if (_colorFilter != null) {
+      final paint = Paint()..colorFilter = _colorFilter;
+      canvas.saveLayer(paint);
+    }
+    addChildrenToScene(canvas);
+    if (_colorFilter != null) canvas.restore();
   }
 }

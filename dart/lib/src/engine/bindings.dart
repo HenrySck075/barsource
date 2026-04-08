@@ -213,9 +213,26 @@ external void rina_canvas_translate(
 );
 
 @ffi.Native<
+  ffi.Void Function(ffi.Pointer<TennojiCanvas>, ffi.Pointer<ffi.Float>)
+>(isLeaf: true)
+external void rina_canvas_transform(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<ffi.Float> matrix4,
+);
+
+@ffi.Native<
   ffi.Void Function(ffi.Pointer<TennojiCanvas>, ffi.Float, ffi.Float)
 >(isLeaf: true)
 external void rina_canvas_scale(
+  ffi.Pointer<TennojiCanvas> canvas,
+  double sx,
+  double sy,
+);
+
+@ffi.Native<
+  ffi.Void Function(ffi.Pointer<TennojiCanvas>, ffi.Float, ffi.Float)
+>(isLeaf: true)
+external void rina_canvas_skew(
   ffi.Pointer<TennojiCanvas> canvas,
   double sx,
   double sy,
@@ -266,6 +283,9 @@ external int rina_canvas_save_layer_alpha(
   ffi.Pointer<TennojiCanvas> canvas,
   int alpha,
 );
+
+@ffi.Native<ffi.Uint64 Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
+external int rina_canvas_get_save_count(ffi.Pointer<TennojiCanvas> canvas);
 
 @ffi.Native<
   ffi.Pointer<TennojiCanvasImage> Function(

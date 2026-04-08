@@ -176,21 +176,22 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
-        drawFrame();
+        handleDrawFrame();
         
         // Paint phase
         // ignore: invalid_use_of_protected_member
         final nativeCanvas = canvas.nativePtr;
         rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
         // literally nothing happens here
-        pipelineOwner.flushPaint(canvas);
+        pipelineOwner.flushPaint();
         final laye = _NothingBurger();
         renderView.paint(PaintingContext(laye, canvasRect), Offset.zero);
+        _log.fine("pre layer");
+        laye.addToScene(canvas);
+        _log.fine("post layer");
 
         // Encode video
         rina_encoder_write_frame(encoder, nativeCanvas);
-
-        canvas.dispose();
 
         // NEW Audio Submission System: ALWAYS write audio for every video frame
         // to maintain sync (even if it's silence)
@@ -265,6 +266,8 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
 
         _currentTime += frameDuration;
       }
+    } on Exception catch (e, st) {
+      _log.severe('Error during render run: $e', e, st);
     } finally {
       rina_encoder_finalize(encoder);
       rina_encoder_destroy(encoder);

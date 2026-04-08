@@ -4,6 +4,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+cd "${SCRIPT_DIR}/dart"
+dart run ffigen
+
 cd "${SCRIPT_DIR}/native"
 
 if [ ! -d "build" ]; then
