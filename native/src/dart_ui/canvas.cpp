@@ -18,6 +18,8 @@
 
 #include "../renderer/skia_surface.h"
 #include "tennoji/types.h"
+#include <iostream>
+#include <memory>
 
 // copied straight from the dart file idc
 // Must match //lib/ui/painting/paint.cc.
@@ -179,34 +181,42 @@ TENNOJI_EXPORT void rina_canvas_draw_image(
     samplingOpt, &paint
   );
 }
+TENNOJI_EXPORT void rina_canvas_draw_picture(
+  TennojiCanvas* canvas,
+  TennojiPicture* picture
+) {
+  if (!canvas || !canvas->canvas || !picture) return;
+
+  canvas->canvas->drawPicture(picture->picture);
+}
 
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->save();
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->save();
 }
 
 TENNOJI_EXPORT void rina_canvas_restore(TennojiCanvas* canvas) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->restore();
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->restore();
 }
 
 TENNOJI_EXPORT void rina_canvas_translate(TennojiCanvas* canvas, float dx, float dy) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->translate(dx, dy);
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->translate(dx, dy);
 }
 TENNOJI_EXPORT void rina_canvas_transform(TennojiCanvas* canvas, float* matrix4) {
-    if (!canvas || !canvas->canvas || !matrix4) return;
-    canvas->canvas->concat(*(SkM44*)(matrix4));
+  if (!canvas || !canvas->canvas || !matrix4) return;
+  canvas->canvas->concat(*(SkM44*)(matrix4));
 }
 
 TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->scale(sx, sy);
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->scale(sx, sy);
 }
 
 TENNOJI_EXPORT void rina_canvas_skew(TennojiCanvas* canvas, float sx, float sy) {
-    if (!canvas || !canvas->canvas) return;
-    canvas->canvas->skew(sx, sy);
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->skew(sx, sy);
 }
 
 TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees) {
@@ -245,6 +255,7 @@ TENNOJI_EXPORT uint64_t rina_canvas_get_save_count(TennojiCanvas* canvas) {
 }
 
 TENNOJI_EXPORT TennojiPicture* rina_canvas_finish_recording(TennojiCanvas* canvas) {
+  if (!canvas) return nullptr;
   return new TennojiPicture {
     .picture = canvas->recorder->finishRecordingAsPicture()
   };
@@ -272,6 +283,18 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_picture_to_image(
   return new TennojiCanvasImage{
     .image = surface->makeImageSnapshot()
   };
+}
+
+TENNOJI_EXPORT void rina_picture_destroy(TennojiPicture* picture) {
+  if (picture == nullptr) return;
+  delete picture;
+}
+
+TENNOJI_EXPORT int rina_picture_approximate_bytes_used(TennojiPicture* picture) {
+  return picture->picture->approximateBytesUsed();
+}
+TENNOJI_EXPORT int rina_picture_approximate_op_count(TennojiPicture* picture) {
+  return picture->picture->approximateOpCount();
 }
 
 } // extern "C"

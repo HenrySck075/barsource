@@ -5,7 +5,7 @@ import 'package:barsource/src/elements/framework.dart';
 import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/rendering/box.dart';
 
-mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
+mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
   BuildOwner? _buildOwner;
   Element? _renderViewElement;
 
@@ -19,8 +19,6 @@ mixin WidgetsBinding on BindingBase, RendererBinding, SchedulerBinding {
     super.initInstances();
     _instance = this;
     _buildOwner = BuildOwner();
-
-    addPersistentFrameCallback((_)=>drawFrame());
   }
 
   void attachRootWidget(Widget app) {

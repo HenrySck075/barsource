@@ -37,7 +37,9 @@ class FadeTransition extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderAnimatedOpacity renderObject) {}
+      BuildContext context, covariant RenderAnimatedOpacity renderObject) {
+    renderObject.opacity = opacity;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +76,9 @@ class SlideTransition extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(BuildContext context,
-      covariant RenderAnimatedTranslation renderObject) {}
+      covariant RenderAnimatedTranslation renderObject) {
+    renderObject.offset = offset;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +119,11 @@ class ScaleTransition extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderAnimatedScale renderObject) {}
+      BuildContext context, covariant RenderAnimatedScale renderObject) {
+      renderObject
+        ..scale = scale
+        ..alignment = alignment;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -158,5 +166,9 @@ class RotationTransition extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderAnimatedRotation renderObject) {}
+      BuildContext context, covariant RenderAnimatedRotation renderObject) {
+    renderObject
+      ..turns = turns
+      ..alignment = alignment;
+  }
 }

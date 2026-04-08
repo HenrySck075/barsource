@@ -99,7 +99,9 @@ class _bombState extends State<bomb> {
           listController: _controller,
           clipBehavior: .hardEdge,
           itemBuilder: (context, data, anim){
+            print("Animated list data: $data");
             return SlideTransition(
+              key: ValueKey(data),
               offset: CurvedAnimation(parent: anim, curve: Curves.easeOut).drive(
                 Tween<Offset>(
                   begin: Offset(1.0, 0.0), end: Offset(0.0, 0.0)

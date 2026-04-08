@@ -22,6 +22,7 @@ TENNOJI_EXPORT TennojiCanvasPath* rina_path_clone(TennojiCanvasPath* path) {
 }
 
 TENNOJI_EXPORT void rina_path_destroy(TennojiCanvasPath* path) {
+  if (!path) return;
   delete path;
 }
 
@@ -286,6 +287,7 @@ TENNOJI_EXPORT TennojiCanvasPathMeasure* rina_path_measure_create(
   };
 }
 TENNOJI_EXPORT void rina_path_measure_destroy(TennojiCanvasPathMeasure* measure) {
+  if (!measure) return;
   delete measure;
 };
 

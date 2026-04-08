@@ -87,6 +87,10 @@ TENNOJI_EXPORT void rina_canvas_draw_paragraph(
   TennojiParagraph* paragraph,
   float dx, float dy
 );
+TENNOJI_EXPORT void rina_canvas_draw_picture(
+  TennojiCanvas* canvas,
+  TennojiPicture* picture
+);
 
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas);
 TENNOJI_EXPORT void rina_canvas_restore(TennojiCanvas* canvas);
@@ -113,6 +117,8 @@ TENNOJI_EXPORT uint64_t rina_canvas_get_save_count(TennojiCanvas* canvas);
 
 TENNOJI_EXPORT TennojiCanvasImage* rina_picture_to_image(TennojiPicture* picture, TennojiEngine* engine);
 TENNOJI_EXPORT void rina_picture_destroy(TennojiPicture* picture);
+TENNOJI_EXPORT int rina_picture_approximate_bytes_used(TennojiPicture* picture);
+TENNOJI_EXPORT int rina_picture_approximate_op_count(TennojiPicture* picture);
 
 // Texture (GPU texture handle, opaque int ID)
 // no longer true

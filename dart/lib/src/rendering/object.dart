@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:math' as math;
 import 'package:barsource/dart_ui.dart';
 import 'package:barsource/src/rendering/layer.dart';
@@ -114,6 +115,8 @@ typedef PaintingContextCallback = void Function(PaintingContext context, Offset 
 class PaintingContext {
   PaintingContext(this._containerLayer, this.estimatedBounds);
 
+  final _log = Logger("PaintingContext");
+
   final ContainerLayer _containerLayer;
   final Rect estimatedBounds;
   PictureLayer? _currentLayer;
@@ -178,15 +181,18 @@ class PaintingContext {
   }
   void paintChild(RenderObject child, Offset offset) {
     if (child.isRepaintBoundary) {
+      //_log.fine("Repaint boundary ($child)");
       stopRecordingIfNeeded();
       _compositeChild(child, offset);
       // If a render object was a repaint boundary but no longer is one, this
       // is where the framework managed layer is automatically disposed.
     } else if (child._wasRepaintBoundary) {
+      //_log.fine("Unboundary'd child ($child)");
       assert(child._layerHandle.layer is OffsetLayer);
       child._layerHandle.layer = null;
       _paintChild(child, offset);
     } else {
+      //_log.fine("Generic child ($child)");
       _paintChild(child, offset);
     }
   }
@@ -336,7 +342,11 @@ class PaintingContext {
 
 class PipelineOwner {
   final List<RenderObject> _nodesNeedingLayout = [];
-  List<RenderObject> _nodesNeedingPaint = [];
+  List<RenderObject> _nodesNeedingPaint = <RenderObject>[];
+  @protected
+  List<RenderObject> get nodesNeedingPaint => _nodesNeedingPaint;
+
+  final _log = Logger("PipelineOwner");
 
   void requestLayout(RenderObject node) {
     _nodesNeedingLayout.add(node);
@@ -350,7 +360,7 @@ class PipelineOwner {
     while (_nodesNeedingLayout.isNotEmpty) {
       final node = _nodesNeedingLayout.removeAt(0);
       if (node.needsLayout) {
-        node.layout(const BoxConstraints());
+        node.performLayout();
       }
     }
   }
@@ -381,17 +391,12 @@ class PipelineOwner {
 ///
 /// Used by [RenderObject.visitChildren] and [RenderObject.visitChildrenForSemantics].
 typedef RenderObjectVisitor = void Function(RenderObject child);
-/// About the absence of markNeedsPaint and the Layer tree:
-/// Practically in a video editing library the whole thing's repainted every frame anyways
-/// And those who's gonna spam repaint requests are media widgets which will be the majority of the widgets in a real video
-/// Plus Plus basic shapes are fast to compute its not worth caching them
-///
-/// Will add them in if somebody do computationally expensive custom painting
+
 abstract class RenderObject {
   RenderObject? _parent;
   PipelineOwner? _owner;
-  bool _needsLayout = true;
-  bool _needsPaint = true;
+  bool _needsLayout = false;
+  bool _needsPaint = false;
   ParentData? parentData;
   Rect get paintBounds;
 
@@ -481,10 +486,10 @@ abstract class RenderObject {
   bool _wasRepaintBoundary = false;
   void markNeedsPaint() {
     assert(!_debugDisposed);
-    parent?.markNeedsPaint();
     if (_needsPaint) return;
     _needsPaint = true;
     if (isRepaintBoundary && _wasRepaintBoundary) {
+      //print("Dirty paint requested by $this. Sending request to pipeline.");
       // If we always have our own layer, then we can just repaint
       // ourselves without involving any other nodes.
       assert(_layerHandle.layer is OffsetLayer);
@@ -493,7 +498,13 @@ abstract class RenderObject {
         //owner!.requestVisualUpdate();
       }
     } else if (parent != null) {
+      //print("Dirty paint requested by $this. Propagating.");
       parent!.markNeedsPaint();
+    } else {
+      //print("Dirty paint requested.");
+      // i think this is the case for render view
+      // they said this one is always repainting or smth idk i didnt make it do that so heres a
+      owner!.requestPaint(this);
     }
   }
   OffsetLayer updateCompositedLayer({required covariant OffsetLayer? oldLayer}) {
@@ -518,11 +529,19 @@ abstract class RenderObject {
     //_log.finer('layout with $constraints');
     _constraints = constraints;
     _isRelayoutBoundary = !parentUsesSize || sizedByParent || constraints.isTight || parent == null;
+    performLayout();
     _needsLayout = false;
+    markNeedsPaint();
   }
+
+  @protected
+  void performLayout();
 
   void paint(PaintingContext context, Offset offset);
 
+  void replaceRootLayer(ContainerLayer layer) {
+    _layerHandle.layer = layer..attach(this);
+  }
   @mustCallSuper
   void attach(PipelineOwner owner) {
     assert(!_debugDisposed);

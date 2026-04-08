@@ -42,7 +42,7 @@ abstract class Layer {
 
   Object? _owner;
   Object? get owner => _owner;
-  bool get attached => owner != null;
+  bool get attached => _owner != null;
 
   final LayerHandle<Layer> _parentHandle = LayerHandle<Layer>();
 
@@ -84,6 +84,7 @@ abstract class Layer {
 mixin DontSkipOnEmptyChildren on ContainerLayer {}
 
 abstract class ContainerLayer extends Layer {
+  static int _logIndentation = 0;
   Layer? _firstChild;
   Layer? get firstChild => _firstChild;
   Layer? _lastChild;
@@ -124,16 +125,22 @@ abstract class ContainerLayer extends Layer {
 
   void addChildrenToScene(Canvas canvas) {
     Layer? child = firstChild;
+    _logIndentation++;
     while (child != null) {
       // skip child if its non-leaf and does not have any children
       // and does not explicitly told the framework to exclude it from this check
-      if (child is ContainerLayer && !child.hasChildren /*&& child is! DontSkipOnEmptyChildren*/) {
+      /*
+      if (child is ContainerLayer && !child.hasChildren && child is! DontSkipOnEmptyChildren) {
         child = child.nextSibling;
         continue;
       }
+      */
+      // ignore: prefer_interpolation_to_compose_strings
+      //print((" "*_logIndentation)+"Adding $child");
       child.addToScene(canvas);
       child = child.nextSibling;
     }
+    _logIndentation--;
   }
 
   void append(Layer child) {
@@ -296,7 +303,7 @@ class TransformLayer extends ContainerLayer {
 }
 
 /// A layer that applies opacity to its children.
-class OpacityLayer extends ContainerLayer {
+class OpacityLayer extends OffsetLayer {
   OpacityLayer({required int alpha}) : _alpha = alpha;
   
   int _alpha;
@@ -309,8 +316,7 @@ class OpacityLayer extends ContainerLayer {
 
   @override
   void addToScene(Canvas canvas) {
-    final paint = Paint()..color = Color.fromARGB(_alpha, 255, 255, 255);
-    canvas.saveLayer(paint);
+    canvas.saveLayerAlpha(alpha);
     addChildrenToScene(canvas);
     canvas.restore();
   }

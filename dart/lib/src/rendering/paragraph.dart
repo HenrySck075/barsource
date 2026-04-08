@@ -44,14 +44,14 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.text == value) return;
     _textPainter.text = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   ui.TextAlign get textAlign => _textPainter.textAlign;
   set textAlign(ui.TextAlign value) {
     if (_textPainter.textAlign == value) return;
     _textPainter.textAlign = value;
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   ui.TextDirection get textDirection => _textPainter.textDirection!;
@@ -59,7 +59,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.textDirection == value) return;
     _textPainter.textDirection = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   bool get softWrap => _softWrap;
@@ -68,7 +68,7 @@ class RenderParagraph extends RenderBox {
     if (_softWrap == value) return;
     _softWrap = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   TextOverflow get overflow => _overflow;
@@ -78,7 +78,7 @@ class RenderParagraph extends RenderBox {
     _overflow = value;
     _textPainter.ellipsis = value == TextOverflow.ellipsis ? '\u2026' : null;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   TextScaler get textScaler => _textPainter.textScaler;
@@ -86,7 +86,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.textScaler == value) return;
     _textPainter.textScaler = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   int? get maxLines => _textPainter.maxLines;
@@ -94,7 +94,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.maxLines == value) return;
     _textPainter.maxLines = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   ui.Locale? get locale => _textPainter.locale;
@@ -102,7 +102,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.locale == value) return;
     _textPainter.locale = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   StrutStyle? get strutStyle => _textPainter.strutStyle;
@@ -110,7 +110,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.strutStyle == value) return;
     _textPainter.strutStyle = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   TextWidthBasis get textWidthBasis => _textPainter.textWidthBasis;
@@ -118,7 +118,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.textWidthBasis == value) return;
     _textPainter.textWidthBasis = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   ui.TextHeightBehavior? get textHeightBehavior => _textPainter.textHeightBehavior;
@@ -126,7 +126,7 @@ class RenderParagraph extends RenderBox {
     if (_textPainter.textHeightBehavior == value) return;
     _textPainter.textHeightBehavior = value;
     markNeedsLayout();
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   @override

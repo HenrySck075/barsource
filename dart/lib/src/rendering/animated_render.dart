@@ -16,10 +16,18 @@ import 'object.dart';
 /// resulting opacity (0.0 transparent → 1.0 opaque) via [Canvas.saveLayer].
 class RenderAnimatedOpacity extends RenderProxyBox {
   RenderAnimatedOpacity({
-    required this.opacity,
-  });
+    required Animation<double> opacity,
+  }) : _opacity = opacity;
 
-  final Animation<double> opacity;
+  Animation<double> _opacity;
+  Animation<double> get opacity => _opacity;
+  set opacity(Animation<double> value) {
+    if (_opacity == value) return;
+    opacity.removeListener(markNeedsPaint);
+    _opacity = value;
+    opacity.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
 
 /*
   void _onOpacityUpdate() {
@@ -28,8 +36,13 @@ class RenderAnimatedOpacity extends RenderProxyBox {
 */
   @override
   void attach(PipelineOwner owner) {
-    //opacity.addListener(_onOpacityUpdate);
+    opacity.addListener(markNeedsPaint);
     super.attach(owner);
+  }
+  @override
+  void detach() {
+    opacity.removeListener(markNeedsPaint);
+    super.detach();
   }
 
   @override
@@ -57,10 +70,29 @@ class RenderAnimatedOpacity extends RenderProxyBox {
 /// size, matching Flutter's [SlideTransition] semantics.
 class RenderAnimatedTranslation extends RenderProxyBox {
   RenderAnimatedTranslation({
-    required this.offset,
-  });
+    required Animation<Offset> offset,
+  }) : _offset = offset;
 
-  final Animation<Offset> offset;
+  Animation<Offset> _offset;
+  Animation<Offset> get offset => _offset;
+  set offset(Animation<Offset> value) {
+    if (_offset == value) return;
+    offset.removeListener(markNeedsPaint);
+    _offset = value;
+    offset.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    offset.addListener(markNeedsPaint);
+    super.attach(owner);
+  }
+  @override
+  void detach() {
+    offset.removeListener(markNeedsPaint);
+    super.detach();
+  }
 
   @override
   void paint(PaintingContext context, Offset paintOffset) {
@@ -85,15 +117,40 @@ class RenderAnimatedTranslation extends RenderProxyBox {
 /// NOTE: Incomplete conversion
 class RenderAnimatedScale extends RenderProxyBox {
   RenderAnimatedScale({
-    required this.scale,
-    this.alignment = Alignment.center,
-  });
+    required Animation<double> scale,
+    Alignment alignment = .center,
+  }) : _scale = scale, _alignment = alignment;
 
-  final Animation<double> scale;
+  Animation<double> _scale;
+  Animation<double> get scale => _scale;
+  set scale(Animation<double> value) {
+    if (_scale == value) return;
+    scale.removeListener(markNeedsPaint);
+    _scale = value;
+    scale.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    scale.addListener(markNeedsPaint);
+    super.attach(owner);
+  }
+  @override
+  void detach() {
+    scale.removeListener(markNeedsPaint);
+    super.detach();
+  }
 
   /// Alignment of the scale origin as (x, y) fractions of child size.
   /// (0.5, 0.5) = center (default), (0, 0) = top~left, (1, 1) = bottom~right.
-  final Alignment alignment;
+  Alignment _alignment;
+  Alignment get alignment => _alignment;
+  set alignment(Alignment value) {
+    if (_alignment == value) return;
+    _alignment = value;
+    markNeedsPaint();
+  }
 
   @override
   void performLayout() {
@@ -132,14 +189,39 @@ class RenderAnimatedScale extends RenderProxyBox {
 /// matching Flutter's [RotationTransition] semantics.
 class RenderAnimatedRotation extends RenderProxyBox {
   RenderAnimatedRotation({
-    required this.turns,
-    this.alignment = Alignment.center,
-  });
+    required Animation<double> turns,
+    Alignment alignment = .center,
+  }) : _turns = turns, _alignment = alignment;
 
-  final Animation<double> turns;
+  Animation<double> _turns;
+  Animation<double> get turns => _turns;
+  set turns(Animation<double> value) {
+    if (_turns == value) return;
+    turns.removeListener(markNeedsPaint);
+    _turns = value;
+    turns.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
 
   /// Alignment of the rotation origin as (x, y) fractions of child size.
-  final Alignment alignment;
+  Alignment _alignment;
+  Alignment get alignment => _alignment;
+  set alignment(Alignment value) {
+    if (_alignment == value) return;
+    _alignment = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    turns.addListener(markNeedsPaint);
+    super.attach(owner);
+  }
+  @override
+  void detach() {
+    turns.removeListener(markNeedsPaint);
+    super.detach();
+  }
 
   @override
   void paint(PaintingContext context, Offset offset) {

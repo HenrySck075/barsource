@@ -1,9 +1,6 @@
 import 'package:meta/meta.dart';
 
 abstract class BindingBase {
-  BindingBase() {
-    initInstances();
-  }
 
   @protected
   @mustCallSuper

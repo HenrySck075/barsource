@@ -197,6 +197,14 @@ external void rina_canvas_draw_paragraph(
   double dy,
 );
 
+@ffi.Native<
+  ffi.Void Function(ffi.Pointer<TennojiCanvas>, ffi.Pointer<TennojiPicture>)
+>(isLeaf: true)
+external void rina_canvas_draw_picture(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiPicture> picture,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
 external void rina_canvas_save(ffi.Pointer<TennojiCanvas> canvas);
 
@@ -300,6 +308,16 @@ external ffi.Pointer<TennojiCanvasImage> rina_picture_to_image(
 
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiPicture>)>(isLeaf: true)
 external void rina_picture_destroy(ffi.Pointer<TennojiPicture> picture);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiPicture>)>(isLeaf: true)
+external int rina_picture_approximate_bytes_used(
+  ffi.Pointer<TennojiPicture> picture,
+);
+
+@ffi.Native<ffi.Int Function(ffi.Pointer<TennojiPicture>)>(isLeaf: true)
+external int rina_picture_approximate_op_count(
+  ffi.Pointer<TennojiPicture> picture,
+);
 
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
 external void rina_texture_destroy(ffi.Pointer<TennojiCanvasImage> texture);

@@ -1,7 +1,9 @@
+import 'dart:developer';
 import 'dart:ffi';
 import 'dart:typed_data';
 
 import 'package:barsource/src/rendering/layer.dart';
+import 'package:barsource/src/scheduler/binding.dart';
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
 import 'package:barsource/src/dart_ui/dart_ui.dart';
@@ -12,7 +14,7 @@ import 'object.dart';
 import 'pipeline_owner.dart';
 
 class _NativeImageLayer extends Layer {
-  final Pointer<TennojiCanvasImage> texture;
+  Pointer<TennojiCanvasImage> texture;
   _NativeImageLayer(this.texture);
 
   @override
@@ -22,7 +24,7 @@ class _NativeImageLayer extends Layer {
 
   @override
   void addToScene(Canvas canvas) {
-    canvas.drawImageNative(texture, Offset.zero, Paint());
+    if (texture != nullptr) canvas.drawImageNative(texture, Offset.zero, Paint());
   }
 }
 
@@ -88,7 +90,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       _texture = null;
     }
     Engine.instance.unregisterAudioContributor(this);
-    _layerHandle.layer = null;
     super.detach();
   }
 
@@ -98,6 +99,8 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
+    layer?.append(_layerHandle.layer!);
+    _layerHandle.layer = null;
     _ticker.stop();
   }
 
@@ -118,16 +121,28 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       rina_texture_destroy(_texture!);
     }
 
-    _texture = rina_decoder_get_texture(_decoder!, timeUs);
-    _textureTimestamp = timeUs;
-
+    if (timeUs != _textureTimestamp) {
+      _texture = rina_decoder_get_texture(_decoder!, timeUs);
+      _textureTimestamp = timeUs;
+    }
     if (_texture != nullptr) {
-      final layer = _layerHandle.layer ?? _NativeImageLayer(_texture!);
-      _layerHandle.layer = layer;
-      context.canvas.drawImageNative(_texture!, offset, Paint());
+      var layer = _layerHandle.layer;
+      if (layer == null) {
+        layer = _NativeImageLayer(_texture!);
+        _layerHandle.layer = layer;
+        this.layer!.append(layer);
+      } else {
+        _layerHandle.layer!.texture = _texture!;
+        this.layer!.append(layer);
+      }
     } else {
       _texture = null;
+      _layerHandle.layer?.texture = nullptr;
     }
+
+    SchedulerBinding.instance.addPostFrameCallback((_){
+      if (attached) markNeedsPaint();
+    });
   }
 
   @override

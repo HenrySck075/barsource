@@ -39,4 +39,7 @@ abstract class AudioContributor {
 final class AudioContributorEntry extends LinkedListEntry<AudioContributorEntry> {
   AudioContributor theActualValue;
   AudioContributorEntry(this.theActualValue);
+
+  @override
+  String toString() => theActualValue.toString();
 }

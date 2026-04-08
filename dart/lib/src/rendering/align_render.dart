@@ -1,3 +1,6 @@
+import 'dart:developer';
+
+import 'package:barsource/src/foundation/const.dart';
 import 'package:barsource/src/painting/basic_types.dart';
 
 import 'package:barsource/src/painting/alignment.dart';
@@ -50,6 +53,11 @@ class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   }
 
   Offset _childOffset = Offset.zero;
+
+  @override
+  void markNeedsPaint() {
+    super.markNeedsPaint();
+  }
 
   @override
   void performLayout() {

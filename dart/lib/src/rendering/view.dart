@@ -1,3 +1,7 @@
+import 'dart:developer';
+
+import 'package:barsource/src/rendering/layer.dart';
+
 import 'object.dart';
 import 'box.dart';
 import '../foundation/geometry.dart';
@@ -5,22 +9,19 @@ import '../foundation/geometry.dart';
 class ViewConfiguration {
   const ViewConfiguration({
     required this.size,
-    required this.currentTime,
   });
 
   final Size size;
-  final Duration currentTime;
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is ViewConfiguration &&
-        other.size == size &&
-        other.currentTime == currentTime;
+        other.size == size;
   }
 
   @override
-  int get hashCode => Object.hash(size, currentTime);
+  int get hashCode => size.hashCode;
 }
 
 class RenderView extends RenderBox with RenderObjectWithChildMixin {
@@ -56,6 +57,8 @@ class RenderView extends RenderBox with RenderObjectWithChildMixin {
         maxHeight: _configuration.size.height,
       ));
     } 
+
+    size = constraints.smallest;
   }
 
   @override

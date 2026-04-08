@@ -15,11 +15,7 @@ abstract class RenderBox extends RenderObject {
   void layout(covariant BoxConstraints constraints,
       {bool parentUsesSize = false}) {
     super.layout(constraints, parentUsesSize: parentUsesSize);
-    performLayout();
-    clearNeedsLayout();
   }
-
-  void performLayout();
 }
 
 abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {

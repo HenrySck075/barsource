@@ -250,6 +250,7 @@ TENNOJI_EXPORT float* rina_fragment_shader_get_uniform_buffer(TennojiFragmentSha
 };
 
 TENNOJI_EXPORT void rina_shader_destroy(TennojiShader* shader) {
+  if (!shader) return;
   delete shader;
 };
 

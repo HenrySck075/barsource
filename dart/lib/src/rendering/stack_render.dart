@@ -193,6 +193,7 @@ class RenderStack extends RenderBox with ContainerRenderObjectMixin<RenderBox,Co
       child.parentData = StackParentData();
     }
   }
+  
   @override
   void performLayout() {
     final parentConstraints = constraints;

@@ -387,7 +387,7 @@ TENNOJI_EXPORT TennojiParagraph* rina_paragraph_builder_build(
 TENNOJI_EXPORT void rina_paragraph_builder_destroy(
   TennojiParagraphBuilder* builder
 ) {
-  delete builder;
+  if (builder) delete builder;
 }
 
 TENNOJI_EXPORT void rina_load_font_from_list(
@@ -624,7 +624,7 @@ TENNOJI_EXPORT uint64_t rina_paragraph_get_line_number_at(
 TENNOJI_EXPORT void rina_paragraph_destroy(
   TennojiParagraph* paragraph
 ) {
-  delete paragraph;
+  if (paragraph) delete paragraph;
 }
 
 __UNEXTERN_C__

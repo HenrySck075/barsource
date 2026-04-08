@@ -10,7 +10,8 @@
 extern "C" {
 
 TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture) {
-    delete texture;
+  if (!texture) return;
+  delete texture;
 }
 
 TENNOJI_EXPORT int rina_texture_get_width(TennojiCanvasImage* texture) {
@@ -106,7 +107,7 @@ TENNOJI_EXPORT TennojiFrameInfo* rina_codec_get_frame_info(TennojiCodec* codec, 
 }
 
 TENNOJI_EXPORT void rina_frame_info_destroy(TennojiFrameInfo* info) {
-  delete info;
+  if (info) delete info;
 }
 
 // ImageDescriptor
@@ -180,6 +181,7 @@ TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(
   };
 };
 TENNOJI_EXPORT void rina_idesc_destroy(TennojiImageDescriptor* descriptor) {
+  if (!descriptor) return;
   delete descriptor;
 };
 

@@ -4,8 +4,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-cd "${SCRIPT_DIR}/dart"
-dart run ffigen
+#cd "${SCRIPT_DIR}/dart"
+#dart run ffigen
 
 cd "${SCRIPT_DIR}/native"
 
@@ -22,4 +22,4 @@ cmake --build . -- -j$(nproc)
 find . -name "*.so" -exec cp {} "${SCRIPT_DIR}/dart/lib/blob/" \;
 
 cd "${SCRIPT_DIR}/example"
-dart run 
+dart run $* 

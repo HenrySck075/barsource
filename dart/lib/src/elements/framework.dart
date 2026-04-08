@@ -16,7 +16,7 @@ abstract class Key {
 }
 
 
-abstract class LocalKey {
+abstract class LocalKey extends Key {
   const LocalKey();
 }
 

@@ -6095,6 +6095,9 @@ abstract class Picture {
   /// The actual size of this picture may be larger, particularly if it contains
   /// references to image or other large objects.
   int get approximateBytesUsed;
+
+  /// Returns the approximate number of operations in this object.
+  int get approximateOpCount;
 }
 
 base class _NativePicture implements Picture {
@@ -6103,10 +6106,11 @@ base class _NativePicture implements Picture {
   ///
   /// To create a [Picture], use a [PictureRecorder].
   _NativePicture._(this._nativePtr) {
+    if (_nativePtr == nullptr) throw StateError("Error in creating the Picture object."); // marking for now
     Picture.onCreate?.call(this);
   }
 
-  final Pointer<TennojiPicture> _nativePtr;
+  Pointer<TennojiPicture> _nativePtr;
 
   @override
   Image toImage(
@@ -6132,8 +6136,10 @@ base class _NativePicture implements Picture {
       _disposed = true;
       return true;
     }());
+    print("Disposing ${_nativePtr.address.toString()}");
     Picture.onDispose?.call(this);
     rina_picture_destroy(_nativePtr);
+    _nativePtr = nullptr;
   }
 
   bool _disposed = false;
@@ -6150,7 +6156,9 @@ base class _NativePicture implements Picture {
   }
 
   @override
-  int get approximateBytesUsed => 0; // TODO: Implement actual size tracking
+  int get approximateBytesUsed => rina_picture_approximate_bytes_used(_nativePtr); 
+  @override
+  int get approximateOpCount => rina_picture_approximate_op_count(_nativePtr); 
 
   @override
   String toString() => 'Picture';
@@ -6466,7 +6474,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
   }
 
   late (Pointer<Uint8>, int) _buffer;
-  late Pointer<TennojiImageDescriptor> _nativePtr;
+  Pointer<TennojiImageDescriptor> _nativePtr = nullptr;
 
   int? _width;
 
@@ -6492,6 +6500,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
   @override
   void dispose() {
     rina_idesc_destroy(_nativePtr);
+    _nativePtr = nullptr;
   }
 
   @override
@@ -6749,6 +6758,7 @@ class Canvas {
 
   void drawPicture(Picture picture) {
     debugAssertNullPointer();
+    rina_canvas_draw_picture(_nativePtr, (picture as _NativePicture)._nativePtr);
   }
 
   void save() {
@@ -6824,6 +6834,7 @@ class Canvas {
   }
 
   void dispose() {
+    debugAssertNullPointer();
     rina_canvas_destroy(_nativePtr);
     _nativePtr = nullptr;
   }

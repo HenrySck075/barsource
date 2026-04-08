@@ -59,7 +59,7 @@ class AudioCodec {
   final String name;
 }
 
-class _NothingBurger extends ContainerLayer {}
+class _NothingBurger extends OffsetLayer {}
 
 class Engine extends BindingBase with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
   Engine._(this._nativePtr);
@@ -123,8 +123,9 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     // 1. Initialize RenderView
     initRenderView(ViewConfiguration(
       size: config.resolution,
-      currentTime: Duration.zero,
     ));
+
+    renderView.replaceRootLayer(_NothingBurger());
 
     // 2. Attach Root Widget
     attachRootWidget(app);
@@ -156,11 +157,16 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     );
     */
 
+    // This canvas is a special one, and thus does not experience the same lifecycle as every other canvas inside PaintingContext
     final canvas = Canvas(
       config.resolution.width.toInt(),
       config.resolution.height.toInt(),
     );
-    final canvasRect = Rect.fromLTWH(0, 0, config.resolution.width, config.resolution.height);
+    renderView.layout(BoxConstraints(
+      minWidth: config.resolution.width, minHeight: config.resolution.height,
+      maxWidth: config.resolution.width,
+      maxHeight: config.resolution.height
+    ));
     try {
       while (_currentTime < config.duration) {
         handleBeginFrame(_currentTime);
@@ -169,10 +175,12 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         await Future.delayed(Duration.zero);
         
         // Update view time
+        /*
         renderView.configuration = ViewConfiguration(
           size: config.resolution,
           currentTime: _currentTime,
         );
+        */
         
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
@@ -183,13 +191,12 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         final nativeCanvas = canvas.nativePtr;
         rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
         // literally nothing happens here
-        pipelineOwner.flushPaint();
-        final laye = _NothingBurger();
-        renderView.paint(PaintingContext(laye, canvasRect), Offset.zero);
-        _log.fine("pre layer");
-        laye.addToScene(canvas);
-        _log.fine("post layer");
-
+        try {
+          renderView.layer?.addToScene(canvas);
+          //pipelineOwner.addToScene(canvas);
+        } catch (e, st) {
+          _log.severe('Error during painting at $_currentTime: $e', e, st);
+        }
         // Encode video
         rina_encoder_write_frame(encoder, nativeCanvas);
 

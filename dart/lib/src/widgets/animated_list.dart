@@ -218,18 +218,20 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
       _removeActiveItemAt(_outgoingItems, outgoingItem.itemIndex)!.controller!.dispose();
       _items.removeAt(outgoingItem.itemIndex);
 
-      // Decrement the incoming and outgoing item indices to account
-      // for the removal.
-      for (final _ActiveItem item in _incomingItems) {
-        if (item.itemIndex > outgoingItem.itemIndex) {
-          item.itemIndex -= 1;
+      setState((){
+        // Decrement the incoming and outgoing item indices to account
+        // for the removal.
+        for (final _ActiveItem item in _incomingItems) {
+          if (item.itemIndex > outgoingItem.itemIndex) {
+            item.itemIndex -= 1;
+          }
         }
-      }
-      for (final _ActiveItem item in _outgoingItems) {
-        if (item.itemIndex > outgoingItem.itemIndex) {
-          item.itemIndex -= 1;
+        for (final _ActiveItem item in _outgoingItems) {
+          if (item.itemIndex > outgoingItem.itemIndex) {
+            item.itemIndex -= 1;
+          }
         }
-      }
+      });
     });
   }
 
@@ -262,7 +264,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
 
           final incomingItem = _activeItemAt(_incomingItems, itemIndex);
           final Animation<double> animation = incomingItem?.controller ?? kAlwaysCompleteAnimation;
-          final T data = incomingItem?.data ?? _items[_itemIndexToIndex(itemIndex)];
+          final T data = incomingItem?.data ?? _items[itemIndex];
           return widget.itemBuilder(context, data, animation);
         }
       ),
