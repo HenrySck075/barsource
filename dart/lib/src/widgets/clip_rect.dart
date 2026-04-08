@@ -1,6 +1,5 @@
 import 'package:barsource/src/painting/basic_types.dart';
 import 'package:barsource/src/rendering/box.dart';
-import 'package:barsource/src/rendering/layer.dart';
 import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/widgets/framework.dart';
 
@@ -39,9 +38,15 @@ class _RenderClipRect extends RenderProxyBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    layer = context.pushClipRect(offset, offset & size, (c, o){
-      if (child != null) context.paintChild(child!, offset);
-    }, oldLayer: layer as ClipRectLayer?);
+    if (_clipBehavior != .none) {
+      context.canvas.save();
+      context.canvas.clipRect(offset & size, _clipBehavior == .antiAlias);
+    }
+    if (child != null) {
+      context.paintChild(child!, offset);
+    }
+    if (_clipBehavior != .none) {
+      context.canvas.restore();
+    }
   }
 }
-

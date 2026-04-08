@@ -1,8 +1,6 @@
-import 'dart:developer';
 import 'dart:ffi';
 import 'dart:typed_data';
 
-import 'package:barsource/src/rendering/layer.dart';
 import 'package:barsource/src/scheduler/binding.dart';
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
@@ -11,22 +9,6 @@ import 'package:barsource/src/rendering/box.dart';
 
 import '../engine/engine.dart';
 import 'object.dart';
-import 'pipeline_owner.dart';
-
-class _NativeImageLayer extends Layer {
-  Pointer<TennojiCanvasImage> texture;
-  _NativeImageLayer(this.texture);
-
-  @override
-  void dispose() {
-    rina_texture_destroy(texture);
-  }
-
-  @override
-  void addToScene(Canvas canvas) {
-    if (texture != nullptr) canvas.drawImageNative(texture, Offset.zero, Paint());
-  }
-}
 
 class RenderVideoClip extends RenderBox implements AudioContributor {
   RenderVideoClip({
@@ -37,9 +19,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
   }) {
     _ticker = Ticker(onTick);
   }
-
-  // because the one on RenderObject is for ContainerLayer
-  final LayerHandle<_NativeImageLayer> _layerHandle = LayerHandle();
 
   final String source;
   final Duration trimStart;
@@ -99,8 +78,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
-    layer?.append(_layerHandle.layer!);
-    _layerHandle.layer = null;
     _ticker.stop();
   }
 
@@ -125,19 +102,9 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       _texture = rina_decoder_get_texture(_decoder!, timeUs);
       _textureTimestamp = timeUs;
     }
+    
     if (_texture != nullptr) {
-      var layer = _layerHandle.layer;
-      if (layer == null) {
-        layer = _NativeImageLayer(_texture!);
-        _layerHandle.layer = layer;
-        this.layer!.append(layer);
-      } else {
-        _layerHandle.layer!.texture = _texture!;
-        this.layer!.append(layer);
-      }
-    } else {
-      _texture = null;
-      _layerHandle.layer?.texture = nullptr;
+      context.canvas.drawImageNative(_texture!, offset, Paint());
     }
 
     SchedulerBinding.instance.addPostFrameCallback((_){

@@ -1,7 +1,3 @@
-import 'dart:developer';
-
-import 'package:barsource/src/rendering/layer.dart';
-
 import 'object.dart';
 import 'box.dart';
 import '../foundation/geometry.dart';

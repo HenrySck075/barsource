@@ -1,12 +1,8 @@
-import 'dart:developer';
 import 'dart:math' as math;
 import 'package:barsource/dart_ui.dart';
-import 'package:barsource/src/rendering/layer.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import 'package:barsource/src/rendering/parent_data.dart';
-import '../foundation/geometry.dart';
-import '../painting/canvas.dart';
 import '../painting/edge_insets.dart';
 import 'pipeline_owner.dart';
 
@@ -113,230 +109,19 @@ class BoxConstraints extends Constraints {
 typedef PaintingContextCallback = void Function(PaintingContext context, Offset offset);
 
 class PaintingContext {
-  PaintingContext(this._containerLayer, this.estimatedBounds);
+  PaintingContext(this._canvas, this.estimatedBounds);
 
   final _log = Logger("PaintingContext");
 
-  final ContainerLayer _containerLayer;
+  final Canvas _canvas;
   final Rect estimatedBounds;
-  PictureLayer? _currentLayer;
-  Canvas? _canvas;
 
-  bool get _isRecording => _canvas != null;
-  @protected
-  void appendLayer(Layer layer) {
-    assert(!_isRecording);
-    layer.remove();
-    _containerLayer.append(layer);
-  }
-  Canvas get canvas {
-    if (_canvas == null) {
-      _startRecording();
-    }
-    assert(_currentLayer != null);
-    return _canvas!;
-  }
-  void _startRecording() {
-    assert(!_isRecording);
-    _currentLayer = PictureLayer(estimatedBounds);
-    _canvas = Canvas(estimatedBounds.width.toInt(), estimatedBounds.height.toInt());
-    _containerLayer.append(_currentLayer!);
-  }
-  @protected
-  @mustCallSuper
-  void stopRecordingIfNeeded() {
-    if (!_isRecording) {
-      return;
-    }
-    _currentLayer!.picture = _canvas!.endRecording();
-    _currentLayer = null;
-    _canvas = null;
-  }
-  void pushLayer(
-    ContainerLayer childLayer,
-    PaintingContextCallback painter,
-    Offset offset, {
-    Rect? childPaintBounds,
-  }) {
-    // If a layer is being reused, it may already contain children. We remove
-    // them so that `painter` can add children that are relevant for this frame.
-    if (childLayer.hasChildren) {
-      childLayer.removeAllChildren();
-    }
-    stopRecordingIfNeeded();
-    appendLayer(childLayer);
-    final PaintingContext childContext = PaintingContext(
-      childLayer,
-      childPaintBounds ?? estimatedBounds,
-    );
+  Canvas get canvas => _canvas;
 
-    painter(childContext, offset);
-    childContext.stopRecordingIfNeeded();
-  }
-
-  void _paintChild(RenderObject child, Offset offset) {
+  void paintChild(RenderObject child, Offset offset) {
     child._needsPaint = false;
     child._wasRepaintBoundary = child.isRepaintBoundary;
     child.paint(this, offset);
-  }
-  void paintChild(RenderObject child, Offset offset) {
-    if (child.isRepaintBoundary) {
-      //_log.fine("Repaint boundary ($child)");
-      stopRecordingIfNeeded();
-      _compositeChild(child, offset);
-      // If a render object was a repaint boundary but no longer is one, this
-      // is where the framework managed layer is automatically disposed.
-    } else if (child._wasRepaintBoundary) {
-      //_log.fine("Unboundary'd child ($child)");
-      assert(child._layerHandle.layer is OffsetLayer);
-      child._layerHandle.layer = null;
-      _paintChild(child, offset);
-    } else {
-      //_log.fine("Generic child ($child)");
-      _paintChild(child, offset);
-    }
-  }
-  void _compositeChild(RenderObject child, Offset offset) {
-    assert(!_isRecording);
-    assert(child.isRepaintBoundary);
-    assert(_canvas == null || _canvas!.getSaveCount() == 1);
-
-    // Create a layer for our child, and paint the child into it.
-    if (child._needsPaint || !child._wasRepaintBoundary) {
-      repaintCompositedChild(child, debugAlsoPaintedParent: true);
-    } else {
-      /*
-      if (child._needsCompositedLayerUpdate) {
-        updateLayerProperties(child);
-      }
-      assert(() {
-        // register the call for RepaintBoundary metrics
-        child.debugRegisterRepaintBoundaryPaint();
-        child._layerHandle.layer!.debugCreator = child.debugCreator ?? child;
-        return true;
-      }());
-      */
-    }
-    assert(child._layerHandle.layer is OffsetLayer);
-    final childOffsetLayer = child._layerHandle.layer! as OffsetLayer;
-    childOffsetLayer.offset = offset;
-    appendLayer(childOffsetLayer);
-  }
-  static void repaintCompositedChild(
-    RenderObject child, {
-    bool debugAlsoPaintedParent = false,
-    PaintingContext? childContext,
-  }) {
-    assert(child._needsPaint);
-    assert(child.isRepaintBoundary);
-    /*
-    assert(() {
-      // register the call for RepaintBoundary metrics
-      child.debugRegisterRepaintBoundaryPaint(
-        includedParent: debugAlsoPaintedParent,
-        includedChild: true,
-      );
-      return true;
-    }());
-    */
-    var childLayer = child._layerHandle.layer as OffsetLayer?;
-    if (childLayer == null) {
-      assert(debugAlsoPaintedParent);
-      assert(child._layerHandle.layer == null);
-
-      // Not using the `layer` setter because the setter asserts that we not
-      // replace the layer for repaint boundaries. That assertion does not
-      // apply here because this is exactly the place designed to create a
-      // layer for repaint boundaries.
-      final OffsetLayer layer = child.updateCompositedLayer(oldLayer: null);
-      child._layerHandle.layer = childLayer = layer;
-    } else {
-      assert(debugAlsoPaintedParent || childLayer.attached);
-      Offset? debugOldOffset;
-      assert(() {
-        debugOldOffset = childLayer!.offset;
-        return true;
-      }());
-      childLayer.removeAllChildren();
-      final OffsetLayer updatedLayer = child.updateCompositedLayer(oldLayer: childLayer);
-      assert(
-        identical(updatedLayer, childLayer),
-        '$child created a new layer instance $updatedLayer instead of reusing the '
-        'existing layer $childLayer. See the documentation of RenderObject.updateCompositedLayer '
-        'for more information on how to correctly implement this method.',
-      );
-      assert(debugOldOffset == updatedLayer.offset);
-    }
-    //child._needsCompositedLayerUpdate = false;
-
-    assert(identical(childLayer, child._layerHandle.layer));
-    assert(child._layerHandle.layer is OffsetLayer);
-    /*
-    assert(() {
-      childLayer!.debugCreator = child.debugCreator ?? child.runtimeType;
-      return true;
-    }());
-    */
-
-    childContext ??= PaintingContext(childLayer, child.paintBounds);
-    childContext._paintChild(child, Offset.zero);
-
-    // Double-check that the paint method did not replace the layer (the first
-    // check is done in the [layer] setter itself).
-    assert(identical(childLayer, child._layerHandle.layer));
-    childContext.stopRecordingIfNeeded();
-  }
-  static void updateLayerProperties(RenderObject child) {
-    assert(child.isRepaintBoundary && child._wasRepaintBoundary);
-    assert(!child._needsPaint);
-    assert(child._layerHandle.layer != null);
-
-    final childLayer = child._layerHandle.layer! as OffsetLayer;
-    Offset? debugOldOffset;
-    assert(() {
-      debugOldOffset = childLayer.offset;
-      return true;
-    }());
-    final OffsetLayer updatedLayer = child.updateCompositedLayer(oldLayer: childLayer);
-    assert(
-      identical(updatedLayer, childLayer),
-      '$child created a new layer instance $updatedLayer instead of reusing the '
-      'existing layer $childLayer. See the documentation of RenderObject.updateCompositedLayer '
-      'for more information on how to correctly implement this method.',
-    );
-    assert(debugOldOffset == updatedLayer.offset);
-    //child._needsCompositedLayerUpdate = false;
-  }
-
-  ClipRectLayer? pushClipRect(
-    Offset offset,
-    Rect clipRect,
-    PaintingContextCallback painter, {
-    Clip clipBehavior = Clip.hardEdge,
-    ClipRectLayer? oldLayer,
-  }) {
-    if (clipBehavior == Clip.none) {
-      painter(this, offset);
-      return null;
-    }
-    final Rect offsetClipRect = clipRect.shift(offset);
-      final ClipRectLayer layer = oldLayer ?? ClipRectLayer();
-      layer
-        ..clipRect = offsetClipRect
-        ..clipBehavior = clipBehavior;
-      pushLayer(layer, painter, offset, childPaintBounds: offsetClipRect);
-      return layer;
-  }
-  ColorFilterLayer pushColorFilter(
-    Offset offset,
-    ColorFilter colorFilter,
-    PaintingContextCallback painter, {
-    ColorFilterLayer? oldLayer,
-  }) {
-    final ColorFilterLayer layer = oldLayer ?? ColorFilterLayer();
-    layer.colorFilter = colorFilter;
-    pushLayer(layer, painter, offset);
-    return layer;
   }
 }
 
@@ -368,20 +153,11 @@ class PipelineOwner {
   void flushPaint() {
     final List<RenderObject> dirtyNodes = _nodesNeedingPaint;
     _nodesNeedingPaint = <RenderObject>[];
-    // Sort the dirty nodes in reverse order (deepest first).
-    for (final node in dirtyNodes..sort((RenderObject a, RenderObject b) => b.depth - a.depth)) {
-      assert(node._layerHandle.layer != null);
-      if ((node._needsPaint/* || node._needsCompositedLayerUpdate*/) && node.owner == this) {
-        if (node._layerHandle.layer!.attached) {
-          assert(node.isRepaintBoundary);
-          if (node._needsPaint) {
-            PaintingContext.repaintCompositedChild(node);
-          } else {
-            PaintingContext.updateLayerProperties(node);
-          }
-        } else {
-          node._skippedPaintingOnLayer();
-        }
+    // Paint all dirty nodes
+    for (final node in dirtyNodes) {
+      if (node._needsPaint && node.owner == this) {
+        node._needsPaint = false;
+        // Painting is handled directly without layers
       }
     }  
   }
@@ -399,23 +175,6 @@ abstract class RenderObject {
   bool _needsPaint = false;
   ParentData? parentData;
   Rect get paintBounds;
-
-  final LayerHandle<ContainerLayer> _layerHandle = LayerHandle();
-  @protected
-  ContainerLayer? get layer {
-    assert(!isRepaintBoundary || _layerHandle.layer == null || _layerHandle.layer is OffsetLayer);
-    return _layerHandle.layer;
-  }
-  @protected
-  set layer(ContainerLayer? newLayer) {
-    assert(
-      !isRepaintBoundary,
-      'Attempted to set a layer to a repaint boundary render object.\n'
-      'The framework creates and assigns an OffsetLayer to a repaint '
-      'boundary automatically.',
-    );
-    _layerHandle.layer = newLayer;
-  }
 
   RenderObject? get parent => _parent;
   PipelineOwner? get owner => _owner;
@@ -436,28 +195,6 @@ abstract class RenderObject {
   void setupParentData(covariant RenderObject child) {
     if (child.parentData is! ParentData) {
       child.parentData = ParentData();
-    }
-  }
-  void _skippedPaintingOnLayer() {
-    assert(attached);
-    assert(isRepaintBoundary);
-    assert(_needsPaint/* || _needsCompositedLayerUpdate*/);
-    assert(_layerHandle.layer != null);
-    assert(!_layerHandle.layer!.attached);
-    RenderObject? node = parent;
-    while (node != null) {
-      if (node.isRepaintBoundary) {
-        if (node._layerHandle.layer == null) {
-          // Looks like the subtree here has never been painted. Let it handle itself.
-          break;
-        }
-        if (node._layerHandle.layer!.attached) {
-          // It's the one that detached us, so it's the one that will decide to repaint us.
-          break;
-        }
-        node._needsPaint = true;
-      }
-      node = node.parent;
     }
   }
   /// Clears the needs-layout flag. Called by subclasses after performing layout.
@@ -484,32 +221,10 @@ abstract class RenderObject {
   }
 
   bool _wasRepaintBoundary = false;
+  
+  /// markNeedsPaint is now a no-op as layers have been removed
   void markNeedsPaint() {
-    assert(!_debugDisposed);
-    if (_needsPaint) return;
-    _needsPaint = true;
-    if (isRepaintBoundary && _wasRepaintBoundary) {
-      //print("Dirty paint requested by $this. Sending request to pipeline.");
-      // If we always have our own layer, then we can just repaint
-      // ourselves without involving any other nodes.
-      assert(_layerHandle.layer is OffsetLayer);
-      if (owner != null) {
-        owner!.requestPaint(this);
-        //owner!.requestVisualUpdate();
-      }
-    } else if (parent != null) {
-      //print("Dirty paint requested by $this. Propagating.");
-      parent!.markNeedsPaint();
-    } else {
-      //print("Dirty paint requested.");
-      // i think this is the case for render view
-      // they said this one is always repainting or smth idk i didnt make it do that so heres a
-      owner!.requestPaint(this);
-    }
-  }
-  OffsetLayer updateCompositedLayer({required covariant OffsetLayer? oldLayer}) {
-    assert(isRepaintBoundary);
-    return oldLayer ?? OffsetLayer();
+    // No-op: layers logic removed
   }
   /// The layout constraints most recently supplied by the parent.
   ///
@@ -539,9 +254,6 @@ abstract class RenderObject {
 
   void paint(PaintingContext context, Offset offset);
 
-  void replaceRootLayer(ContainerLayer layer) {
-    _layerHandle.layer = layer..attach(this);
-  }
   @mustCallSuper
   void attach(PipelineOwner owner) {
     assert(!_debugDisposed);
@@ -555,24 +267,6 @@ abstract class RenderObject {
       _needsLayout = false;
       markNeedsLayout();
     }
-    /*
-    if (_needsCompositingBitsUpdate) {
-      _needsCompositingBitsUpdate = false;
-      markNeedsCompositingBitsUpdate();
-    }
-    */
-    if (_needsPaint && _layerHandle.layer != null) {
-      // Don't enter this block if we've never painted at all;
-      // scheduleInitialPaint() will handle it
-      _needsPaint = false;
-      markNeedsPaint();
-    }
-    /*
-    if (_semantics.configProvider.effective.isSemanticBoundary &&
-        (_semantics.parentDataDirty || !_semantics.built)) {
-      markNeedsSemanticsUpdate();
-    }
-    */
   }
 
   void detach() {

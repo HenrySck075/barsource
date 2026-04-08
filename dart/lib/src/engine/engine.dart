@@ -16,7 +16,6 @@ import 'package:logging/logging.dart';
 import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/rendering/view.dart';
 import 'package:barsource/src/rendering/object.dart';
-import 'package:barsource/src/rendering/layer.dart';
 import 'package:barsource/src/scheduler/ticker.dart';
 
 import 'package:cli_progress_bar/cli_progress_bar.dart';
@@ -58,8 +57,6 @@ class AudioCodec {
   const AudioCodec.opus() : name = 'opus';
   final String name;
 }
-
-class _NothingBurger extends OffsetLayer {}
 
 class Engine extends BindingBase with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
   Engine._(this._nativePtr);
@@ -125,7 +122,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       size: config.resolution,
     ));
 
-    renderView.replaceRootLayer(_NothingBurger());
+    // Layers removed - no longer need replaceRootLayer
 
     // 2. Attach Root Widget
     attachRootWidget(app);
@@ -190,10 +187,11 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         // ignore: invalid_use_of_protected_member
         final nativeCanvas = canvas.nativePtr;
         rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
-        // literally nothing happens here
+        
+        // Paint directly without layers
         try {
-          renderView.layer?.addToScene(canvas);
-          //pipelineOwner.addToScene(canvas);
+          final context = PaintingContext(canvas, Rect.fromLTWH(0, 0, config.resolution.width, config.resolution.height));
+          renderView.paint(context, Offset.zero);
         } catch (e, st) {
           _log.severe('Error during painting at $_currentTime: $e', e, st);
         }
