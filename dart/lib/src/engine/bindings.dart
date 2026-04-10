@@ -139,6 +139,41 @@ external void rina_canvas_draw_rect(
 @ffi.Native<
   ffi.Void Function(
     ffi.Pointer<TennojiCanvas>,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+  )
+>(isLeaf: true)
+external void rina_canvas_draw_rrect(
+  ffi.Pointer<TennojiCanvas> canvas,
+  double left,
+  double top,
+  double width,
+  double height,
+  double tlRx,
+  double tlRy,
+  double trRx,
+  double trRy,
+  double blRx,
+  double blRy,
+  double brRx,
+  double brRy,
+  ffi.Pointer<TennojiCanvasPaintMetadata> paintData,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
     ffi.Pointer<TennojiCanvasImage>,
     ffi.Float,
     ffi.Float,
@@ -274,6 +309,41 @@ external void rina_canvas_clip_rect(
 );
 
 @ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
+    ffi.Bool,
+  )
+>(isLeaf: true)
+external void rina_canvas_clip_rrect(
+  ffi.Pointer<TennojiCanvas> canvas,
+  double left,
+  double top,
+  double width,
+  double height,
+  double tlRx,
+  double tlRy,
+  double trRx,
+  double trRy,
+  double blRx,
+  double blRy,
+  double brRx,
+  double brRy,
+  bool doAntiAlias,
+);
+
+@ffi.Native<
   ffi.Int Function(
     ffi.Pointer<TennojiCanvas>,
     ffi.Pointer<TennojiCanvasPaintMetadata>,
@@ -282,6 +352,14 @@ external void rina_canvas_clip_rect(
 external int rina_canvas_save_layer(
   ffi.Pointer<TennojiCanvas> canvas,
   ffi.Pointer<TennojiCanvasPaintMetadata> paint,
+);
+
+@ffi.Native<
+  ffi.Int Function(ffi.Pointer<TennojiCanvas>, ffi.Pointer<TennojiImageFilter>)
+>(isLeaf: true)
+external int rina_canvas_save_layer_rec(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiImageFilter> filter,
 );
 
 @ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvas>, ffi.Uint8)>(

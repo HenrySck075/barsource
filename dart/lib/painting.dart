@@ -12,4 +12,5 @@ export 'src/painting/decoration.dart';
 export 'src/painting/text_painter.dart';
 export 'src/painting/inline_span.dart';
 export 'src/painting/canvas.dart';
+export 'src/painting/border_radius.dart';
 export 'src/painting/strut_style.dart';

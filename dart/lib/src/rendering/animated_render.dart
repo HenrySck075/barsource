@@ -1,4 +1,5 @@
 import 'package:barsource/src/painting/alignment.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 import 'package:barsource/src/rendering/box.dart';
 import 'package:barsource/src/rendering/pipeline_owner.dart';
 
@@ -71,6 +72,7 @@ class RenderAnimatedOpacity extends RenderProxyBox {
 class RenderAnimatedTranslation extends RenderProxyBox {
   RenderAnimatedTranslation({
     required Animation<Offset> offset,
+    required this.asPixel
   }) : _offset = offset;
 
   Animation<Offset> _offset;
@@ -83,6 +85,8 @@ class RenderAnimatedTranslation extends RenderProxyBox {
     markNeedsPaint();
   }
 
+  bool asPixel;
+
   @override
   void attach(PipelineOwner owner) {
     offset.addListener(markNeedsPaint);
@@ -94,13 +98,14 @@ class RenderAnimatedTranslation extends RenderProxyBox {
     super.detach();
   }
 
+  static final Size sizeOfOne = const Size(1,1);
   @override
   void paint(PaintingContext context, Offset paintOffset) {
     final child = this.child;
     if (child == null) return;
     final o = offset.value;
     // Fractional offset: multiply by child size.
-    final childSize = child.size;
+    final childSize = asPixel ? sizeOfOne : child.size ;
     final translatedOffset = Offset(
       paintOffset.dx + o.dx * childSize.width,
       paintOffset.dy + o.dy * childSize.height,
@@ -235,6 +240,78 @@ class RenderAnimatedRotation extends RenderProxyBox {
     context.canvas.translate(off.dx, off.dy);
     context.canvas.rotate(degrees);
     context.canvas.translate(-off.dx, -off.dy);
+    context.paintChild(child, offset);
+    context.canvas.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RenderAnimatedSize
+// ---------------------------------------------------------------------------
+
+// acts as a ClipRect
+class RenderAnimatedSize extends RenderProxyBox {
+  RenderAnimatedSize({
+    required Animation<double> sizeFactor,
+    Axis axis = Axis.vertical,
+    Alignment alignment = .center,
+  }) : _sizeFactor = sizeFactor, _axis = axis, _alignment = alignment;
+
+  Animation<double> _sizeFactor;
+  Animation<double> get sizeFactor => _sizeFactor;
+  set sizeFactor(Animation<double> value) {
+    if (_sizeFactor == value) return;
+    sizeFactor.removeListener(markNeedsLayout);
+    _sizeFactor = value;
+    sizeFactor.addListener(markNeedsLayout);
+    markNeedsPaint();
+  }
+
+  Axis _axis;
+  Axis get axis => _axis;
+  set axis(Axis value) {
+    if (_axis == value) return;
+    _axis = value;
+    markNeedsPaint();
+  }
+
+  Alignment _alignment;
+  Alignment get alignment => _alignment;
+  set alignment(Alignment value) {
+    if (_alignment == value) return;
+    _alignment = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    sizeFactor.addListener(markNeedsLayout);
+    super.attach(owner);
+  }
+  @override
+  void detach() {
+    sizeFactor.removeListener(markNeedsLayout);
+    super.detach();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+
+    final s = sizeFactor.value.clamp(0.0, 1.0);
+    if (s == 0.0) return;
+
+    final childSize = child.size;
+    final clipRect = alignment.inscribe(
+      axis == Axis.vertical
+          ? Size(childSize.width, childSize.height * s)
+          : Size(childSize.width * s, childSize.height),
+      Offset.zero & childSize,
+    );
+
+    context.canvas.save();
+    context.canvas.clipRect(offset & clipRect.size, false);
     context.paintChild(child, offset);
     context.canvas.restore();
   }

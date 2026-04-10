@@ -43,6 +43,11 @@ class BoxConstraints extends Constraints {
         minHeight = height ?? 0.0,
         maxHeight = height ?? double.infinity;
 
+  const BoxConstraints.expand({double? width, double? height})
+  : minWidth = width ?? double.infinity,
+    maxWidth = width ?? double.infinity,
+    minHeight = height ?? double.infinity,
+    maxHeight = height ?? double.infinity;
   @override
   bool get isTight => minWidth == maxWidth && minHeight == maxHeight;
 
@@ -92,12 +97,14 @@ class BoxConstraints extends Constraints {
     );
   }
 
-  static const BoxConstraints expand = BoxConstraints(
-    minWidth: double.infinity,
-    maxWidth: double.infinity,
-    minHeight: double.infinity,
-    maxHeight: double.infinity,
-  );
+  BoxConstraints enforce(BoxConstraints constraints) {
+    return BoxConstraints(
+      minWidth: clampDouble(minWidth, constraints.minWidth, constraints.maxWidth),
+      maxWidth: clampDouble(maxWidth, constraints.minWidth, constraints.maxWidth),
+      minHeight: clampDouble(minHeight, constraints.minHeight, constraints.maxHeight),
+      maxHeight: clampDouble(maxHeight, constraints.minHeight, constraints.maxHeight),
+    );
+  }
 
   bool debugAssertIsValid() {
     assert(minWidth >= 0.0 && minWidth <= maxWidth);

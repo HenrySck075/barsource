@@ -1616,13 +1616,12 @@ final class Paint {
   }
 
   set colorFilter(ColorFilter? value) {
-    final _ColorFilter? nativeFilter = value?._toNativeColorFilter();
-    if (nativeFilter == null) {
+    if (value == null) {
       if (_objects != null) {
         _objects![_kColorFilterIndex] = null;
       }
     } else {
-      _ensureObjectsInitialized()[_kColorFilterIndex] = nativeFilter;
+      _ensureObjectsInitialized()[_kColorFilterIndex] = value;
     }
   }
 
@@ -1657,7 +1656,7 @@ final class Paint {
       final List<Object?> objects = _ensureObjectsInitialized();
       final imageFilter = objects[_kImageFilterIndex] as _ImageFilter?;
       if (imageFilter?.creator != value) {
-        objects[_kImageFilterIndex] = value._toNativeImageFilter();
+        objects[_kImageFilterIndex] = value;
       }
     }
   }
@@ -1690,7 +1689,18 @@ final class Paint {
       // default allocator for arena is calloc so this should be nullptr by default
       ret.ref.shader = nullptr;
     }
-
+    final cf = colorFilter;
+    if (cf != null) {
+      ret.ref.colorFilter = cf._toNativeColorFilter()?._nativePtr ?? nullptr;
+    } else {
+      ret.ref.colorFilter = nullptr;
+    }
+    final imf = imageFilter;
+    if (imf != null) {
+      ret.ref.imageFilter = imf._toNativeImageFilter()._nativePtr;
+    } else {
+      ret.ref.imageFilter = nullptr;
+    }
     return ret;
   }
 
@@ -6136,7 +6146,6 @@ base class _NativePicture implements Picture {
       _disposed = true;
       return true;
     }());
-    print("Disposing ${_nativePtr.address.toString()}");
     Picture.onDispose?.call(this);
     rina_picture_destroy(_nativePtr);
     _nativePtr = nullptr;
@@ -6708,6 +6717,27 @@ class Canvas {
     )
     );
   }
+  void drawRRect(RRect rrect, Paint paint) {
+    debugAssertNullPointer();
+    using((arena)=>
+    rina_canvas_draw_rrect(
+      _nativePtr,
+      rrect.left,
+      rrect.top,
+      rrect.width,
+      rrect.height,
+      rrect.tlRadiusX,
+      rrect.tlRadiusY,
+      rrect.trRadiusX,
+      rrect.trRadiusY,
+      rrect.blRadiusX,
+      rrect.blRadiusY,
+      rrect.brRadiusX,
+      rrect.brRadiusY,
+      paint._createPaintMetadata(arena),
+    )
+    );
+  }
 
   /// this is specifically used by RenderVideoClip.paint 
   /// because it has the pointer 
@@ -6807,12 +6837,35 @@ class Canvas {
       doAntiAlias
     );
   }
+  void clipRRect(RRect rrect, bool doAntiAlias) {
+    debugAssertNullPointer();
+    rina_canvas_clip_rrect(
+      _nativePtr,
+      rrect.left,
+      rrect.top,
+      rrect.width,
+      rrect.height,
+      rrect.tlRadiusX,
+      rrect.tlRadiusY,
+      rrect.trRadiusX,
+      rrect.trRadiusY,
+      rrect.blRadiusX,
+      rrect.blRadiusY,
+      rrect.brRadiusX,
+      rrect.brRadiusY,
+      doAntiAlias
+    );
+  }
 
   void saveLayer(Paint paint) {
     debugAssertNullPointer();
     using((arena)=>
     rina_canvas_save_layer(_nativePtr,paint._createPaintMetadata(arena))
     );
+  }
+  void saveLayerWithBackdrop(ImageFilter filter) {
+    debugAssertNullPointer();
+    rina_canvas_save_layer_rec(_nativePtr, filter._toNativeImageFilter()._nativePtr);
   }
   void saveLayerAlpha(int alpha) {
     debugAssertNullPointer();

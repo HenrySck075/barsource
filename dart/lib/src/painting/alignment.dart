@@ -87,6 +87,18 @@ class Alignment extends AlignmentGeometry {
       identical(this, other) ||
       other is Alignment && other.x == x && other.y == y;
 
+
+  Rect inscribe(Size size, Rect rect) {
+    final double halfWidthDelta = (rect.width - size.width) / 2.0;
+    final double halfHeightDelta = (rect.height - size.height) / 2.0;
+    return Rect.fromLTWH(
+      rect.left + halfWidthDelta + x * halfWidthDelta,
+      rect.top + halfHeightDelta + y * halfHeightDelta,
+      size.width,
+      size.height,
+    );
+  }
+
   @override
   int get hashCode => Object.hash(x, y);
 

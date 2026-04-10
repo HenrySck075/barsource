@@ -1,4 +1,5 @@
 // AUTO-GENERATED BARREL FILE. DO NOT EDIT BY HAND
+export 'src/foundation/audio_reader.dart';
 export 'src/foundation/debug.dart';
 export 'src/foundation/binding_base.dart';
 export 'src/foundation/key.dart';

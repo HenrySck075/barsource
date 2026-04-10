@@ -9,9 +9,9 @@ class Flex extends MultiChildRenderObjectWidget {
   const Flex({
     super.key,
     required this.direction,
-    this.mainAxisAlignment = MainAxisAlignment.start,
-    this.crossAxisAlignment = CrossAxisAlignment.center,
-    this.mainAxisSize = MainAxisSize.max,
+    this.mainAxisAlignment = .start,
+    this.crossAxisAlignment = .center,
+    this.mainAxisSize = .max,
     this.clipBehavior = .none,
     super.children,
   });

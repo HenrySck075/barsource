@@ -8,6 +8,7 @@ import 'package:barsource/src/dart_ui/dart_ui.dart';
 import 'package:barsource/src/rendering/box.dart';
 
 import '../engine/engine.dart';
+import '../foundation/audio_reader.dart';
 import 'object.dart';
 
 class RenderVideoClip extends RenderBox implements AudioContributor {
@@ -171,29 +172,26 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
   final Duration? trimEnd;
   final double volume;
 
-  Pointer<TennojiDecoder>? _decoder;
+  late AudioReader _audioReader;
 
-  Pointer<TennojiDecoder>? get decoderPtr => _decoder;
+  Pointer<TennojiDecoder>? get decoderPtr => _audioReader.decoder;
 
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    final uri = source.toNativeUtf8(allocator: calloc);
-    _decoder = rina_decoder_open(
-      Engine.instance.nativePtr,
-      uri.cast(),
-      TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
+    
+    _audioReader = AudioReader(
+      source: source,
+      trimStart: trimStart,
+      trimEnd: trimEnd,
+      volume: volume,
     );
-    calloc.free(uri);
-    // Audio is now handled via AudioContributor interface
+    _audioReader.open();
   }
 
   @override
   void detach() {
-    if (_decoder != null) {
-      rina_decoder_close(_decoder!);
-      _decoder = null;
-    }
+    _audioReader.close();
     super.detach();
   }
 
@@ -210,42 +208,10 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
 
   @override
   Float32List? getAudioForFrame(Duration frameTime, int sampleCount, int sampleRate) {
-    if (_decoder == null) return null;
-
-    final clipTime = frameTime - trimStart;
-    
-    // Check if we're within the clip bounds
-    if (clipTime < Duration.zero) return null;
-    if (trimEnd != null && clipTime > trimEnd!) return null;
-
-    final timeUs = clipTime.inMicroseconds;
-
-    // Allocate buffer for interleaved stereo samples
-    final sampleBufferSize = sampleCount * 2; // stereo
-    final sampleBuffer = calloc<Float>(sampleBufferSize);
-
-    try {
-      final samplesRead = rina_decoder_read_audio_samples(
-        _decoder!,
-        timeUs,
-        sampleBuffer,
-        sampleCount,
-        sampleRate,
-      );
-
-      if (samplesRead <= 0) {
-        return null;
-      }
-
-      // Copy to Float32List and apply volume
-      final result = Float32List(samplesRead * 2);
-      for (int i = 0; i < samplesRead * 2; i++) {
-        result[i] = sampleBuffer[i] * volume;
-      }
-
-      return result;
-    } finally {
-      calloc.free(sampleBuffer);
-    }
+    return _audioReader.readSamples(
+      frameTime: frameTime,
+      sampleCount: sampleCount,
+      sampleRate: sampleRate,
+    );
   }
 }

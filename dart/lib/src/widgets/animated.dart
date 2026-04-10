@@ -1,5 +1,7 @@
 import 'package:barsource/src/dart_ui/dart_ui.dart';
+import 'package:barsource/src/foundation/listenable.dart';
 import 'package:barsource/src/painting/alignment.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 
 import '../animation/animation.dart';
 import '../rendering/animated_render.dart';
@@ -65,19 +67,23 @@ class SlideTransition extends SingleChildRenderObjectWidget {
   const SlideTransition({
     super.key,
     required this.offset,
+    this.asPixel = false,
     super.child,
   });
 
   final Animation<Offset> offset;
+  /// Whether or not to treat [offset] as a literal pixel unit instead of fraction of the widget's size
+  final bool asPixel;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderAnimatedTranslation(offset: offset);
+      RenderAnimatedTranslation(offset: offset, asPixel: asPixel);
 
   @override
   void updateRenderObject(BuildContext context,
       covariant RenderAnimatedTranslation renderObject) {
     renderObject.offset = offset;
+    renderObject.asPixel = asPixel;
   }
 }
 
@@ -172,3 +178,90 @@ class RotationTransition extends SingleChildRenderObjectWidget {
       ..alignment = alignment;
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// SizeTransition
+// ---------------------------------------------------------------------------
+
+class SizeTransition extends SingleChildRenderObjectWidget {
+  const SizeTransition({
+    super.key,
+    required this.sizeFactor,
+    this.axis = Axis.vertical,
+    this.alignment = Alignment.center,
+    super.child,
+  });
+
+  final Animation<double> sizeFactor;
+  final Axis axis;
+  final Alignment alignment;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderAnimatedSize(
+        sizeFactor: sizeFactor,
+        axis: axis,
+        alignment: alignment,
+      );
+
+  @override
+  void updateRenderObject(
+      BuildContext context, covariant RenderAnimatedSize renderObject) {
+    renderObject
+      ..sizeFactor = sizeFactor
+      ..axis = axis
+      ..alignment = alignment;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ListenableBuilder
+// ---------------------------------------------------------------------------
+
+class ListenableBuilder extends StatefulWidget {
+  const ListenableBuilder({
+    super.key,
+    required this.listenable,
+    this.child,
+    required this.builder,
+  });
+
+  final Listenable listenable;
+  final Widget? child;
+  final Widget Function(BuildContext context, Widget? child) builder;
+
+  @override
+  State<ListenableBuilder> createState() => _ListenableBuilderState(); 
+}
+
+class _ListenableBuilderState extends State<ListenableBuilder> {
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_onChange);
+  }
+
+  @override
+  void didUpdateWidget(ListenableBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listenable != widget.listenable) {
+      oldWidget.listenable.removeListener(_onChange);
+      widget.listenable.addListener(_onChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, widget.child);
+}
+
+
+typedef AnimatedBuilder = ListenableBuilder;

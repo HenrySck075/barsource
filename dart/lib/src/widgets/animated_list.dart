@@ -1,5 +1,6 @@
 import 'package:barsource/dart_ui.dart';
 import 'package:barsource/src/foundation/collections.dart';
+import 'package:barsource/src/rendering/flex_render.dart';
 import 'package:barsource/src/widgets/flex.dart';
 
 import '../animation/animation.dart';
@@ -41,6 +42,16 @@ class ListController<T> extends ChangeNotifier {
     ));
     notifyListeners();
   }
+  
+  void removeWhere(T item, {Duration duration = const Duration(milliseconds: 300)}) {
+    _operations.add(_ListOperation(
+      type: .removeValue,
+      index: -1,
+      data: item,
+      duration: duration,
+    ));
+    notifyListeners();
+  }
 
   // Internal: consume operations
   List<_ListOperation<T>> _consume() {
@@ -50,7 +61,7 @@ class ListController<T> extends ChangeNotifier {
   }
 }
 
-enum _ListOpType { insert, remove }
+enum _ListOpType { insert, remove, removeValue }
 
 class _ListOperation<T> {
   _ListOperation({
@@ -92,13 +103,17 @@ class AnimatedList<T extends Object> extends StatefulWidget {
     required this.itemBuilder,
     required this.listController,
     this.removedItemBuilder,
-    this.clipBehavior = .hardEdge
+    this.clipBehavior = .hardEdge,
+    this.mainAxisAlignment = .start,
+    this.crossAxisAlignment = .start,
   });
 
   final AnimatedItemBuilder<T> itemBuilder;
   final ListController<T> listController;
   final AnimatedRemovedItemBuilder<T>? removedItemBuilder;
   final Clip clipBehavior;
+  final MainAxisAlignment mainAxisAlignment;
+  final CrossAxisAlignment crossAxisAlignment;
 
   @override
   State<AnimatedList<T>> createState() => _AnimatedListState<T>();
@@ -185,6 +200,8 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     });
 
     controller.forward().then<void>((_) {
+      print(_incomingItems);
+      print(incomingItem);
       _removeActiveItemAt(_incomingItems, incomingItem.itemIndex)!.controller!.dispose();
     });
   }
@@ -235,6 +252,14 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     });
   }
 
+  // helper for removeItem where it finds the index by given item
+  void removeValue(T item, {AnimatedRemovedItemBuilder<T>? builder, Duration duration = _kDuration}) {
+    final index = _items.indexOf(item);
+    if (index != -1) {
+      removeItem(index, builder: builder, duration: duration);
+    }
+  }
+
   void _update() {
     setState(() {
       final ops = widget.listController._consume();
@@ -243,10 +268,17 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
           if (op.index >= 0 && op.index <= _items.length) {
             insertItem(op.index, op.data!, duration: op.duration);
           }
+          // if its specifically -1 then we append
+          else if (op.index == -1) {
+            insertItem(_items.length, op.data!, duration: op.duration);
+          }
         } else if (op.type == .remove) {
           if (op.index >= 0 && op.index < _items.length) {
             removeItem(op.index, duration: op.duration);
           }
+        }
+        else if (op.type == .removeValue) {
+          removeValue(op.data!, duration: op.duration);
         }
       }
     });
@@ -268,7 +300,9 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
           return widget.itemBuilder(context, data, animation);
         }
       ),
-      clipBehavior: widget.clipBehavior
+      clipBehavior: widget.clipBehavior,
+      mainAxisAlignment: widget.mainAxisAlignment,
+      crossAxisAlignment: widget.crossAxisAlignment,
     );
   }
 }
@@ -295,5 +329,8 @@ class _ActiveItem<T extends Object> implements Comparable<_ActiveItem> {
 
   @override
   int compareTo(_ActiveItem other) => itemIndex - other.itemIndex;
+
+  @override 
+  String toString() => "{$itemIndex} $data";
 }
 

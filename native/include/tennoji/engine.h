@@ -67,6 +67,16 @@ TENNOJI_EXPORT void rina_canvas_draw_rect(
   float width, float height,
   TennojiCanvasPaintMetadata* paintData
 );
+TENNOJI_EXPORT void rina_canvas_draw_rrect(
+  TennojiCanvas* canvas,
+  float left, float top,
+  float width, float height,
+  float tlRx, float tlRy,
+  float trRx, float trRy,
+  float blRx, float blRy,
+  float brRx, float brRy,
+  TennojiCanvasPaintMetadata* paintData
+);
 TENNOJI_EXPORT void rina_canvas_draw_image_rect(
   TennojiCanvas* canvas,
   TennojiCanvasImage* image,
@@ -105,9 +115,23 @@ TENNOJI_EXPORT void rina_canvas_clip_rect(
   float width, float height,
   bool doAntiAlias
 );
+TENNOJI_EXPORT void rina_canvas_clip_rrect(
+  TennojiCanvas* canvas,
+  float left, float top,
+  float width, float height,
+  float tlRx, float tlRy,
+  float trRx, float trRy,
+  float blRx, float blRy,
+  float brRx, float brRy,
+  bool doAntiAlias
+);
 TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paint
+);
+TENNOJI_EXPORT int rina_canvas_save_layer_rec(
+  TennojiCanvas* canvas, 
+  TennojiImageFilter* filter
 );
 TENNOJI_EXPORT int rina_canvas_save_layer_alpha(
   TennojiCanvas* canvas, 

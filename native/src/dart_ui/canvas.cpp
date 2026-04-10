@@ -1,7 +1,9 @@
 #include "../engine_internal.h"
 #include "canvas_internal.h"
+#include "filter_internal.h"
 #include "image_internal.h"
 #include "include/core/SkM44.h"
+#include "include/core/SkRRect.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "shader_internal.h"
 #include "text/paragraph_internal.h"
@@ -71,6 +73,10 @@ SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata) {
 
   if (metadata->shader)
     paint.setShader(metadata->shader->getShader());
+  if (metadata->colorFilter)
+    paint.setColorFilter(metadata->colorFilter->filter);
+  if (metadata->imageFilter)
+    paint.setImageFilter(metadata->imageFilter->filter);
 
   return paint;
 }
@@ -135,6 +141,33 @@ TENNOJI_EXPORT void rina_canvas_draw_rect(
 
   canvas->canvas->drawRect(
     SkRect::MakeXYWH(left, top, width, height), 
+    paint_create_from_encoded(paintData)
+  );
+}
+TENNOJI_EXPORT void rina_canvas_draw_rrect(
+  TennojiCanvas* canvas,
+  float left, float top,
+  float width, float height,
+  float tlRx, float tlRy,
+  float trRx, float trRy,
+  float blRx, float blRy,
+  float brRx, float brRy,
+  TennojiCanvasPaintMetadata* paintData
+) {
+  if (!canvas || !canvas->canvas) return;
+
+  SkVector radii[4] = {
+    {tlRx, tlRy},
+    {trRx, trRy},
+    {blRx, blRy},
+    {brRx, brRy}
+  };
+
+  canvas->canvas->drawRRect(
+    SkRRect::MakeRectRadii(
+      SkRect::MakeXYWH(left, top, width, height),
+      radii
+    ), 
     paint_create_from_encoded(paintData)
   );
 }
@@ -233,6 +266,32 @@ TENNOJI_EXPORT void rina_canvas_clip_rect(
   if (!canvas || !canvas->canvas) return;
   canvas->canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), doAntiAlias);
 }
+TENNOJI_EXPORT void rina_canvas_clip_rrect(
+  TennojiCanvas* canvas,
+  float left, float top,
+  float width, float height,
+  float tlRx, float tlRy,
+  float trRx, float trRy,
+  float blRx, float blRy,
+  float brRx, float brRy,
+  bool doAntiAlias
+) {
+  if (!canvas || !canvas->canvas) return;
+
+  SkVector radii[4] = {
+    {tlRx, tlRy},
+    {trRx, trRy},
+    {blRx, blRy},
+    {brRx, brRy}
+  };
+
+  canvas->canvas->clipRRect(
+    SkRRect::MakeRectRadii(
+      SkRect::MakeXYWH(left, top, width, height),
+      radii
+    ), doAntiAlias
+  );
+}
 
 TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas,
@@ -241,6 +300,15 @@ TENNOJI_EXPORT int rina_canvas_save_layer(
   if (!canvas || !canvas->canvas) return -1;
   auto paint = paint_create_from_encoded(metadata);
   return canvas->canvas->saveLayer(nullptr, &paint);
+}
+TENNOJI_EXPORT int rina_canvas_save_layer_rec(
+  TennojiCanvas* canvas, 
+  TennojiImageFilter* filter
+) {
+  if (!canvas || !canvas->canvas || !filter) return -1;
+  SkCanvas::SaveLayerRec rec;
+  rec.fBackdrop = filter->filter.get();
+  return canvas->canvas->saveLayer(rec);
 }
 TENNOJI_EXPORT int rina_canvas_save_layer_alpha(
   TennojiCanvas* canvas, 

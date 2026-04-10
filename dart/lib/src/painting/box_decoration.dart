@@ -1,4 +1,5 @@
 import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/painting/border_radius.dart';
 import 'package:barsource/src/painting/decoration.dart';
 import 'package:barsource/src/painting/edge_insets.dart';
 
@@ -59,7 +60,6 @@ class BoxBorder {
   EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
 }
 class DecorationImage {}
-class BorderRadius {}
 class BoxShadow {}
 class Gradient {}
 enum BoxShape { rectangle, circle }

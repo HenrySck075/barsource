@@ -1,5 +1,6 @@
 // AUTO-GENERATED BARREL FILE. DO NOT EDIT BY HAND
 export 'src/rendering/timeline_parent_data.dart';
+export 'src/rendering/layer.dart';
 export 'src/rendering/align_render.dart';
 export 'src/rendering/animated_render.dart';
 export 'src/rendering/pipeline_owner.dart';
@@ -13,4 +14,3 @@ export 'src/rendering/parent_data.dart';
 export 'src/rendering/binding.dart';
 export 'src/rendering/media_render.dart';
 export 'src/rendering/flex_render.dart';
-export 'src/rendering/layer.dart';

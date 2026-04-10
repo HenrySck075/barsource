@@ -43,7 +43,9 @@ class Container extends StatelessWidget {
     this.alignment,
     this.padding,
     this.color,
+    this.isAntiAlias = true,
     this.decoration,
+    this.foregroundDecoration,
     this.width,
     this.height,
     this.constraints,
@@ -63,53 +65,190 @@ class Container extends StatelessWidget {
   final AlignmentGeometry? alignment;
   final EdgeInsetsGeometry? padding;
   final Color? color;
+  final bool isAntiAlias;
   final Decoration? decoration;
+  final Decoration? foregroundDecoration;
   final double? width;
   final double? height;
   final BoxConstraints? constraints;
   final EdgeInsetsGeometry? margin;
   final Matrix4? transform;
 
+  EdgeInsetsGeometry? get _paddingIncludingDecoration {
+    return switch ((padding, decoration?.padding)) {
+      (null, final EdgeInsetsGeometry? padding) => padding,
+      (final EdgeInsetsGeometry? padding, null) => padding,
+      (_) => padding!.add(decoration!.padding),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget? current = child;
 
-    if (child == null && (width == null || height == null)) {
-      current = SizedBox(width: width, height: height); 
-    } else {
-      current = Align(alignment: alignment ?? Alignment.center, child: current);
+    if (child == null && (constraints == null || !constraints!.isTight)) {
+      current = LimitedBox(
+        maxWidth: 0.0,
+        maxHeight: 0.0,
+        child: ConstrainedBox(constraints: const BoxConstraints.expand()),
+      );
+    } else if (alignment != null) {
+      current = Align(alignment: alignment!, child: current);
     }
 
-    EdgeInsetsGeometry? effectivePadding = padding;
-    if (decoration != null) {
-      if (effectivePadding == null) {
-        effectivePadding = decoration!.padding;
-      } else {
-        effectivePadding = effectivePadding.add(decoration!.padding);
-      }
-    }
-
+    final EdgeInsetsGeometry? effectivePadding = _paddingIncludingDecoration;
     if (effectivePadding != null) {
       current = Padding(padding: effectivePadding, child: current);
     }
 
     if (color != null) {
-      current = DecoratedBox(decoration: BoxDecoration(color: color), child: current);
-    } else if (decoration != null) {
+      current = ColoredBox(color: color!, isAntiAlias: isAntiAlias, child: current);
+    }
+
+/*
+    if (clipBehavior != Clip.none) {
+      assert(decoration != null);
+      current = ClipPath(
+        clipper: _DecorationClipper(
+          textDirection: Directionality.maybeOf(context),
+          decoration: decoration!,
+        ),
+        clipBehavior: clipBehavior,
+        child: current,
+      );
+    }
+*/
+    if (decoration != null) {
       current = DecoratedBox(decoration: decoration!, child: current);
     }
 
-    if (width != null || height != null) {
-      current = SizedBox(width: width, height: height, child: current);
+    if (foregroundDecoration != null) {
+      current = DecoratedBox(
+        decoration: foregroundDecoration!,
+        position: DecorationPosition.foreground,
+        child: current,
+      );
+    }
+
+    if (constraints != null) {
+      current = ConstrainedBox(constraints: constraints!, child: current);
     }
 
     if (margin != null) {
-      current = Padding(padding: margin as EdgeInsets, child: current);
+      current = Padding(padding: margin!, child: current);
     }
 
-    return current;
+    /*
+    if (transform != null) {
+      current = Transform(transform: transform!, alignment: transformAlignment, child: current);
+    }
+    */
+
+    return current!;
   }
 }
+
+class ColoredBox extends SingleChildRenderObjectWidget {
+  const ColoredBox({
+    super.key,
+    required this.color,
+    this.isAntiAlias = false,
+    super.child,
+  });
+
+  final Color color;
+  final bool isAntiAlias;
+
+  @override
+  RenderColoredBox createRenderObject(BuildContext context) => RenderColoredBox(color: color, isAntiAlias: isAntiAlias);
+
+  @override
+  void updateRenderObject(BuildContext context, RenderColoredBox renderObject) {
+    renderObject
+      ..color = color
+      ..isAntiAlias = isAntiAlias;
+  }
+}
+
+class RenderColoredBox extends RenderProxyBox {
+  RenderColoredBox({
+    required Color color,
+    bool isAntiAlias = false,
+  }) : _color = color, _isAntiAlias = isAntiAlias;
+
+  Color get color => _color;
+  Color _color;
+  set color(Color value) {
+    if (_color == value) return;
+    _color = value;
+    markNeedsPaint();
+  }
+
+  bool get isAntiAlias => _isAntiAlias;
+  bool _isAntiAlias;
+  set isAntiAlias(bool value) {
+    if (_isAntiAlias == value) return;
+    _isAntiAlias = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final Paint paint = Paint()
+      ..color = color
+      ..isAntiAlias = isAntiAlias;
+    context.canvas.drawRect(offset & size, paint);
+    if (child != null) {
+      context.paintChild(child!, offset);
+    }
+  }
+}
+
+// A widget that imposes additional constraints to its child
+class ConstrainedBox extends SingleChildRenderObjectWidget {
+  const ConstrainedBox({super.key, required this.constraints, super.child});
+  final BoxConstraints constraints;
+
+  @override
+  RenderConstrainedBox createRenderObject(BuildContext context) => RenderConstrainedBox(constraints: constraints);
+
+  @override
+  void updateRenderObject(BuildContext context, RenderConstrainedBox renderObject) {
+    renderObject.additionalConstraints = constraints;
+  }
+}
+
+class RenderConstrainedBox extends RenderProxyBox {
+  RenderConstrainedBox({
+    required BoxConstraints constraints,
+  }) : _constraints = constraints;
+
+  BoxConstraints get additionalConstraints => _constraints;
+  BoxConstraints _constraints;
+  set additionalConstraints(BoxConstraints value) {
+    if (_constraints == value) return;
+    _constraints = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    if (child != null) {
+      child!.layout(additionalConstraints.enforce(constraints), parentUsesSize: true);
+      size = constraints.constrain(child!.size);
+    } else {
+      size = constraints.constrain(Size.zero);
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) {
+      context.paintChild(child!, offset);
+    }
+  }
+}
+
 
 class DecoratedBox extends SingleChildRenderObjectWidget {
   const DecoratedBox({
@@ -227,28 +366,6 @@ class SizedBox extends SingleChildRenderObjectWidget {
   }
 }
 
-class Padding extends SingleChildRenderObjectWidget {
-  const Padding({super.key, required this.padding, super.child});
-  final EdgeInsetsGeometry padding;
-
-  @override
-  RenderPadding createRenderObject(BuildContext context) {
-    return RenderPadding(
-      padding: padding,
-      textDirection: Directionality.maybeOf(context),
-    );
-  }
-
-  @override
-  void updateRenderObject(BuildContext context, RenderPadding renderObject) {
-    renderObject
-      ..padding = padding
-      ..textDirection = Directionality.maybeOf(context);
-  }
-}
-
-// Render objects for basic widgets
-
 class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderSizedBox({
     double? width,
@@ -303,7 +420,27 @@ class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox
   }
 }
 
-class RenderPadding extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
+class Padding extends SingleChildRenderObjectWidget {
+  const Padding({super.key, required this.padding, super.child});
+  final EdgeInsetsGeometry padding;
+
+  @override
+  RenderPadding createRenderObject(BuildContext context) {
+    return RenderPadding(
+      padding: padding,
+      textDirection: Directionality.maybeOf(context),
+    );
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, RenderPadding renderObject) {
+    renderObject
+      ..padding = padding
+      ..textDirection = Directionality.maybeOf(context);
+  }
+}
+
+class RenderPadding extends RenderProxyBox {
   RenderPadding({
     required EdgeInsetsGeometry padding,
     TextDirection? textDirection,
@@ -350,6 +487,79 @@ class RenderPadding extends RenderBox with RenderObjectWithChildMixin<RenderBox>
     if (child != null) {
       final EdgeInsets resolvedPadding = padding.resolve(textDirection);
       context.paintChild(child!, offset + resolvedPadding.topLeft);
+    }
+  }
+}
+
+// a box that limits its size only when unconstrained
+class LimitedBox extends SingleChildRenderObjectWidget {
+  const LimitedBox({
+    super.key,
+    this.maxWidth = double.infinity,
+    this.maxHeight = double.infinity,
+    super.child,
+  });
+
+  final double maxWidth;
+  final double maxHeight;
+
+  @override
+  RenderLimitedBox createRenderObject(BuildContext context) => RenderLimitedBox(
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+      );
+
+  @override
+  void updateRenderObject(BuildContext context, RenderLimitedBox renderObject) {
+    renderObject
+      ..maxWidth = maxWidth
+      ..maxHeight = maxHeight;
+  }
+}
+
+class RenderLimitedBox extends RenderProxyBox {
+  RenderLimitedBox({
+    double maxWidth = double.infinity,
+    double maxHeight = double.infinity,
+  }) : _maxWidth = maxWidth, _maxHeight = maxHeight;
+
+  double get maxWidth => _maxWidth;
+  double _maxWidth;
+  set maxWidth(double value) {
+    if (_maxWidth == value) return;
+    _maxWidth = value;
+    markNeedsLayout();
+  }
+
+  double get maxHeight => _maxHeight;
+  double _maxHeight;
+  set maxHeight(double value) {
+    if (_maxHeight == value) return;
+    _maxHeight = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final BoxConstraints constraints = this.constraints;
+    final BoxConstraints limitedConstraints = BoxConstraints(
+      minWidth: constraints.minWidth,
+      maxWidth: constraints.hasBoundedWidth ? constraints.maxWidth : maxWidth,
+      minHeight: constraints.minHeight,
+      maxHeight: constraints.hasBoundedHeight ? constraints.maxHeight : maxHeight,
+    );
+    if (child != null) {
+      child!.layout(limitedConstraints, parentUsesSize: true);
+      size = constraints.constrain(child!.size);
+    } else {
+      size = constraints.constrain(Size.zero);
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) {
+      context.paintChild(child!, offset);
     }
   }
 }
