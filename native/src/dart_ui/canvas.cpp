@@ -17,6 +17,7 @@
 #include "include/core/SkColor.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkMaskFilter.h"
+#include "include/core/SkBlurTypes.h"
 
 #include "../renderer/skia_surface.h"
 #include "tennoji/types.h"
@@ -42,45 +43,74 @@ static const int _kMaskFilterIndex = 13;
 static const int _kMaskFilterBlurStyleIndex = 14;
 static const int _kMaskFilterSigmaIndex = 15;
 static const int _kInvertColorIndex = 16;
-
 SkPaint paint_create_from_encoded(TennojiCanvasPaintMetadata* metadata) {
-  if (!metadata) {
-    // idk return a default paint 
-    SkPaint defaultPaint;
-    defaultPaint.setAntiAlias(true);
-  }
-  SkPaint paint;
+    SkPaint paint;
+    
+    // 1. Fundamental Safety Check
+    if (!metadata || !metadata->encodedData) {
+        paint.setAntiAlias(true);
+        return paint;
+    }
 
-  auto data = metadata->encodedData;
+    const uint32_t* data = metadata->encodedData;
+    // Note: In a production environment, you should also verify 
+    // metadata->dataLength >= _kInvertColorIndex to prevent OOB reads.
 
-  paint.setAntiAlias(data[_kIsAntiAliasIndex]);
-  // paint.setColor4f(*reinterpret_cast<SkColor4f*>(&data[_kColorRedIndex]), SkColorSpace::MakeSRGBLinear().get());
-  float r = *reinterpret_cast<float*>(&data[_kColorRedIndex]);
-  float g = *reinterpret_cast<float*>(&data[_kColorGreenIndex]);
-  float b = *reinterpret_cast<float*>(&data[_kColorBlueIndex]);
-  float a = 1.0f - *reinterpret_cast<float*>(&data[_kColorAlphaIndex]);
-  paint.setColor4f({r, g, b, a}, SkColorSpace::MakeSRGBLinear().get());
-  paint.setBlendMode((SkBlendMode)(data[_kBlendModeIndex] ^ 3));
-  paint.setStyle((SkPaint::Style)data[_kStyleIndex]);
-  paint.setStrokeWidth(*reinterpret_cast<float*>(&data[_kStrokeWidthIndex]));
-  paint.setStrokeCap((SkPaint::Cap)data[_kStrokeCapIndex]);
-  paint.setStrokeJoin((SkPaint::Join)data[_kStrokeJoinIndex]);
-  paint.setStrokeMiter(*reinterpret_cast<float*>(&data[_kStrokeMiterLimitIndex]));
-  paint.setMaskFilter(SkMaskFilter::MakeBlur(
-    (SkBlurStyle)data[_kMaskFilterBlurStyleIndex],
-    *reinterpret_cast<float*>(&data[_kMaskFilterSigmaIndex])
-  ));
+    // 2. Helper for Float extraction (Avoids UB compared to reinterpret_cast)
+    auto getFloat = [&](int index) {
+        float val;
+        uint32_t raw = data[index];
+        std::memcpy(&val, &raw, sizeof(float));
+        return val;
+    };
 
-  if (metadata->shader)
-    paint.setShader(metadata->shader->getShader());
-  if (metadata->colorFilter)
-    paint.setColorFilter(metadata->colorFilter->filter);
-  if (metadata->imageFilter)
-    paint.setImageFilter(metadata->imageFilter->filter);
+    // 3. Boolean/Integer Assignments
+    paint.setAntiAlias(data[_kIsAntiAliasIndex] != 0);
 
-  return paint;
+    // 4. Color Handling 
+    // If Dart sends 0.0-1.0 floats, we clamp them to be safe.
+    float r = std::clamp(getFloat(_kColorRedIndex), 0.0f, 1.0f);
+    float g = std::clamp(getFloat(_kColorGreenIndex), 0.0f, 1.0f);
+    float b = std::clamp(getFloat(_kColorBlueIndex), 0.0f, 1.0f);
+    // fuckass
+    float a = 1 - std::clamp(getFloat(_kColorAlphaIndex), 0.0f, 1.0f);
+    
+    // Note: You had '1.0f - alpha' in your snippet. 
+    // If that's genuinely what your data source requires, keep it, 
+    // but usually, alpha is straight 0.0-1.0.
+    paint.setColor4f({r, g, b, a}, SkColorSpace::MakeSRGBLinear().get());
+
+    // 5. Enum Safety (Casting raw ints to Enums is risky)
+    // BlendMode: Ensure it's within SkBlendMode::kLastMode (usually 29)
+    auto rawBlend = static_cast<SkBlendMode>(data[_kBlendModeIndex] ^ static_cast<uint32_t>(SkBlendMode::kSrcOver));; // Kept your 'magic' xor
+    paint.setBlendMode(std::min(rawBlend, SkBlendMode::kLastMode));
+
+    // Style: Stroke, Fill, or StrokeAndFill (0, 1, 2)
+    paint.setStyle(static_cast<SkPaint::Style>(std::min(data[_kStyleIndex], 2u)));
+
+    // 6. Stroke Attributes
+    paint.setStrokeWidth(std::max(0.0f, getFloat(_kStrokeWidthIndex)));
+    paint.setStrokeCap(static_cast<SkPaint::Cap>(std::min(data[_kStrokeCapIndex], (uint32_t)SkPaint::kLast_Cap)));
+    paint.setStrokeJoin(static_cast<SkPaint::Join>(std::min(data[_kStrokeJoinIndex], (uint32_t)SkPaint::kLast_Join)));
+    paint.setStrokeMiter(getFloat(_kStrokeMiterLimitIndex));
+
+    // 7. Mask Filter (Blur)
+    float sigma = getFloat(_kMaskFilterSigmaIndex);
+    if (sigma > 0.0f) {
+        uint32_t blurStyle = std::min(data[_kMaskFilterBlurStyleIndex], (uint32_t)SkBlurStyle::kLastEnum_SkBlurStyle);
+        paint.setMaskFilter(SkMaskFilter::MakeBlur(static_cast<SkBlurStyle>(blurStyle), sigma));
+    }
+
+    // 8. Object Attachments
+    if (metadata->shader)
+        paint.setShader(metadata->shader->getShader());
+    if (metadata->colorFilter)
+        paint.setColorFilter(metadata->colorFilter->filter);
+    if (metadata->imageFilter)
+        paint.setImageFilter(metadata->imageFilter->filter);
+
+    return paint;
 }
-
 extern "C" {
 
 TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
@@ -192,7 +222,7 @@ TENNOJI_EXPORT void rina_canvas_draw_image_rect(
     img, 
     SkRect::MakeXYWH(srcLeft, srcTop, srcWidth, srcHeight),
     SkRect::MakeXYWH(dstLeft, dstTop, dstWidth, dstHeight),
-    samplingOpt, &paint, SkCanvas::kFast_SrcRectConstraint
+    samplingOpt, &paint, SkCanvas::kStrict_SrcRectConstraint
   );
 }
 

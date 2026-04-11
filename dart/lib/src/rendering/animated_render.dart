@@ -294,6 +294,22 @@ class RenderAnimatedSize extends RenderProxyBox {
     super.detach();
   }
 
+
+  @override
+  void performLayout() {
+    child?.layout(constraints);
+    size = child?.size
+        ?? Size(constraints.maxWidth, constraints.maxHeight);
+
+    // edit the size based on factor and axis
+    final s = sizeFactor.value.clamp(0.0, 1.0);
+    if (axis == Axis.vertical) {
+      size = Size(size.width, size.height * s);
+    } else {
+      size = Size(size.width * s, size.height);
+    }
+  }
+
   @override
   void paint(PaintingContext context, Offset offset) {
     final child = this.child;

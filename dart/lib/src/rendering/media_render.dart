@@ -192,13 +192,18 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
 
   @override
   void detach() {
+    print("audio detaching");
+    Engine.instance.unregisterAudioContributor(this);
+    super.detach();
+  }
+
+  @override
+  void dispose() {
     if (_decoder != null) {
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
-    print("audio detaching");
-    Engine.instance.unregisterAudioContributor(this);
-    super.detach();
+    super.dispose();
   }
 
   @override

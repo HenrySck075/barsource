@@ -467,12 +467,30 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
         AVPacket* pkt = nullptr;
         {
             std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
-            if (decoder->audioPacketQueue.empty()) break; 
-            pkt = decoder->audioPacketQueue.front();
-            decoder->audioPacketQueue.pop_front();
+            if (!decoder->audioPacketQueue.empty()) {
+                pkt = decoder->audioPacketQueue.front();
+                decoder->audioPacketQueue.pop_front();
+            }
+        }
+        
+        // If queue is empty, read directly from file
+        if (!pkt) {
+            pkt = av_packet_alloc();
+            int ret = av_read_frame(decoder->fmtCtx, pkt);
+            if (ret < 0) {
+                av_packet_free(&pkt);
+                break; // EOF or error
+            }
+            
+            // Skip non-audio packets
+            if (pkt->stream_index != decoder->audioStreamIdx) {
+                av_packet_unref(pkt);
+                av_packet_free(&pkt);
+                continue;
+            }
         }
 
-        if (avcodec_send_packet(decoder->audioCodecCtx, pkt) >= 0) {
+        if (pkt && avcodec_send_packet(decoder->audioCodecCtx, pkt) >= 0) {
             while (avcodec_receive_frame(decoder->audioCodecCtx, frame) == 0) {
                 // Initialize/Update Resampler
                 if (!decoder->swrCtx) {
@@ -500,7 +518,9 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
                 av_frame_unref(frame);
             }
         }
-        av_packet_free(&pkt);
+        if (pkt) {
+            av_packet_free(&pkt);
+        }
     }
 
     // 2. Pull the exact requested amount from FIFO
