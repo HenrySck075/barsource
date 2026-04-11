@@ -199,6 +199,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
       _items.insert(index, data);
     });
 
+    print("add $incomingItem");
     controller.forward().then<void>((_) {
       print(_incomingItems);
       print(incomingItem);
@@ -221,10 +222,11 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     assert(_activeItemAt(_outgoingItems, itemIndex) == null);
 
     final _ActiveItem? incomingItem = _removeActiveItemAt(_incomingItems, itemIndex);
+    print("remove $incomingItem");
     final AnimationController controller =
         incomingItem?.controller ??
         AnimationController(duration: duration, value: 1.0/*, vsync: this*/);
-    final outgoingItem = _ActiveItem.outgoing(_items[index], controller, itemIndex, builder ?? widget.removedItemBuilder ?? widget.itemBuilder);
+    final outgoingItem = _ActiveItem.outgoing(_items[index], controller, itemIndex, builder ?? widget.removedItemBuilder);
     setState(() {
       _outgoingItems
         ..add(outgoingItem)
