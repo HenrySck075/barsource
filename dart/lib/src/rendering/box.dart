@@ -16,6 +16,19 @@ abstract class RenderBox extends RenderObject {
       {bool parentUsesSize = false}) {
     super.layout(constraints, parentUsesSize: parentUsesSize);
   }
+
+  @override
+  void debugPaint(PaintingContext context, Offset offset) {
+    debugPaintSize(context, offset); // just in case we do have anything else other than this call
+  }
+
+  void debugPaintSize(PaintingContext context, Offset offset) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(0xFF00FFFF);
+    context.canvas.drawRect((offset & size).deflate(0.5), paint);
+  }
 }
 
 abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {

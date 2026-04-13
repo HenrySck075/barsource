@@ -86,10 +86,13 @@ struct TennojiEncoder {
     // Surface Pool
     std::vector<tennoji::ExportableSurface> allSurfaces;
     std::queue<tennoji::ExportableSurface> freeSurfaces;
+    std::queue<std::vector<uint8_t>> freePixelBuffers;
     std::mutex poolMutex;
 
     std::atomic<bool> running{true};
     std::atomic<bool> renderFinished{false};
+    std::vector<float> audioLeftScratch;
+    std::vector<float> audioRightScratch;
 };
 
 static constexpr size_t kMaxRenderQueueSize = 8;
@@ -100,6 +103,14 @@ static void return_surface_to_pool(TennojiEncoder* enc, const tennoji::Exportabl
     {
         std::lock_guard<std::mutex> lock(enc->poolMutex);
         enc->freeSurfaces.push(surface);
+    }
+}
+
+static void return_pixels_to_pool(TennojiEncoder* enc, std::vector<uint8_t>& pixels) {
+    if (pixels.empty()) return;
+    {
+        std::lock_guard<std::mutex> lock(enc->poolMutex);
+        enc->freePixelBuffers.push(std::move(pixels));
     }
 }
 
@@ -147,13 +158,12 @@ static void render_loop(TennojiEncoder* enc) {
              exSurface.skSurface->getCanvas()->clear(SK_ColorTRANSPARENT);
              exSurface.skSurface->getCanvas()->drawPicture(frame.picture);
              
-              if (auto* grCtx = exSurface.skSurface->recordingContext()) {
-                  static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
-              }
-
-              if (exSurface.fd != -1) {
-                  // Zero copy path
-                  {
+               if (exSurface.fd != -1) {
+                   if (auto* grCtx = exSurface.skSurface->recordingContext()) {
+                       static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
+                   }
+                   // Zero copy path
+                   {
                       std::unique_lock<std::mutex> lock(enc->encodeMutex);
                       enc->encodeCv.wait(lock, [&] {
                           return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
@@ -166,15 +176,26 @@ static void render_loop(TennojiEncoder* enc) {
                       enc->encodeQueue.push({std::vector<uint8_t>(), exSurface, frame.pts});
                   }
                   enc->encodeCv.notify_one();
-              } else {
-                 // Read pixels (GPU -> CPU copy)
-                 SkImageInfo readInfo = SkImageInfo::Make(
-                    enc->width, enc->height,
-                    kBGRA_8888_SkColorType, kPremul_SkAlphaType);
+               } else {
+                  // Read pixels (GPU -> CPU copy)
+                  SkImageInfo readInfo = SkImageInfo::Make(
+                     enc->width, enc->height,
+                     kBGRA_8888_SkColorType, kPremul_SkAlphaType);
 
-                  std::vector<uint8_t> pixels(enc->width * enc->height * 4);
-                  if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
-                      {
+                   std::vector<uint8_t> pixels;
+                   {
+                       std::lock_guard<std::mutex> lock(enc->poolMutex);
+                       if (!enc->freePixelBuffers.empty()) {
+                           pixels = std::move(enc->freePixelBuffers.front());
+                           enc->freePixelBuffers.pop();
+                       }
+                   }
+                   const size_t frameBytes = static_cast<size_t>(enc->width) * enc->height * 4;
+                   if (pixels.size() != frameBytes) {
+                       pixels.resize(frameBytes);
+                   }
+                   if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
+                       {
                           std::unique_lock<std::mutex> lock(enc->encodeMutex);
                           enc->encodeCv.wait(lock, [&] {
                               return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
@@ -200,6 +221,9 @@ static void render_loop(TennojiEncoder* enc) {
 }
 
 static void encode_loop(TennojiEncoder* encoder) {
+    AVPacket* pkt = av_packet_alloc();
+    if (!pkt) return;
+
     while (true) {
         EncodeFrame frameData;
         {
@@ -252,6 +276,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                 av_frame_free(&hw_frame);
                 // Should return surface to pool!
                 return_surface_to_pool(encoder, frameData.surface);
+                return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
             hw_frame->pts = sw_frame->pts;
@@ -260,6 +285,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                 av_frame_free(&sw_frame);
                 av_frame_free(&hw_frame);
                 return_surface_to_pool(encoder, frameData.surface);
+                return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
             encode_frame = hw_frame;
@@ -276,6 +302,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                 if (frameData.surface.skSurface) {
                     return_surface_to_pool(encoder, frameData.surface);
                 }
+                return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
 
@@ -295,6 +322,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                     if (frameData.surface.skSurface) {
                         return_surface_to_pool(encoder, frameData.surface);
                     }
+                    return_pixels_to_pool(encoder, frameData.pixels);
                     continue;
                 }
                 hw_frame->pts = sw_frame->pts;
@@ -305,6 +333,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                     if (frameData.surface.skSurface) {
                         return_surface_to_pool(encoder, frameData.surface);
                     }
+                    return_pixels_to_pool(encoder, frameData.pixels);
                     continue;
                 }
                 encode_frame = hw_frame;
@@ -322,22 +351,27 @@ static void encode_loop(TennojiEncoder* encoder) {
         if (hw_frame) av_frame_free(&hw_frame);
         if (sw_frame) av_frame_free(&sw_frame);
         
-        if (ret < 0) continue;
+        if (ret < 0) {
+            return_pixels_to_pool(encoder, frameData.pixels);
+            continue;
+        }
 
-        AVPacket* pkt = av_packet_alloc();
         while (true) {
             ret = avcodec_receive_packet(encoder->videoCodecCtx, pkt);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
-            if (ret < 0) { av_packet_free(&pkt); break; }
+            if (ret < 0) break;
 
             av_packet_rescale_ts(pkt, encoder->videoCodecCtx->time_base,
                                  encoder->videoStream->time_base);
             pkt->stream_index = encoder->videoStream->index;
 
             av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            av_packet_unref(pkt);
         }
-        av_packet_free(&pkt);
+        av_packet_unref(pkt);
+        return_pixels_to_pool(encoder, frameData.pixels);
     }
+    av_packet_free(&pkt);
 }
 
 static const AVCodec* find_encoder(const char* codec_name, bool try_hw) {
@@ -423,7 +457,11 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->videoCodecCtx->framerate = AVRational{config->fps, 1};
     enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
     enc->videoCodecCtx->gop_size = config->fps > 0 ? config->fps * 2 : 60;
-    enc->videoCodecCtx->max_b_frames = 3;
+    enc->videoCodecCtx->max_b_frames = 0;
+    const unsigned hw_threads = std::thread::hardware_concurrency();
+    if (hw_threads > 0) {
+        enc->videoCodecCtx->thread_count = static_cast<int>(hw_threads);
+    }
 
     AVPixelFormat sw_format = AV_PIX_FMT_YUV420P;
 
@@ -471,8 +509,9 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     const char* crf = is_h265 ? "30" : "28";
     const int qp = is_h265 ? 28 : 26;
 
-    av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0);
-    av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 0);
+    av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0); // dont ever change this under any circumstances unless you like huge file sizes
+    av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 23);
+    // av_opt_set(enc->videoCodecCtx->priv_data, "tune", "zerolatency", 0); (enable this for streaming idk, we dont give them that option yet although the codebase is very clearly streaming oriented)
 
     // VAAPI requires an explicit quality target for compact output.
     if (strstr(vcodec->name, "vaapi")) {
@@ -531,7 +570,7 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->swsCtx = sws_getContext(
         config->width, config->height, AV_PIX_FMT_BGRA,
         config->width, config->height, sw_format,
-        SWS_BILINEAR, nullptr, nullptr, nullptr
+        SWS_FAST_BILINEAR, nullptr, nullptr, nullptr
     );
     if (!enc->swsCtx) {
         rina_encoder_destroy(enc);
@@ -877,15 +916,19 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
 
     // Convert interleaved input to planar format and add to FIFO
     // Input: [L, R, L, R, ...] -> Planar: [L, L, L, ...] [R, R, R, ...]
-    std::vector<float> left_channel(sample_count);
-    std::vector<float> right_channel(sample_count);
-    
-    for (int i = 0; i < sample_count; i++) {
-        left_channel[i] = samples[i * channels];
-        right_channel[i] = (channels > 1) ? samples[i * channels + 1] : samples[i * channels];
+    if (encoder->audioLeftScratch.size() < static_cast<size_t>(sample_count)) {
+        encoder->audioLeftScratch.resize(sample_count);
+    }
+    if (encoder->audioRightScratch.size() < static_cast<size_t>(sample_count)) {
+        encoder->audioRightScratch.resize(sample_count);
     }
     
-    void* channel_data[2] = { left_channel.data(), right_channel.data() };
+    for (int i = 0; i < sample_count; i++) {
+        encoder->audioLeftScratch[i] = samples[i * channels];
+        encoder->audioRightScratch[i] = (channels > 1) ? samples[i * channels + 1] : samples[i * channels];
+    }
+    
+    void* channel_data[2] = { encoder->audioLeftScratch.data(), encoder->audioRightScratch.data() };
     int ret = av_audio_fifo_write(encoder->audioFifo, channel_data, sample_count);
     if (ret < sample_count) return -1;
 

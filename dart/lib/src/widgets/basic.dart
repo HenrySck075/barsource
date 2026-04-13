@@ -446,6 +446,8 @@ class RenderPadding extends RenderProxyBox {
     TextDirection? textDirection,
   }) : _padding = padding, _textDirection = textDirection;
 
+  EdgeInsets? _resolvedPaddingCache;
+
   EdgeInsetsGeometry _padding;
   EdgeInsetsGeometry get padding => _padding;
   set padding(EdgeInsetsGeometry value) {
@@ -464,7 +466,7 @@ class RenderPadding extends RenderProxyBox {
 
   @override
   void performLayout() {
-    final EdgeInsets resolvedPadding = padding.resolve(textDirection);
+    final EdgeInsets resolvedPadding = (_resolvedPaddingCache ??= padding.resolve(textDirection));
     final innerConstraints = constraints.deflate(resolvedPadding);
     if (child != null) {
       final child = this.child!;
@@ -485,10 +487,52 @@ class RenderPadding extends RenderProxyBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
-      final EdgeInsets resolvedPadding = padding.resolve(textDirection);
+      final EdgeInsets resolvedPadding = _resolvedPaddingCache!;
       context.paintChild(child!, offset + resolvedPadding.topLeft);
     }
   }
+
+  void _debugDrawDoubleRect(Canvas canvas, Rect outerRect, Rect innerRect, Color color) {
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(outerRect)
+      ..addRect(innerRect);
+    final paint = Paint()..color = color;
+    canvas.drawPath(path, paint);
+  }
+  void debugPaintPadding(
+    Canvas canvas,
+    Rect outerRect,
+    Rect? innerRect, {
+    double outlineWidth = 2.0,
+  }) {
+    if (innerRect != null && !innerRect.isEmpty) {
+      _debugDrawDoubleRect(canvas, outerRect, innerRect, const Color(0x900090FF));
+      _debugDrawDoubleRect(
+        canvas,
+        innerRect.inflate(outlineWidth).intersect(outerRect),
+        innerRect,
+        const Color(0xFF0090FF),
+      );
+    } else {
+      final paint = Paint()..color = const Color(0x90909090);
+      canvas.drawRect(outerRect, paint);
+    }
+  }
+  @override
+  void debugPaintSize(PaintingContext context, Offset offset) {
+    super.debugPaintSize(context, offset);
+    assert(() {
+      final Rect outerRect = offset & size;
+      debugPaintPadding(
+        context.canvas,
+        outerRect,
+        child != null ? _resolvedPaddingCache!.deflateRect(outerRect) : null,
+      );
+      return true;
+    }());
+  }
+
 }
 
 // a box that limits its size only when unconstrained

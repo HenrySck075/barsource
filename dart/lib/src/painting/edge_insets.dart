@@ -45,6 +45,15 @@ class EdgeInsets extends EdgeInsetsGeometry {
 
   Offset get topLeft => Offset(left, top);
 
+  Rect deflateRect(Rect rect) {
+    return Rect.fromLTRB(
+      rect.left + left,
+      rect.top + top,
+      rect.right - right,
+      rect.bottom - bottom,
+    );
+  }
+
   @override
   EdgeInsets resolve(TextDirection? direction) => this;
 

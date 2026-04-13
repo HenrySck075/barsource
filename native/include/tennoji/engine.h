@@ -101,6 +101,11 @@ TENNOJI_EXPORT void rina_canvas_draw_picture(
   TennojiCanvas* canvas,
   TennojiPicture* picture
 );
+TENNOJI_EXPORT void rina_canvas_draw_path(
+  TennojiCanvas* canvas,
+  TennojiCanvasPath* path,
+  TennojiCanvasPaintMetadata* paintData
+);
 
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas);
 TENNOJI_EXPORT void rina_canvas_restore(TennojiCanvas* canvas);

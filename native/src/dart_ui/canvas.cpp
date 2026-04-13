@@ -21,6 +21,7 @@
 
 #include "../renderer/skia_surface.h"
 #include "tennoji/types.h"
+#include "vector_internal.h"
 #include <iostream>
 #include <memory>
 
@@ -252,6 +253,19 @@ TENNOJI_EXPORT void rina_canvas_draw_picture(
 
   canvas->canvas->drawPicture(picture->picture);
 }
+TENNOJI_EXPORT void rina_canvas_draw_path(
+  TennojiCanvas* canvas,
+  TennojiCanvasPath* path,
+  TennojiCanvasPaintMetadata* paintData
+) {
+  if (!canvas || !canvas->canvas || !path) return;
+
+  canvas->canvas->drawPath(
+    path->builder->snapshot(), 
+    paint_create_from_encoded(paintData)
+  );
+}
+
 
 TENNOJI_EXPORT void rina_canvas_save(TennojiCanvas* canvas) {
   if (!canvas || !canvas->canvas) return;

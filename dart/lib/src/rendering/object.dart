@@ -129,6 +129,11 @@ class PaintingContext {
     child._needsPaint = false;
     child._wasRepaintBoundary = child.isRepaintBoundary;
     child.paint(this, offset);
+
+    assert((){
+      child.debugPaint(this, offset);
+      return true;
+    }());
   }
 }
 
@@ -260,6 +265,8 @@ abstract class RenderObject {
   void performLayout();
 
   void paint(PaintingContext context, Offset offset);
+
+  void debugPaint(PaintingContext context, Offset offset) {}
 
   @mustCallSuper
   void attach(PipelineOwner owner) {

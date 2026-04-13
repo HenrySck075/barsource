@@ -6795,6 +6795,17 @@ class Canvas {
     rina_canvas_draw_picture(_nativePtr, (picture as _NativePicture)._nativePtr);
   }
 
+  void drawPath(Path path, Paint paint) {
+    debugAssertNullPointer();
+    using((arena)=>
+    rina_canvas_draw_path(
+      _nativePtr,
+      (path as _NativePath)._nativePtr,
+      paint._createPaintMetadata(arena),
+    )
+    );
+  }
+
   void save() {
     debugAssertNullPointer();
     rina_canvas_save(_nativePtr);

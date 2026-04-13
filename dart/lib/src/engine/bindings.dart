@@ -240,6 +240,19 @@ external void rina_canvas_draw_picture(
   ffi.Pointer<TennojiPicture> picture,
 );
 
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Pointer<TennojiCanvasPath>,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+  )
+>(isLeaf: true)
+external void rina_canvas_draw_path(
+  ffi.Pointer<TennojiCanvas> canvas,
+  ffi.Pointer<TennojiCanvasPath> path,
+  ffi.Pointer<TennojiCanvasPaintMetadata> paintData,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
 external void rina_canvas_save(ffi.Pointer<TennojiCanvas> canvas);
 

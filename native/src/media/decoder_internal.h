@@ -7,10 +7,12 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 #include <libavutil/audio_fifo.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #include <deque>
 #include <mutex>
+#include <vector>
 
 #include "frame_pool.h"
 
@@ -28,7 +30,13 @@ struct TennojiDecoder {
     TennojiEngine* engine = nullptr;
     AVAudioFifo* audioFifo = nullptr;
     SwrContext* swrCtx = nullptr;
+    SwsContext* videoSwsCtx = nullptr;
     int64_t lastSeekTs = INT64_MIN;
+    int swrOutSampleRate = 0;
+    std::vector<float> audioScratch;
+    std::vector<uint8_t> rgbaScratch;
+    AVPacket* decodePacket = nullptr;
+    AVFrame* decodeFrame = nullptr;
 
     // Audio packet queue: video decode stashes audio packets here
     // instead of discarding them, so they can be drained by the encoder.

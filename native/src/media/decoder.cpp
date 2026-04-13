@@ -11,6 +11,7 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #include "include/core/SkImage.h"
@@ -20,6 +21,7 @@ extern "C" {
 
 #include "frame_pool.h"
 #include "demuxer.h"
+#include <cstring>
 
 // HW pixel format callback for hw-accel decoding
 static enum AVPixelFormat get_hw_format(AVCodecContext* ctx,
@@ -113,59 +115,43 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
         swFrame = tmpFrame;
     }
 
-    // Convert to BGRA (Skia's preferred format on most platforms)
-    // For simplicity, we read NV12/YUV420P as-is and use Skia's
-    // SkImages::RasterFromData with conversion. In production, use
-    // libyuv or a shader for GPU-side YUV→RGB.
     int dstWidth = swFrame->width;
     int dstHeight = swFrame->height;
     size_t rowBytes = dstWidth * 4;
-    auto pixels = std::make_unique<uint8_t[]>(rowBytes * dstHeight);
+    decoder->rgbaScratch.resize(rowBytes * dstHeight);
 
-    // Manual NV12/YUV420P → BGRA conversion (simplified)
-    if (swFrame->format == AV_PIX_FMT_YUV420P || swFrame->format == AV_PIX_FMT_NV12) {
-        const uint8_t* yPlane = swFrame->data[0];
-        const uint8_t* uPlane = swFrame->data[1];
-        const uint8_t* vPlane = (swFrame->format == AV_PIX_FMT_NV12)
-                                 ? nullptr : swFrame->data[2];
-        int yStride = swFrame->linesize[0];
-        int uStride = swFrame->linesize[1];
-        int vStride = (swFrame->format == AV_PIX_FMT_NV12) ? 0 : swFrame->linesize[2];
+    const AVPixelFormat srcFmt = static_cast<AVPixelFormat>(swFrame->format);
+    if (srcFmt == AV_PIX_FMT_BGRA && swFrame->linesize[0] == static_cast<int>(rowBytes)) {
+        memcpy(decoder->rgbaScratch.data(), swFrame->data[0], rowBytes * dstHeight);
+    } else {
+        decoder->videoSwsCtx = sws_getCachedContext(
+            decoder->videoSwsCtx,
+            swFrame->width, swFrame->height, srcFmt,
+            dstWidth, dstHeight, AV_PIX_FMT_BGRA,
+            SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+        if (!decoder->videoSwsCtx) {
+            if (tmpFrame) av_frame_free(&tmpFrame);
+            return nullptr;
+        }
 
-        for (int row = 0; row < dstHeight; row++) {
-            for (int col = 0; col < dstWidth; col++) {
-                int y = yPlane[row * yStride + col];
-                int u, v;
-                if (swFrame->format == AV_PIX_FMT_NV12) {
-                    int uvIdx = (row / 2) * uStride + (col / 2) * 2;
-                    u = uPlane[uvIdx] - 128;
-                    v = uPlane[uvIdx + 1] - 128;
-                } else {
-                    u = uPlane[(row / 2) * uStride + (col / 2)] - 128;
-                    v = vPlane[(row / 2) * vStride + (col / 2)] - 128;
-                }
-
-                int r = y + (int)(1.402 * v);
-                int g = y - (int)(0.344 * u) - (int)(0.714 * v);
-                int b = y + (int)(1.772 * u);
-
-                auto clamp = [](int val) -> uint8_t {
-                    return val < 0 ? 0 : (val > 255 ? 255 : (uint8_t)val);
-                };
-
-                size_t pixIdx = (row * dstWidth + col) * 4;
-                pixels[pixIdx + 0] = clamp(b); // B
-                pixels[pixIdx + 1] = clamp(g); // G
-                pixels[pixIdx + 2] = clamp(r); // R
-                pixels[pixIdx + 3] = 255;      // A
-            }
+        uint8_t* dstData[4] = { decoder->rgbaScratch.data(), nullptr, nullptr, nullptr };
+        int dstLinesize[4] = { static_cast<int>(rowBytes), 0, 0, 0 };
+        if (sws_scale(decoder->videoSwsCtx,
+                      swFrame->data,
+                      swFrame->linesize,
+                      0,
+                      swFrame->height,
+                      dstData,
+                      dstLinesize) <= 0) {
+            if (tmpFrame) av_frame_free(&tmpFrame);
+            return nullptr;
         }
     }
 
     SkImageInfo imageInfo = SkImageInfo::Make(
         dstWidth, dstHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
 
-    sk_sp<SkData> data = SkData::MakeWithCopy(pixels.get(), rowBytes * dstHeight);
+    sk_sp<SkData> data = SkData::MakeWithCopy(decoder->rgbaScratch.data(), rowBytes * dstHeight);
     sk_sp<SkImage> image = SkImages::RasterFromData(imageInfo, data, rowBytes);
 
     // Upload to GPU if context available
@@ -256,6 +242,19 @@ TENNOJI_EXPORT TennojiDecoder* rina_decoder_open(TennojiEngine* engine,
 
     // Create frame pool for decoded video frames
     decoder->framePool = new tennoji::FramePool(8);
+    decoder->decodePacket = av_packet_alloc();
+    decoder->decodeFrame = av_frame_alloc();
+    if (!decoder->decodePacket || !decoder->decodeFrame) {
+        if (decoder->decodePacket) av_packet_free(&decoder->decodePacket);
+        if (decoder->decodeFrame) av_frame_free(&decoder->decodeFrame);
+        delete decoder->framePool;
+        if (decoder->videoCodecCtx) avcodec_free_context(&decoder->videoCodecCtx);
+        if (decoder->audioCodecCtx) avcodec_free_context(&decoder->audioCodecCtx);
+        if (decoder->hwDeviceCtx) av_buffer_unref(&decoder->hwDeviceCtx);
+        if (decoder->fmtCtx) avformat_close_input(&decoder->fmtCtx);
+        delete decoder;
+        return nullptr;
+    }
 
     return decoder;
 }
@@ -265,6 +264,11 @@ TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder) {
 
     decoder->flush_audio_queue();
     delete decoder->framePool;
+    av_packet_free(&decoder->decodePacket);
+    av_frame_free(&decoder->decodeFrame);
+    if (decoder->audioFifo) av_audio_fifo_free(decoder->audioFifo);
+    if (decoder->swrCtx) swr_free(&decoder->swrCtx);
+    if (decoder->videoSwsCtx) sws_freeContext(decoder->videoSwsCtx);
 
     if (decoder->videoCodecCtx) avcodec_free_context(&decoder->videoCodecCtx);
     if (decoder->audioCodecCtx) avcodec_free_context(&decoder->audioCodecCtx);
@@ -332,8 +336,11 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
     decoder->lastSeekTs = timestamp_us;
 
     // Decode frames until we reach or pass the target PTS
-    AVPacket* pkt = av_packet_alloc();
-    AVFrame* frame = av_frame_alloc();
+    AVPacket* pkt = decoder->decodePacket;
+    AVFrame* frame = decoder->decodeFrame;
+    if (!pkt || !frame) return nullptr;
+    av_packet_unref(pkt);
+    av_frame_unref(frame);
     bool found = false;
 
     while (!found) {
@@ -380,9 +387,6 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
             return new TennojiCanvasImage{.image = std::move(image)};
         }
     }
-
-    av_frame_free(&frame);
-    av_packet_free(&pkt);
 
     return nullptr;
 }
@@ -458,6 +462,7 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
     // Initialize FIFO if it doesn't exist
     if (!decoder->audioFifo) {
         decoder->audioFifo = av_audio_fifo_alloc(AV_SAMPLE_FMT_FLT, out_channels, sample_rate);
+        if (!decoder->audioFifo) return -1;
     }
 
     AVFrame* frame = av_frame_alloc();
@@ -493,28 +498,50 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
         if (pkt && avcodec_send_packet(decoder->audioCodecCtx, pkt) >= 0) {
             while (avcodec_receive_frame(decoder->audioCodecCtx, frame) == 0) {
                 // Initialize/Update Resampler
-                if (!decoder->swrCtx) {
+                if (!decoder->swrCtx || decoder->swrOutSampleRate != sample_rate) {
+                    if (decoder->swrCtx) swr_free(&decoder->swrCtx);
                     AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
                     swr_alloc_set_opts2(&decoder->swrCtx,
                         &out_ch_layout, AV_SAMPLE_FMT_FLT, sample_rate,
                         &frame->ch_layout, (AVSampleFormat)frame->format, frame->sample_rate,
                         0, nullptr);
-                    swr_init(decoder->swrCtx);
+                    if (!decoder->swrCtx || swr_init(decoder->swrCtx) < 0) {
+                        av_frame_free(&frame);
+                        return -1;
+                    }
+                    decoder->swrOutSampleRate = sample_rate;
                 }
 
-                // Convert to a temporary float buffer
-                float* swr_buf = nullptr;
-                av_samples_alloc((uint8_t**)&swr_buf, nullptr, out_channels, frame->nb_samples, AV_SAMPLE_FMT_FLT, 0);
-                
-                int converted = swr_convert(decoder->swrCtx, (uint8_t**)&swr_buf, frame->nb_samples,
-                                            (const uint8_t**)frame->data, frame->nb_samples);
+                const int out_samples = av_rescale_rnd(
+                    swr_get_delay(decoder->swrCtx, frame->sample_rate) + frame->nb_samples,
+                    sample_rate,
+                    frame->sample_rate,
+                    AV_ROUND_UP);
+                if (out_samples <= 0) {
+                    av_frame_unref(frame);
+                    continue;
+                }
+
+                decoder->audioScratch.resize(static_cast<size_t>(out_samples) * out_channels);
+                uint8_t* out_data[1] = {
+                    reinterpret_cast<uint8_t*>(decoder->audioScratch.data())
+                };
+                int converted = swr_convert(decoder->swrCtx,
+                                            out_data,
+                                            out_samples,
+                                            (const uint8_t**)frame->extended_data,
+                                            frame->nb_samples);
                 
                 // Push converted samples into FIFO
                 if (converted > 0) {
-                    av_audio_fifo_write(decoder->audioFifo, (void**)&swr_buf, converted);
+                    const int needed = av_audio_fifo_size(decoder->audioFifo) + converted;
+                    if (av_audio_fifo_realloc(decoder->audioFifo, needed) < 0) {
+                        av_frame_free(&frame);
+                        return -1;
+                    }
+                    void* fifo_data[1] = { decoder->audioScratch.data() };
+                    av_audio_fifo_write(decoder->audioFifo, fifo_data, converted);
                 }
-                
-                av_freep(&swr_buf);
                 av_frame_unref(frame);
             }
         }

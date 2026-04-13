@@ -165,11 +165,15 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       maxHeight: renderResolution.height
     ));
     bool doScale = config.renderResolution != null && config.resolution != config.renderResolution;
+    final scaleX = doScale ? config.renderResolution!.width / config.resolution.width : 1.0;
+    final scaleY = doScale ? config.renderResolution!.height / config.resolution.height : 1.0;
+    const sampleRate = 44100;
+    final samplesPerFrame = (sampleRate / config.fps).round();
+    final expectedStereoSamples = samplesPerFrame * 2;
+    final sampleBuffer = calloc<Float>(expectedStereoSamples);
     try {
       while (_currentTime < config.duration) {
         if (doScale) {
-          final scaleX = config.renderResolution!.width / config.resolution.width;
-          final scaleY = config.renderResolution!.height / config.resolution.height;
           canvas.scale(scaleX, scaleY);
         }
         handleBeginFrame(_currentTime);
@@ -210,9 +214,6 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
 
         // NEW Audio Submission System: ALWAYS write audio for every video frame
         // to maintain sync (even if it's silence)
-        const sampleRate = 44100;
-        final samplesPerFrame = (sampleRate / config.fps).round();
-        
         final audioBuffers = <Float32List>[];
         
         for (final contributor in _contributors) {
@@ -231,21 +232,21 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
           audioToWrite = _mixAudioSamples(audioBuffers);
         } else {
           // No audio available - write silence to maintain sync
-          audioToWrite = Float32List(samplesPerFrame * 2); // stereo, initialized to 0
+          audioToWrite = Float32List(expectedStereoSamples); // stereo, initialized to 0
         }
         
         // Ensure we always have exactly the right number of samples for this frame
         // Pad with silence if needed to maintain perfect A/V sync
-        if (audioToWrite.length < samplesPerFrame * 2) {
-          final padded = Float32List(samplesPerFrame * 2);
+        if (audioToWrite.length < expectedStereoSamples) {
+          final padded = Float32List(expectedStereoSamples);
           for (int i = 0; i < audioToWrite.length; i++) {
             padded[i] = audioToWrite[i];
           }
           // Rest is already zero-initialized
           audioToWrite = padded;
-        } else if (audioToWrite.length > samplesPerFrame * 2) {
+        } else if (audioToWrite.length > expectedStereoSamples) {
           // Truncate if somehow we got too many samples
-          audioToWrite = Float32List.sublistView(audioToWrite, 0, samplesPerFrame * 2);
+          audioToWrite = Float32List.sublistView(audioToWrite, 0, expectedStereoSamples);
         }
         
         // Validate no NaN/Inf values
@@ -262,22 +263,17 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         }
         
         // Write audio to encoder
-        final sampleBuffer = calloc<Float>(audioToWrite.length);
-        try {
-          for (int i = 0; i < audioToWrite.length; i++) {
-            sampleBuffer[i] = audioToWrite[i];
-          }
-          
-          rina_encoder_write_audio_samples(
-            encoder,
-            sampleBuffer,
-            samplesPerFrame,  // Always write the expected frame size
-            sampleRate,
-            2, // stereo
-          );
-        } finally {
-          calloc.free(sampleBuffer);
+        for (int i = 0; i < expectedStereoSamples; i++) {
+          sampleBuffer[i] = audioToWrite[i];
         }
+
+        rina_encoder_write_audio_samples(
+          encoder,
+          sampleBuffer,
+          samplesPerFrame,  // Always write the expected frame size
+          sampleRate,
+          2, // stereo
+        );
 
         _currentTime += frameDuration;
         progressBar.increment();
@@ -293,6 +289,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       calloc.free(videoCodecUtf8);
       calloc.free(audioCodecUtf8);
       calloc.free(encConfig);
+      calloc.free(sampleBuffer);
       
       detachRootWidget();
       _log.info('Render run completed.');
@@ -448,4 +445,3 @@ class EngineStopwatch implements Stopwatch {
   @override
   int get elapsedTicks => elapsedMicroseconds;
 }
-
