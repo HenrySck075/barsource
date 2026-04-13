@@ -2200,7 +2200,11 @@ base class _Image {
   // _Images are always handed out wrapped in [Image]s. To create an [Image],
   // use the ImageDescriptor API.
   @pragma('vm:entry-point')
-  _Image._(this._nativePtr);
+  _Image._(this._nativePtr) {
+    if (_nativePtr == nullptr) {
+      throw Exception('Failed to create Image: native pointer is null');
+    }
+  }
 
   final Pointer<TennojiCanvasImage> _nativePtr;
 
