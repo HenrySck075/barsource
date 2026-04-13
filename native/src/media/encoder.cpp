@@ -92,6 +92,17 @@ struct TennojiEncoder {
     std::atomic<bool> renderFinished{false};
 };
 
+static constexpr size_t kMaxRenderQueueSize = 8;
+static constexpr size_t kMaxEncodeQueueSize = 8;
+
+static void return_surface_to_pool(TennojiEncoder* enc, const tennoji::ExportableSurface& surface) {
+    if (!surface.skSurface) return;
+    {
+        std::lock_guard<std::mutex> lock(enc->poolMutex);
+        enc->freeSurfaces.push(surface);
+    }
+}
+
 static void render_loop(TennojiEncoder* enc) {
     while (true) {
         RenderFrame frame;
@@ -102,6 +113,7 @@ static void render_loop(TennojiEncoder* enc) {
             frame = std::move(enc->renderQueue.front());
             enc->renderQueue.pop();
         }
+        enc->renderCv.notify_one();
 
         tennoji::ExportableSurface exSurface;
         {
@@ -112,7 +124,7 @@ static void render_loop(TennojiEncoder* enc) {
             }
         }
 
-        if (!exSurface.isValid()) {
+        if (!exSurface.skSurface) {
             if (enc->hwFramesCtx) {
                 exSurface = tennoji::create_exportable_gpu_surface(enc->engine->gpuCtx, enc->width, enc->height);
             }
@@ -126,41 +138,61 @@ static void render_loop(TennojiEncoder* enc) {
             }
         }
 
+        if (!exSurface.skSurface) {
+            if (!enc->running) break;
+            continue;
+        }
+
         if (exSurface.skSurface) {
              exSurface.skSurface->getCanvas()->clear(SK_ColorTRANSPARENT);
              exSurface.skSurface->getCanvas()->drawPicture(frame.picture);
              
-             if (auto* grCtx = exSurface.skSurface->recordingContext()) {
-                 static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
-             }
+              if (auto* grCtx = exSurface.skSurface->recordingContext()) {
+                  static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
+              }
 
-             if (exSurface.fd != -1) {
-                 // Zero copy path
-                 {
-                     std::lock_guard<std::mutex> lock(enc->encodeMutex);
-                     enc->encodeQueue.push({std::vector<uint8_t>(), exSurface, frame.pts});
-                 }
-                 enc->encodeCv.notify_one();
-             } else {
+              if (exSurface.fd != -1) {
+                  // Zero copy path
+                  {
+                      std::unique_lock<std::mutex> lock(enc->encodeMutex);
+                      enc->encodeCv.wait(lock, [&] {
+                          return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
+                      });
+                      if (!enc->running) {
+                          lock.unlock();
+                          return_surface_to_pool(enc, exSurface);
+                          continue;
+                      }
+                      enc->encodeQueue.push({std::vector<uint8_t>(), exSurface, frame.pts});
+                  }
+                  enc->encodeCv.notify_one();
+              } else {
                  // Read pixels (GPU -> CPU copy)
                  SkImageInfo readInfo = SkImageInfo::Make(
                     enc->width, enc->height,
                     kBGRA_8888_SkColorType, kPremul_SkAlphaType);
 
-                 std::vector<uint8_t> pixels(enc->width * enc->height * 4);
-                 if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
-                     {
-                         std::lock_guard<std::mutex> lock(enc->encodeMutex);
-                         enc->encodeQueue.push({std::move(pixels), exSurface, frame.pts});
-                     }
-                     enc->encodeCv.notify_one();
-                 } else {
-                     // Readback failed, return surface
-                     std::lock_guard<std::mutex> lock(enc->poolMutex);
-                     enc->freeSurfaces.push(exSurface);
-                 }
-             }
-        }
+                  std::vector<uint8_t> pixels(enc->width * enc->height * 4);
+                  if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
+                      {
+                          std::unique_lock<std::mutex> lock(enc->encodeMutex);
+                          enc->encodeCv.wait(lock, [&] {
+                              return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
+                          });
+                          if (!enc->running) {
+                              lock.unlock();
+                              return_surface_to_pool(enc, exSurface);
+                              continue;
+                          }
+                          enc->encodeQueue.push({std::move(pixels), exSurface, frame.pts});
+                      }
+                      enc->encodeCv.notify_one();
+                  } else {
+                      // Readback failed, return surface
+                      return_surface_to_pool(enc, exSurface);
+                  }
+              }
+         }
     }
     
     enc->renderFinished = true;
@@ -182,6 +214,7 @@ static void encode_loop(TennojiEncoder* encoder) {
             frameData = std::move(encoder->encodeQueue.front());
             encoder->encodeQueue.pop();
         }
+        encoder->encodeCv.notify_one();
 
         AVFrame* encode_frame = nullptr;
         AVFrame* sw_frame = nullptr;
@@ -218,10 +251,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                 av_frame_free(&sw_frame);
                 av_frame_free(&hw_frame);
                 // Should return surface to pool!
-                {
-                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
-                    encoder->freeSurfaces.push(frameData.surface);
-                }
+                return_surface_to_pool(encoder, frameData.surface);
                 continue;
             }
             hw_frame->pts = sw_frame->pts;
@@ -229,10 +259,7 @@ static void encode_loop(TennojiEncoder* encoder) {
             if (av_hwframe_transfer_data(hw_frame, sw_frame, 0) < 0) {
                 av_frame_free(&sw_frame);
                 av_frame_free(&hw_frame);
-                 {
-                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
-                    encoder->freeSurfaces.push(frameData.surface);
-                }
+                return_surface_to_pool(encoder, frameData.surface);
                 continue;
             }
             encode_frame = hw_frame;
@@ -246,9 +273,8 @@ static void encode_loop(TennojiEncoder* encoder) {
             
             if (av_frame_get_buffer(sw_frame, 32) < 0) {
                 av_frame_free(&sw_frame);
-                if (frameData.surface.isValid()) {
-                    std::lock_guard<std::mutex> lock(encoder->poolMutex);
-                    encoder->freeSurfaces.push(frameData.surface);
+                if (frameData.surface.skSurface) {
+                    return_surface_to_pool(encoder, frameData.surface);
                 }
                 continue;
             }
@@ -266,9 +292,8 @@ static void encode_loop(TennojiEncoder* encoder) {
                 if (av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0) < 0) {
                     av_frame_free(&sw_frame);
                     av_frame_free(&hw_frame);
-                    if (frameData.surface.isValid()) {
-                        std::lock_guard<std::mutex> lock(encoder->poolMutex);
-                        encoder->freeSurfaces.push(frameData.surface);
+                    if (frameData.surface.skSurface) {
+                        return_surface_to_pool(encoder, frameData.surface);
                     }
                     continue;
                 }
@@ -277,9 +302,8 @@ static void encode_loop(TennojiEncoder* encoder) {
                 if (av_hwframe_transfer_data(hw_frame, sw_frame, 0) < 0) {
                     av_frame_free(&sw_frame);
                     av_frame_free(&hw_frame);
-                    if (frameData.surface.isValid()) {
-                        std::lock_guard<std::mutex> lock(encoder->poolMutex);
-                        encoder->freeSurfaces.push(frameData.surface);
+                    if (frameData.surface.skSurface) {
+                        return_surface_to_pool(encoder, frameData.surface);
                     }
                     continue;
                 }
@@ -288,9 +312,8 @@ static void encode_loop(TennojiEncoder* encoder) {
         }
 
         // Return surface to pool immediately after use/copy
-        if (frameData.surface.isValid()) {
-             std::lock_guard<std::mutex> lock(encoder->poolMutex);
-             encoder->freeSurfaces.push(frameData.surface);
+        if (frameData.surface.skSurface) {
+            return_surface_to_pool(encoder, frameData.surface);
         }
 
         // Encode the frame
@@ -399,8 +422,8 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->videoCodecCtx->time_base = AVRational{1, config->fps};
     enc->videoCodecCtx->framerate = AVRational{config->fps, 1};
     enc->videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-    enc->videoCodecCtx->gop_size = 12;
-    enc->videoCodecCtx->max_b_frames = 2;
+    enc->videoCodecCtx->gop_size = config->fps > 0 ? config->fps * 2 : 60;
+    enc->videoCodecCtx->max_b_frames = 3;
 
     AVPixelFormat sw_format = AV_PIX_FMT_YUV420P;
 
@@ -444,7 +467,19 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         enc->videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    av_opt_set(enc->videoCodecCtx->priv_data, "preset", "medium", 0);
+    const bool is_h265 = strcmp(vcodec_name, "h265") == 0 || strcmp(vcodec_name, "hevc") == 0;
+    const char* crf = is_h265 ? "30" : "28";
+    const int qp = is_h265 ? 28 : 26;
+
+    av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0);
+    av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 0);
+
+    // VAAPI requires an explicit quality target for compact output.
+    if (strstr(vcodec->name, "vaapi")) {
+        av_opt_set(enc->videoCodecCtx->priv_data, "rc_mode", "CQP", 0);
+        av_opt_set_int(enc->videoCodecCtx->priv_data, "qp", qp, 0);
+        enc->videoCodecCtx->global_quality = qp * FF_QP2LAMBDA;
+    }
 
     ret = avcodec_open2(enc->videoCodecCtx, vcodec, nullptr);
     if (ret < 0) {
@@ -470,7 +505,7 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
             av_channel_layout_default(&enc->audioCodecCtx->ch_layout,
                                       config->audio_channels > 0 ? config->audio_channels : 2);
             enc->audioCodecCtx->time_base = AVRational{1, enc->audioCodecCtx->sample_rate};
-            enc->audioCodecCtx->bit_rate = 128000;
+            enc->audioCodecCtx->bit_rate = (acodec->id == AV_CODEC_ID_OPUS) ? 64000 : 96000;
 
             if (enc->fmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
                 enc->audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -535,7 +570,11 @@ TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
     if (!pic) return -1;
 
     {
-        std::lock_guard<std::mutex> lock(encoder->renderMutex);
+        std::unique_lock<std::mutex> lock(encoder->renderMutex);
+        encoder->renderCv.wait(lock, [&] {
+            return encoder->renderQueue.size() < kMaxRenderQueueSize || !encoder->running;
+        });
+        if (!encoder->running) return -1;
         encoder->renderQueue.push({std::move(pic), encoder->videoPts++});
     }
     encoder->renderCv.notify_one();
@@ -698,6 +737,7 @@ TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
 
     encoder->running = false;
     encoder->renderCv.notify_all();
+    encoder->encodeCv.notify_all();
     
     if (encoder->renderThread.joinable()) encoder->renderThread.join();
     if (encoder->encodeThread.joinable()) encoder->encodeThread.join();

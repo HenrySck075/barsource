@@ -199,10 +199,9 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
       _items.insert(index, data);
     });
 
+    print(_incomingItems);
     print("add $incomingItem");
     controller.forward().then<void>((_) {
-      print(_incomingItems);
-      print(incomingItem);
       _removeActiveItemAt(_incomingItems, incomingItem.itemIndex)!.controller!.dispose();
     });
   }
@@ -222,7 +221,6 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
     assert(_activeItemAt(_outgoingItems, itemIndex) == null);
 
     final _ActiveItem? incomingItem = _removeActiveItemAt(_incomingItems, itemIndex);
-    print("remove $incomingItem");
     final AnimationController controller =
         incomingItem?.controller ??
         AnimationController(duration: duration, value: 1.0/*, vsync: this*/);
@@ -233,6 +231,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
         ..sort();
     });
 
+    print("remove $outgoingItem");
     controller.reverse().then<void>((void _) {
       _removeActiveItemAt(_outgoingItems, outgoingItem.itemIndex)!.controller!.dispose();
       _items.removeAt(outgoingItem.itemIndex);
@@ -299,6 +298,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
           final incomingItem = _activeItemAt(_incomingItems, itemIndex);
           final Animation<double> animation = incomingItem?.controller ?? kAlwaysCompleteAnimation;
           final T data = incomingItem?.data ?? _items[itemIndex];
+          print("Constructing incoming/active widget associated with $data with $animation");
           return widget.itemBuilder(context, data, animation);
         }
       ),

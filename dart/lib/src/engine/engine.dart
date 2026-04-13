@@ -18,7 +18,7 @@ import 'package:barsource/src/rendering/view.dart';
 import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/scheduler/ticker.dart';
 
-import 'package:cli_progress_bar/cli_progress_bar.dart';
+import 'package:console_bars/console_bars.dart';
 
 export 'bindings.dart';
 export 'audio_binding.dart';
@@ -31,31 +31,34 @@ class RenderConfig {
     required this.duration,
     required this.fps,
     required this.resolution,
-    this.codec = const VideoCodec.h264(),
-    this.audioCodec = const AudioCodec.aac(),
+    this.renderResolution,
+    this.codec = .h265,
+    this.audioCodec = .aac,
     this.logLevel = Level.INFO,
     this.showProgressBar = true,
   });
   final String output;
   final Duration duration;
   final int fps;
+  /// Canvas size
   final Size resolution;
+  /// The actual video resolution, defaults to [resolution]
+  /// Don't use this though, it works but it fucks up rendering for some reason
+  final Size? renderResolution;
   final VideoCodec codec;
   final AudioCodec audioCodec;
   final Level logLevel;
   final bool showProgressBar;
 }
 
-class VideoCodec {
-  const VideoCodec.h264() : name = 'h264';
-  const VideoCodec.h265() : name = 'h265';
-  final String name;
+enum VideoCodec {
+  h264,
+  h265;
 }
 
-class AudioCodec {
-  const AudioCodec.aac() : name = 'aac';
-  const AudioCodec.opus() : name = 'opus';
-  final String name;
+enum AudioCodec {
+  aac,
+  opus;
 }
 
 class Engine extends BindingBase with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
@@ -112,6 +115,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   /// The entire operation is designed to be synchronous. The function was set to async to give room for event queues
   /// (otherwise all of them will run after the loop ends)
   Future<void> run(Widget app, RenderConfig config) async {
+    final renderResolution = config.renderResolution ?? config.resolution;
     final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
     _frameDuration = frameDuration.inMilliseconds;
     _currentTime = Duration.zero;
@@ -119,7 +123,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     _log.info('Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}');
     // 1. Initialize RenderView
     initRenderView(ViewConfiguration(
-      size: config.resolution,
+      size: renderResolution,
     ));
 
     // Layers removed - no longer need replaceRootLayer
@@ -135,8 +139,8 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     
     encConfig.ref
       ..output_path = outputPathUtf8.cast()
-      ..width = config.resolution.width.toInt()
-      ..height = config.resolution.height.toInt()
+      ..width = renderResolution.width.toInt()
+      ..height = renderResolution.height.toInt()
       ..fps = config.fps
       ..video_codec = videoCodecUtf8.cast()
       ..audio_codec = audioCodecUtf8.cast()
@@ -145,27 +149,29 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
 
     final encoder = rina_encoder_create(_nativePtr, encConfig); 
 
-/*
-    final progressBar = ProgressBar(
-      schema: "[#bar] #after",
-      settings: ProgressBarSettings(
-        max: config.duration.in
-      )
+    final progressBar = FillingBar(
+      desc: "r", time: true, percentage: true,
+      total:(config.duration.inMilliseconds/1000*config.fps).toInt()
     );
-    */
 
     // This canvas is a special one, and thus does not experience the same lifecycle as every other canvas inside PaintingContext
     final canvas = Canvas(
-      config.resolution.width.toInt(),
-      config.resolution.height.toInt(),
+      renderResolution.width.toInt(),
+      renderResolution.height.toInt(),
     );
     renderView.layout(BoxConstraints(
-      minWidth: config.resolution.width, minHeight: config.resolution.height,
-      maxWidth: config.resolution.width,
-      maxHeight: config.resolution.height
+      minWidth: renderResolution.width, minHeight: renderResolution.height,
+      maxWidth: renderResolution.width,
+      maxHeight: renderResolution.height
     ));
+    bool doScale = config.renderResolution != null && config.resolution != config.renderResolution;
     try {
       while (_currentTime < config.duration) {
+        if (doScale) {
+          final scaleX = config.renderResolution!.width / config.resolution.width;
+          final scaleY = config.renderResolution!.height / config.resolution.height;
+          canvas.scale(scaleX, scaleY);
+        }
         handleBeginFrame(_currentTime);
 
         // execute microtasks
@@ -174,7 +180,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         // Update view time
         /*
         renderView.configuration = ViewConfiguration(
-          size: config.resolution,
+          size: renderResolution,
           currentTime: _currentTime,
         );
         */
@@ -190,10 +196,14 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         
         // Paint directly without layers
         try {
-          final context = PaintingContext(canvas, Rect.fromLTWH(0, 0, config.resolution.width, config.resolution.height));
+          final context = PaintingContext(canvas, Rect.fromLTWH(0, 0, renderResolution.width, renderResolution.height));
           renderView.paint(context, Offset.zero);
         } catch (e, st) {
           _log.severe('Error during painting at $_currentTime: $e', e, st);
+        }
+
+        if (doScale) {
+          canvas.restore();
         }
         // Encode video
         rina_encoder_write_frame(encoder, nativeCanvas);
@@ -270,10 +280,12 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         }
 
         _currentTime += frameDuration;
+        progressBar.increment();
       }
     } on Exception catch (e, st) {
       _log.severe('Error during render run: $e', e, st);
     } finally {
+      // this function crashes on literally any exceptions ever
       rina_encoder_finalize(encoder);
       rina_encoder_destroy(encoder);
       
