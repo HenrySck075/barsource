@@ -10,6 +10,7 @@ import 'package:barsource/src/foundation/binding_base.dart';
 import 'package:barsource/src/rendering/binding.dart';
 import 'package:barsource/src/scheduler/binding.dart';
 import 'package:barsource/src/widgets/binding.dart';
+import 'package:barsource/src/widgets/root.dart';
 import 'package:barsource/src/engine/audio_binding.dart';
 import 'package:barsource/src/engine/audio_contributor.dart';
 import 'package:logging/logging.dart';
@@ -129,7 +130,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     // Layers removed - no longer need replaceRootLayer
 
     // 2. Attach Root Widget
-    attachRootWidget(app);
+    attachRootWidget(RootWidget(child: app, container: renderView));
 
     // 3. Create Encoder
     final encConfig = calloc<TennojiEncoderConfig>();
@@ -178,16 +179,9 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         }
         handleBeginFrame(_currentTime);
 
-        // execute microtasks
-        await Future.delayed(Duration.zero);
-        
-        // Update view time
-        /*
-        renderView.configuration = ViewConfiguration(
-          size: renderResolution,
-          currentTime: _currentTime,
-        );
-        */
+        // Trigger microtasks / futures
+        // no, really, this is how you do it
+        await Future.delayed(Duration.zero); 
         
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
@@ -278,8 +272,8 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         _currentTime += frameDuration;
         progressBar.increment();
       }
-    } on Exception catch (e, st) {
-      _log.severe('Error during render run: $e', e, st);
+    } catch (e, st) {
+      print('Error during render run: $e\n$st');
     } finally {
       // this function crashes on literally any exceptions ever
       rina_encoder_finalize(encoder);

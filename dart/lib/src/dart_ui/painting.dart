@@ -6908,6 +6908,6 @@ class Canvas {
   }
 
   void debugAssertNullPointer() {
-    assert(_nativePtr == nullptr);
+    assert(_nativePtr != nullptr);
   }
 }

@@ -2,6 +2,8 @@ import 'package:barsource/src/painting/basic_types.dart';
 
 import 'object.dart';
 
+bool debugDoPaintSize = bool.fromEnvironment("barsource.debugPaintSize");
+
 abstract class RenderBox extends RenderObject {
   @override
   BoxConstraints get constraints => super.constraints as BoxConstraints;

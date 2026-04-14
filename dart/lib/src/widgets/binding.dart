@@ -3,6 +3,7 @@ import 'package:barsource/src/rendering/binding.dart';
 import 'package:barsource/src/scheduler/binding.dart';
 import 'package:barsource/src/elements/framework.dart';
 import 'package:barsource/src/widgets/framework.dart';
+import 'package:barsource/src/widgets/root.dart';
 import 'package:barsource/src/rendering/box.dart';
 
 mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
@@ -21,18 +22,20 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
     _buildOwner = BuildOwner();
   }
 
-  void attachRootWidget(Widget app) {
+  void attachRootWidget(RootWidget app) {
     _renderViewElement = app.createElement();
     _renderViewElement!.assignOwner(_buildOwner!);
     _buildOwner!.buildScope(_renderViewElement!, (){
       _renderViewElement!.mount(null, null);
     });
     
+    /*
     // Attach render object
     final renderObject = _renderViewElement!.renderObject;
     if (renderObject is RenderBox) {
       renderView.child = renderObject;
     }
+    */
   }
 
   @override
@@ -42,6 +45,8 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
   }
 
   void detachRootWidget() {
+    // ignore: invalid_use_of_visible_for_overriding_member
+    _renderViewElement?.deactivate();
     _renderViewElement?.unmount();
     _renderViewElement = null;
   }
