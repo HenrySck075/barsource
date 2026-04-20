@@ -36,6 +36,10 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(
   int64_t timestamp_us
 );
 TENNOJI_EXPORT int64_t rina_decoder_duration(TennojiDecoder* decoder);
+TENNOJI_EXPORT int64_t rina_media_source_duration(
+  TennojiEngine* engine,
+  const char* uri
+);
 TENNOJI_EXPORT int rina_decoder_read_audio(
   TennojiDecoder* decoder,
   int64_t timestamp_us

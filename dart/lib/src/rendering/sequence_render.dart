@@ -4,8 +4,21 @@ import '../foundation/geometry.dart';
 import 'object.dart';
 import 'timeline_parent_data.dart';
 
-class RenderSequence extends RenderBox with ContainerRenderObjectMixin<RenderBox, TimelineParentData> {
-  
+class RenderSequence extends RenderBox
+    with ContainerRenderObjectMixin<RenderBox, TimelineParentData> {
+  void _validateChildDurations() {
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final next = childAfter(child);
+      if (child.duration.isInfinite && next != null) {
+        throw StateError(
+          'RenderSequence child ${child.runtimeType} has infinite duration before the end of sequence.',
+        );
+      }
+      child = next;
+    }
+  }
+
   @override
   void setupParentData(covariant RenderObject child) {
     if (child.parentData is! TimelineParentData) {
@@ -19,15 +32,18 @@ class RenderSequence extends RenderBox with ContainerRenderObjectMixin<RenderBox
 
   @override
   void performLayout() {
+    _validateChildDurations();
     visitChildren((child) {
       // this assigns the active child to the first object
       if (!_sequenceCompleted) activeChild ??= child;
-      child.layout(BoxConstraints(
-        minWidth: constraints.minWidth,
-        maxWidth: constraints.maxWidth,
-        minHeight: constraints.minHeight,
-        maxHeight: constraints.maxHeight,
-      ));
+      child.layout(
+        BoxConstraints(
+          minWidth: constraints.minWidth,
+          maxWidth: constraints.maxWidth,
+          minHeight: constraints.minHeight,
+          maxHeight: constraints.maxHeight,
+        ),
+      );
     });
     _stealActiveChildLayout();
   }

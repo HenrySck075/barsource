@@ -32,6 +32,7 @@ struct TennojiDecoder {
     SwrContext* swrCtx = nullptr;
     SwsContext* videoSwsCtx = nullptr;
     int64_t lastSeekTs = INT64_MIN;
+    int64_t lastAudioReadTs = INT64_MIN;
     int swrOutSampleRate = 0;
     std::vector<float> audioScratch;
     std::vector<uint8_t> rgbaScratch;

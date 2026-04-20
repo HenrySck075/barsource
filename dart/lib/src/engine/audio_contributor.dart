@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
 import 'package:barsource/src/rendering/object.dart';
 
 /// Tree-based audio contributor for render objects.
@@ -29,15 +30,13 @@ mixin AudioContributor on RenderObject {
     Float32List mixedSamples,
   ) => mixedSamples;
 
-  /// Returns this contributor's final audio for the frame.
-  ///
-  /// This is the subtree mix for this contributor: descendant contributor audio
-  /// + own source audio, then [processMixedAudioForFrame].
-  Float32List? getAudioForFrame(
+  @protected
+  Float32List? collectSubtreeMixedAudioForFrame(
     Duration frameTime,
     int sampleCount,
-    int sampleRate,
-  ) {
+    int sampleRate, {
+    bool includeOwnAudio = true,
+  }) {
     final expectedStereoSamples = sampleCount * 2;
     Float32List? mixedSamples;
 
@@ -69,10 +68,33 @@ mixin AudioContributor on RenderObject {
     }
 
     collectDescendantContributorAudio(this);
-    final ownSamples = getOwnAudioForFrame(frameTime, sampleCount, sampleRate);
-    if (ownSamples != null && ownSamples.isNotEmpty) {
-      mixInto(ownSamples);
+    if (includeOwnAudio) {
+      final ownSamples = getOwnAudioForFrame(
+        frameTime,
+        sampleCount,
+        sampleRate,
+      );
+      if (ownSamples != null && ownSamples.isNotEmpty) {
+        mixInto(ownSamples);
+      }
     }
+    return mixedSamples;
+  }
+
+  /// Returns this contributor's final audio for the frame.
+  ///
+  /// This is the subtree mix for this contributor: descendant contributor audio
+  /// + own source audio, then [processMixedAudioForFrame].
+  Float32List? getAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+  ) {
+    final mixedSamples = collectSubtreeMixedAudioForFrame(
+      frameTime,
+      sampleCount,
+      sampleRate,
+    );
     if (mixedSamples == null) {
       return null;
     }
@@ -81,7 +103,7 @@ mixin AudioContributor on RenderObject {
       frameTime,
       sampleCount,
       sampleRate,
-      mixedSamples!,
+      mixedSamples,
     );
   }
 }

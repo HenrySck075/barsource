@@ -97,6 +97,7 @@ class _RenderLocalImage extends RenderBox {
         renderWidth = (renderHeight * imageAspectRatio).round();
       }
     }
+    print("$source ${renderWidth}x$renderHeight ${currentFrameInfo?.image.width}x${currentFrameInfo?.image.height}");
   }
 
   late Ticker ticker;

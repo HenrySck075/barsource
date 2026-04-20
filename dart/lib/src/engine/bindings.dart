@@ -66,6 +66,14 @@ external ffi.Pointer<TennojiCanvasImage> rina_decoder_get_texture(
 @ffi.Native<ffi.Int64 Function(ffi.Pointer<TennojiDecoder>)>(isLeaf: true)
 external int rina_decoder_duration(ffi.Pointer<TennojiDecoder> decoder);
 
+@ffi.Native<
+  ffi.Int64 Function(ffi.Pointer<TennojiEngine>, ffi.Pointer<ffi.Char>)
+>(isLeaf: true)
+external int rina_media_source_duration(
+  ffi.Pointer<TennojiEngine> engine,
+  ffi.Pointer<ffi.Char> uri,
+);
+
 @ffi.Native<ffi.Int Function(ffi.Pointer<TennojiDecoder>, ffi.Int64)>(
   isLeaf: true,
 )

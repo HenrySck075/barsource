@@ -86,6 +86,31 @@ static AVCodecContext* open_codec(AVFormatContext* fmtCtx, int streamIdx,
     return codecCtx;
 }
 
+static int64_t resolve_media_duration_us(
+    AVFormatContext* fmtCtx,
+    int videoStreamIdx,
+    int audioStreamIdx) {
+    if (!fmtCtx) return 0;
+
+    if (fmtCtx->duration != AV_NOPTS_VALUE) {
+        return av_rescale_q(fmtCtx->duration,
+                           AV_TIME_BASE_Q,
+                           AVRational{1, 1000000});
+    }
+
+    const int idx = videoStreamIdx >= 0 ? videoStreamIdx : audioStreamIdx;
+    if (idx >= 0) {
+        AVStream* stream = fmtCtx->streams[idx];
+        if (stream->duration != AV_NOPTS_VALUE) {
+            return av_rescale_q(stream->duration,
+                               stream->time_base,
+                               AVRational{1, 1000000});
+        }
+    }
+
+    return 0;
+}
+
 // Map a decoded AVFrame to an SkImage for zero-copy GPU pipeline
 static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame) {
     if (!decoder || !frame || !decoder->engine) return nullptr;
@@ -307,8 +332,14 @@ TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_
     // Flush buffered audio packets (they're from before the seek point)
     decoder->flush_audio_queue();
     decoder->flush_video_queue();
+    if (decoder->audioFifo) av_audio_fifo_reset(decoder->audioFifo);
+    if (decoder->swrCtx) {
+        swr_free(&decoder->swrCtx);
+        decoder->swrOutSampleRate = 0;
+    }
 
     decoder->lastSeekTs = timestamp_us;
+    decoder->lastAudioReadTs = timestamp_us;
     return 0;
 }
 
@@ -410,28 +441,42 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
 
 TENNOJI_EXPORT int64_t rina_decoder_duration(TennojiDecoder* decoder) {
     if (!decoder || !decoder->fmtCtx) return 0;
+    return resolve_media_duration_us(
+        decoder->fmtCtx,
+        decoder->videoStreamIdx,
+        decoder->audioStreamIdx);
+}
 
-    // Return duration in microseconds
-    if (decoder->fmtCtx->duration != AV_NOPTS_VALUE) {
-        return av_rescale_q(decoder->fmtCtx->duration,
-                           AV_TIME_BASE_Q,
-                           AVRational{1, 1000000});
-    }
+TENNOJI_EXPORT int64_t rina_media_source_duration(
+    TennojiEngine* engine,
+    const char* uri) {
+    (void)engine;
+    if (!uri) return 0;
 
-    // Try stream-level duration
-    int idx = decoder->videoStreamIdx >= 0
-                  ? decoder->videoStreamIdx
-                  : decoder->audioStreamIdx;
-    if (idx >= 0) {
-        AVStream* stream = decoder->fmtCtx->streams[idx];
-        if (stream->duration != AV_NOPTS_VALUE) {
-            return av_rescale_q(stream->duration,
-                               stream->time_base,
-                               AVRational{1, 1000000});
+    AVFormatContext* fmtCtx = nullptr;
+    int ret = avformat_open_input(&fmtCtx, uri, nullptr, nullptr);
+    if (ret < 0 || !fmtCtx) {
+        if (fmtCtx) {
+            avformat_close_input(&fmtCtx);
         }
+        return 0;
     }
 
-    return 0;
+    ret = avformat_find_stream_info(fmtCtx, nullptr);
+    if (ret < 0) {
+        avformat_close_input(&fmtCtx);
+        return 0;
+    }
+
+    const int videoStreamIdx = av_find_best_stream(
+        fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    const int audioStreamIdx = av_find_best_stream(
+        fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+
+    const int64_t durationUs = resolve_media_duration_us(
+        fmtCtx, videoStreamIdx, audioStreamIdx);
+    avformat_close_input(&fmtCtx);
+    return durationUs;
 }
 
 TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
@@ -475,11 +520,21 @@ TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
 }
 
 TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
-                                                   int64_t timestamp_us,
-                                                   float* samples_out,
-                                                   int sample_count,
-                                                   int sample_rate) {
+                                                    int64_t timestamp_us,
+                                                    float* samples_out,
+                                                    int sample_count,
+                                                    int sample_rate) {
     if (!decoder || !decoder->audioCodecCtx) return -1;
+
+    // Audio reads are typically sequential; if timeline moves backwards
+    // (e.g. loop/repeat), seek and clear buffered state first.
+    if (decoder->lastAudioReadTs != INT64_MIN &&
+        timestamp_us < decoder->lastAudioReadTs) {
+        const int seek_ret = rina_decoder_seek(decoder, timestamp_us);
+        if (seek_ret < 0) return seek_ret;
+    } else {
+        decoder->lastAudioReadTs = timestamp_us;
+    }
 
     int out_channels = 2;
     // Initialize FIFO if it doesn't exist

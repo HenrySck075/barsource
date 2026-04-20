@@ -25,12 +25,75 @@ class RenderVideoClip extends RenderBox with AudioContributor {
   final Duration? trimEnd;
   final double playbackSpeed;
   late final Ticker _ticker;
+  double? _overrideDuration;
+  int? _sourceDurationUs;
+  bool _sourceDurationResolved = false;
 
   Pointer<TennojiDecoder>? _decoder;
   Pointer<TennojiCanvasImage>? _texture;
   int? _textureTimestamp;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
+
+  int? _resolveSourceDurationUs() {
+    if (_sourceDurationResolved) {
+      return _sourceDurationUs;
+    }
+
+    final decoder = _decoder;
+    if (decoder != null) {
+      final durationUs = rina_decoder_duration(decoder);
+      if (durationUs > 0) {
+        _sourceDurationUs = durationUs;
+        _sourceDurationResolved = true;
+        return durationUs;
+      }
+    }
+
+    final uri = source.toNativeUtf8(allocator: calloc);
+    final durationUs = rina_media_source_duration(
+      Engine.instance.nativePtr,
+      uri.cast(),
+    );
+    calloc.free(uri);
+    _sourceDurationResolved = true;
+    if (durationUs <= 0) {
+      return null;
+    }
+    _sourceDurationUs = durationUs;
+    return durationUs;
+  }
+
+  @override
+  double get duration {
+    final overrideDuration = _overrideDuration;
+    if (overrideDuration != null) {
+      return overrideDuration;
+    }
+    final sourceDurationUs = _resolveSourceDurationUs();
+    if (sourceDurationUs == null) {
+      return double.infinity;
+    }
+    final startUs = trimStart.inMicroseconds;
+    if (startUs >= sourceDurationUs) {
+      return 0;
+    }
+    final endUs = trimEnd?.inMicroseconds ?? sourceDurationUs;
+    final boundedEndUs = endUs < sourceDurationUs ? endUs : sourceDurationUs;
+    final trimmedUs = boundedEndUs - startUs;
+    if (trimmedUs <= 0) {
+      return 0;
+    }
+    return trimmedUs / playbackSpeed / Duration.microsecondsPerSecond;
+  }
+
+  @override
+  set duration(double value) {
+    assert(value >= 0, 'duration must be >= 0');
+    if (_overrideDuration == value) return;
+    _overrideDuration = value;
+    parent?.markNeedsLayout();
+  }
 
   Duration _position = Duration.zero;
   final _log = Logger('RenderVideoClip');
@@ -53,6 +116,13 @@ class RenderVideoClip extends RenderBox with AudioContributor {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
+    if (!_sourceDurationResolved && _decoder != null) {
+      final durationUs = rina_decoder_duration(_decoder!);
+      if (durationUs > 0) {
+        _sourceDurationUs = durationUs;
+        _sourceDurationResolved = true;
+      }
+    }
     if (!_ticker.isTicking) {
       _ticker.start();
     }
@@ -158,7 +228,7 @@ class RenderVideoClip extends RenderBox with AudioContributor {
   }
 }
 
-class RenderAudioClip extends RenderBox with AudioContributor {
+class RenderAudioClip extends RenderProxyBox with AudioContributor {
   RenderAudioClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -170,10 +240,73 @@ class RenderAudioClip extends RenderBox with AudioContributor {
   final Duration trimStart;
   final Duration? trimEnd;
   final double volume;
+  double? _overrideDuration;
+  int? _sourceDurationUs;
+  bool _sourceDurationResolved = false;
 
   Pointer<TennojiDecoder>? _decoder;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
+
+  int? _resolveSourceDurationUs() {
+    if (_sourceDurationResolved) {
+      return _sourceDurationUs;
+    }
+
+    final decoder = _decoder;
+    if (decoder != null) {
+      final durationUs = rina_decoder_duration(decoder);
+      if (durationUs > 0) {
+        _sourceDurationUs = durationUs;
+        _sourceDurationResolved = true;
+        return durationUs;
+      }
+    }
+
+    final uri = source.toNativeUtf8(allocator: calloc);
+    final durationUs = rina_media_source_duration(
+      Engine.instance.nativePtr,
+      uri.cast(),
+    );
+    calloc.free(uri);
+    _sourceDurationResolved = true;
+    if (durationUs <= 0) {
+      return null;
+    }
+    _sourceDurationUs = durationUs;
+    return durationUs;
+  }
+
+  @override
+  double get duration {
+    final overrideDuration = _overrideDuration;
+    if (overrideDuration != null) {
+      return overrideDuration;
+    }
+    final sourceDurationUs = _resolveSourceDurationUs();
+    if (sourceDurationUs == null) {
+      return double.infinity;
+    }
+    final startUs = trimStart.inMicroseconds;
+    if (startUs >= sourceDurationUs) {
+      return 0;
+    }
+    final endUs = trimEnd?.inMicroseconds ?? sourceDurationUs;
+    final boundedEndUs = endUs < sourceDurationUs ? endUs : sourceDurationUs;
+    final trimmedUs = boundedEndUs - startUs;
+    if (trimmedUs <= 0) {
+      return 0;
+    }
+    return trimmedUs / Duration.microsecondsPerSecond;
+  }
+
+  @override
+  set duration(double value) {
+    assert(value >= 0, 'duration must be >= 0');
+    if (_overrideDuration == value) return;
+    _overrideDuration = value;
+    parent?.onChildDurationUpdated(this);
+  }
 
   @override
   void attach(PipelineOwner owner) {
@@ -185,6 +318,16 @@ class RenderAudioClip extends RenderBox with AudioContributor {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
+    if (!_sourceDurationResolved && _decoder != null) {
+      final durationUs = rina_decoder_duration(_decoder!);
+      if (durationUs > 0) {
+        _sourceDurationUs = durationUs;
+        _sourceDurationResolved = true;
+      }
+    }
+
+    print("Audio duration of $source set to $duration");
+    parent?.onChildDurationUpdated(this);
   }
 
   @override
@@ -194,17 +337,6 @@ class RenderAudioClip extends RenderBox with AudioContributor {
       _decoder = null;
     }
     super.dispose();
-  }
-
-  @override
-  void performLayout() {
-    size = Size.zero;
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    // Audio is handled by the encoder via getAudioForFrame,
-    // not through the canvas paint path.
   }
 
   @override
@@ -250,5 +382,240 @@ class RenderAudioClip extends RenderBox with AudioContributor {
     } finally {
       calloc.free(sampleBuffer);
     }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) context.paintChild(child!, offset);
+  }
+}
+
+// super.duration is the child's duration
+class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
+  RenderRepeatAudio({int? repeatCount})
+    : assert(repeatCount == null || repeatCount > 0),
+      _repeatCount = repeatCount;
+
+  double? _overrideDuration;
+
+
+  int? _repeatCount;
+  int? get repeatCount => _repeatCount;
+  set repeatCount(int? value) {
+    assert(value == null || value > 0);
+    if (_repeatCount == value) return;
+    _repeatCount = value;
+    markNeedsLayout();
+    parent?.markNeedsLayout();
+  }
+
+  @override
+  double get duration {
+    final overrideDuration = _overrideDuration;
+    if (overrideDuration != null) {
+      return overrideDuration;
+    }
+    final repeatCount = _repeatCount;
+    if (repeatCount == null) {
+      return double.infinity;
+    }
+    return super.duration *
+        repeatCount;
+  }
+
+  @override
+  set duration(double value) {
+    assert(value >= 0, 'duration must be >= 0');
+    if (_overrideDuration == value) return;
+    _overrideDuration = value;
+  }
+
+  Duration? _attachedAt;
+
+  Duration _resolveAttachTime(Duration frameTime) {
+    final attachedAt = _attachedAt;
+    if (attachedAt != null) {
+      return attachedAt;
+    }
+    _attachedAt = frameTime;
+    return frameTime;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _attachedAt = Engine.instance.currentTime;
+  }
+
+  @override
+  void detach() {
+    _attachedAt = null;
+    super.detach();
+  }
+
+  @override
+  Float32List? getAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+  ) {
+    final attachedAt = _resolveAttachTime(frameTime);
+    final elapsed = frameTime - attachedAt;
+    if (elapsed < Duration.zero) {
+      return null;
+    }
+
+    final activeDuration = duration;
+    if (activeDuration.isFinite) {
+      final activeDurationUs = (activeDuration * Duration.microsecondsPerSecond)
+          .round();
+      if (elapsed.inMicroseconds >= activeDurationUs) {
+        return null;
+      }
+    }
+
+
+    final loopedTimeUs = elapsed.inMicroseconds % (super.duration * 1000000).toInt();
+    final loopedFrameTime = attachedAt + Duration(microseconds: loopedTimeUs);
+    final mixedSamples = collectSubtreeMixedAudioForFrame(
+      loopedFrameTime,
+      sampleCount,
+      sampleRate,
+    );
+    if (mixedSamples == null) {
+      return null;
+    }
+    return processMixedAudioForFrame(
+      frameTime,
+      sampleCount,
+      sampleRate,
+      mixedSamples,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) context.paintChild(child!, offset);
+  }
+}
+
+class RenderFadeAudio extends RenderProxyBox with AudioContributor {
+  RenderFadeAudio({
+    Duration fadeInDuration = Duration.zero,
+    Duration fadeOutDuration = Duration.zero,
+    double duration = double.infinity,
+  }) : assert(!fadeInDuration.isNegative),
+       assert(!fadeOutDuration.isNegative),
+       _fadeInDuration = fadeInDuration,
+       _fadeOutDuration = fadeOutDuration {
+    this.duration = duration;
+  }
+
+  Duration _fadeInDuration;
+  Duration get fadeInDuration => _fadeInDuration;
+  set fadeInDuration(Duration value) {
+    assert(!value.isNegative);
+    if (_fadeInDuration == value) return;
+    _fadeInDuration = value;
+    markNeedsLayout();
+  }
+
+  Duration _fadeOutDuration;
+  Duration get fadeOutDuration => _fadeOutDuration;
+  set fadeOutDuration(Duration value) {
+    assert(!value.isNegative);
+    if (_fadeOutDuration == value) return;
+    _fadeOutDuration = value;
+    markNeedsLayout();
+  }
+
+  double? _overrideDuration;
+
+  @override
+  double get duration => _overrideDuration ?? double.infinity;
+
+  @override
+  set duration(double value) {
+    assert(value >= 0, 'duration must be >= 0');
+    if (_overrideDuration == value) return;
+    _overrideDuration = value;
+    //markNeedsLayout();
+  }
+
+  Duration? _attachedAt;
+
+  Duration _resolveAttachTime(Duration frameTime) {
+    final attachedAt = _attachedAt;
+    if (attachedAt != null) {
+      return attachedAt;
+    }
+    _attachedAt = frameTime;
+    return frameTime;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _attachedAt = Engine.instance.currentTime;
+  }
+
+  @override
+  void detach() {
+    _attachedAt = null;
+    super.detach();
+  }
+
+  @override
+  Float32List processMixedAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+    Float32List mixedSamples,
+  ) {
+    final attachedAt = _resolveAttachTime(frameTime);
+    final elapsedUs = frameTime >= attachedAt
+        ? frameTime.inMicroseconds - attachedAt.inMicroseconds
+        : 0;
+    double gain = 1.0;
+
+    final fadeInUs = _fadeInDuration.inMicroseconds;
+    if (fadeInUs > 0 && elapsedUs < fadeInUs) {
+      gain *= elapsedUs / fadeInUs;
+    }
+
+    final activeDurationSeconds = duration;
+    if (activeDurationSeconds.isFinite) {
+      final activeUs = (activeDurationSeconds * Duration.microsecondsPerSecond)
+          .round();
+      if (elapsedUs >= activeUs) {
+        mixedSamples.fillRange(0, mixedSamples.length, 0.0);
+        return mixedSamples;
+      }
+      final fadeOutUs = _fadeOutDuration.inMicroseconds;
+      if (fadeOutUs <= 0) {
+        return mixedSamples;
+      }
+      final fadeOutStartUs = activeUs - fadeOutUs;
+      if (elapsedUs > fadeOutStartUs) {
+        gain *= (activeUs - elapsedUs) / fadeOutUs;
+      }
+    }
+
+    if (gain >= 1.0) {
+      return mixedSamples;
+    }
+    if (gain <= 0.0) {
+      mixedSamples.fillRange(0, mixedSamples.length, 0.0);
+      return mixedSamples;
+    }
+    for (int i = 0; i < mixedSamples.length; i++) {
+      mixedSamples[i] *= gain;
+    }
+    return mixedSamples;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) context.paintChild(child!, offset);
   }
 }

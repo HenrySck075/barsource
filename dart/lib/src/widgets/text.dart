@@ -72,9 +72,8 @@ class RichText extends LeafRenderObjectWidget {
 }
 
 class Text extends StatelessWidget {
-  const Text({
+  const Text(this.text, {
     super.key,
-    required this.text,
     this.style,
     this.textAlign = ui.TextAlign.start,
     this.textDirection,

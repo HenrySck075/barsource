@@ -25,36 +25,37 @@ class BoxConstraints extends Constraints {
 
   /// Tight constraints with a specific size.
   BoxConstraints.tight(Size size)
-      : minWidth = size.width,
-        maxWidth = size.width,
-        minHeight = size.height,
-        maxHeight = size.height;
+    : minWidth = size.width,
+      maxWidth = size.width,
+      minHeight = size.height,
+      maxHeight = size.height;
 
   /// Loose constraints that allow anything up to the given size.
   BoxConstraints.loose(Size size)
-      : minWidth = 0.0,
-        maxWidth = size.width,
-        minHeight = 0.0,
-        maxHeight = size.height;
+    : minWidth = 0.0,
+      maxWidth = size.width,
+      minHeight = 0.0,
+      maxHeight = size.height;
 
   const BoxConstraints.tightFor({double? width, double? height})
-      : minWidth = width ?? 0.0,
-        maxWidth = width ?? double.infinity,
-        minHeight = height ?? 0.0,
-        maxHeight = height ?? double.infinity;
+    : minWidth = width ?? 0.0,
+      maxWidth = width ?? double.infinity,
+      minHeight = height ?? 0.0,
+      maxHeight = height ?? double.infinity;
 
   const BoxConstraints.expand({double? width, double? height})
-  : minWidth = width ?? double.infinity,
-    maxWidth = width ?? double.infinity,
-    minHeight = height ?? double.infinity,
-    maxHeight = height ?? double.infinity;
+    : minWidth = width ?? double.infinity,
+      maxWidth = width ?? double.infinity,
+      minHeight = height ?? double.infinity,
+      maxHeight = height ?? double.infinity;
   @override
   bool get isTight => minWidth == maxWidth && minHeight == maxHeight;
 
   bool get hasBoundedWidth => maxWidth < double.infinity;
   bool get hasBoundedHeight => maxHeight < double.infinity;
   Size get smallest => Size(constrainWidth(0.0), constrainHeight(0.0));
-  Size get biggest => Size(constrainWidth(double.infinity), constrainHeight(double.infinity));
+  Size get biggest =>
+      Size(constrainWidth(double.infinity), constrainHeight(double.infinity));
 
   double constrainWidth([double width = double.infinity]) {
     return width.clamp(minWidth, maxWidth);
@@ -69,10 +70,7 @@ class BoxConstraints extends Constraints {
   }
 
   BoxConstraints loosen() {
-    return BoxConstraints(
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-    );
+    return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
   }
 
   BoxConstraints tighten({double? width, double? height}) {
@@ -99,10 +97,26 @@ class BoxConstraints extends Constraints {
 
   BoxConstraints enforce(BoxConstraints constraints) {
     return BoxConstraints(
-      minWidth: clampDouble(minWidth, constraints.minWidth, constraints.maxWidth),
-      maxWidth: clampDouble(maxWidth, constraints.minWidth, constraints.maxWidth),
-      minHeight: clampDouble(minHeight, constraints.minHeight, constraints.maxHeight),
-      maxHeight: clampDouble(maxHeight, constraints.minHeight, constraints.maxHeight),
+      minWidth: clampDouble(
+        minWidth,
+        constraints.minWidth,
+        constraints.maxWidth,
+      ),
+      maxWidth: clampDouble(
+        maxWidth,
+        constraints.minWidth,
+        constraints.maxWidth,
+      ),
+      minHeight: clampDouble(
+        minHeight,
+        constraints.minHeight,
+        constraints.maxHeight,
+      ),
+      maxHeight: clampDouble(
+        maxHeight,
+        constraints.minHeight,
+        constraints.maxHeight,
+      ),
     );
   }
 
@@ -113,7 +127,8 @@ class BoxConstraints extends Constraints {
   }
 }
 
-typedef PaintingContextCallback = void Function(PaintingContext context, Offset offset);
+typedef PaintingContextCallback =
+    void Function(PaintingContext context, Offset offset);
 
 class PaintingContext {
   PaintingContext(this._canvas, this.estimatedBounds);
@@ -130,7 +145,7 @@ class PaintingContext {
     child._wasRepaintBoundary = child.isRepaintBoundary;
     child.paint(this, offset);
 
-    assert((){
+    assert(() {
       child.debugPaint(this, offset);
       return true;
     }());
@@ -171,7 +186,7 @@ class PipelineOwner {
         node._needsPaint = false;
         // Painting is handled directly without layers
       }
-    }  
+    }
   }
 }
 
@@ -185,6 +200,7 @@ abstract class RenderObject {
   PipelineOwner? _owner;
   bool _needsLayout = false;
   bool _needsPaint = false;
+  double _duration = double.infinity;
   ParentData? parentData;
   Rect get paintBounds;
 
@@ -195,11 +211,22 @@ abstract class RenderObject {
 
   bool get needsLayout => _needsLayout;
   bool get attached => _owner != null;
+  double get duration => _duration;
+  set duration(double value) {
+    assert(value >= 0, 'duration must be >= 0');
+    if (_duration == value) return;
+    _duration = value;
+    parent?.onChildDurationUpdated(this);
+  }
+
+  void onChildDurationUpdated(RenderObject child) {}
+
   @protected
   bool get sizedByParent => false;
 
   bool? _isRelayoutBoundary;
   bool get isRepaintBoundary => false;
+
   /// Override to setup parent data correctly for your children.
   ///
   /// You can call this function to set up the parent data for child before the
@@ -209,6 +236,7 @@ abstract class RenderObject {
       child.parentData = ParentData();
     }
   }
+
   /// Clears the needs-layout flag. Called by subclasses after performing layout.
   void clearNeedsLayout() {
     _needsLayout = false;
@@ -224,6 +252,7 @@ abstract class RenderObject {
       markParentNeedsLayout();
     }
   }
+
   void markParentNeedsLayout() {
     assert(!_debugDisposed);
     _log.finest('markParentNeedsLayout');
@@ -233,11 +262,12 @@ abstract class RenderObject {
   }
 
   bool _wasRepaintBoundary = false;
-  
+
   /// markNeedsPaint is now a no-op as layers have been removed
   void markNeedsPaint() {
     // No-op: layers logic removed
   }
+
   /// The layout constraints most recently supplied by the parent.
   ///
   /// If layout has not yet happened, accessing this getter will
@@ -245,7 +275,9 @@ abstract class RenderObject {
   @protected
   Constraints get constraints {
     if (_constraints == null) {
-      throw StateError('A RenderObject does not have any constraints before it has been laid out.');
+      throw StateError(
+        'A RenderObject does not have any constraints before it has been laid out.',
+      );
     }
     return _constraints!;
   }
@@ -255,7 +287,11 @@ abstract class RenderObject {
     assert(!_debugDisposed);
     //_log.finer('layout with $constraints');
     _constraints = constraints;
-    _isRelayoutBoundary = !parentUsesSize || sizedByParent || constraints.isTight || parent == null;
+    _isRelayoutBoundary =
+        !parentUsesSize ||
+        sizedByParent ||
+        constraints.isTight ||
+        parent == null;
     performLayout();
     _needsLayout = false;
     markNeedsPaint();
@@ -320,12 +356,14 @@ abstract class RenderObject {
   }
 
   void visitChildren(RenderObjectVisitor visitor) {}
+
   /// Adjust the [depth] of this node's children, if any.
   ///
   /// Override this method in subclasses with child nodes to call [redepthChild]
   /// for each child. Do not call this method directly.
   @protected
   void redepthChildren() {}
+
   /// Called by subclasses when they decide a render object is a child.
   ///
   /// Only for use by subclasses when changing their child lists. Calling this
@@ -352,6 +390,7 @@ abstract class RenderObject {
     }
     redepthChild(child);
   }
+
   /// Called by subclasses when they decide a render object is no longer a child.
   ///
   /// Only for use by subclasses when changing their child lists. Calling this
@@ -379,12 +418,14 @@ abstract class RenderObject {
   bool _debugDisposed = false;
   void dispose() {
     assert(!_debugDisposed);
-    assert((){
-      return _debugDisposed = true; 
-    }()); 
+    assert(() {
+      return _debugDisposed = true;
+    }());
   }
 }
-mixin RenderObjectWithChildMixin<ChildType extends RenderObject> on RenderObject {
+
+mixin RenderObjectWithChildMixin<ChildType extends RenderObject>
+    on RenderObject {
   ChildType? _child;
 
   /// The child of this render object.
@@ -422,10 +463,14 @@ mixin ContainerParentDataMixin<ChildType extends RenderObject> on ParentData {
       previousSibling == null,
       'Pointers to siblings must be nulled before detaching ParentData.',
     );
-    assert(nextSibling == null, 'Pointers to siblings must be nulled before detaching ParentData.');
+    assert(
+      nextSibling == null,
+      'Pointers to siblings must be nulled before detaching ParentData.',
+    );
     super.detach();
   }
 }
+
 /// Mixin for render objects that have a list of children.
 ///
 /// This used to provide a `children` list. Now it doesn't. Any code that accesses such property is outdated
@@ -434,7 +479,8 @@ mixin ContainerParentDataMixin<ChildType extends RenderObject> on ParentData {
 mixin ContainerRenderObjectMixin<
   ChildType extends RenderObject,
   ParentDataType extends ContainerParentDataMixin<ChildType>
-> on RenderObject { 
+>
+    on RenderObject {
   int _childCount = 0;
 
   /// The number of children.
@@ -460,7 +506,7 @@ mixin ContainerRenderObjectMixin<
     } else {
       assert(_firstChild != null);
       assert(_lastChild != null);
-     // assert(_debugUltimatePreviousSiblingOf(after, equals: _firstChild));
+      // assert(_debugUltimatePreviousSiblingOf(after, equals: _firstChild));
       //assert(_debugUltimateNextSiblingOf(after, equals: _lastChild));
       final afterParentData = after.parentData! as ParentDataType;
       if (afterParentData.nextSibling == null) {
@@ -536,8 +582,10 @@ mixin ContainerRenderObjectMixin<
       assert(_lastChild == child);
       _lastChild = childParentData.previousSibling;
     } else {
-      final childNextSiblingParentData = childParentData.nextSibling!.parentData! as ParentDataType;
-      childNextSiblingParentData.previousSibling = childParentData.previousSibling;
+      final childNextSiblingParentData =
+          childParentData.nextSibling!.parentData! as ParentDataType;
+      childNextSiblingParentData.previousSibling =
+          childParentData.previousSibling;
     }
     childParentData.previousSibling = null;
     childParentData.nextSibling = null;
@@ -650,7 +698,9 @@ mixin ContainerRenderObjectMixin<
     final childParentData = child.parentData! as ParentDataType;
     return childParentData.nextSibling;
   }
+
 }
 
-abstract class ContainerBoxParentData<ChildType extends RenderObject> extends BoxParentData
+abstract class ContainerBoxParentData<ChildType extends RenderObject>
+    extends BoxParentData
     with ContainerParentDataMixin<ChildType> {}

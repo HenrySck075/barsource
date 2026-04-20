@@ -39,4 +39,10 @@ abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<
     child?.layout(constraints);
     size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
   }
+
+  @override
+  void onChildDurationUpdated(RenderObject child) {
+    super.duration = child.duration;
+    print("I hereby report this $runtimeType has a super.duration of ${super.duration} and the main duration of $duration");
+  }
 }
