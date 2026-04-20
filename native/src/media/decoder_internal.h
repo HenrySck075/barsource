@@ -42,6 +42,8 @@ struct TennojiDecoder {
     // instead of discarding them, so they can be drained by the encoder.
     std::deque<AVPacket*> audioPacketQueue;
     std::mutex audioQueueMutex;
+    std::deque<AVPacket*> videoPacketQueue;
+    std::mutex videoQueueMutex;
 
     void enqueue_audio_packet(AVPacket* pkt) {
         AVPacket* clone = av_packet_clone(pkt);
@@ -55,5 +57,19 @@ struct TennojiDecoder {
         std::lock_guard<std::mutex> lock(audioQueueMutex);
         for (auto* p : audioPacketQueue) av_packet_free(&p);
         audioPacketQueue.clear();
+    }
+
+    void enqueue_video_packet(AVPacket* pkt) {
+        AVPacket* clone = av_packet_clone(pkt);
+        if (clone) {
+            std::lock_guard<std::mutex> lock(videoQueueMutex);
+            videoPacketQueue.push_back(clone);
+        }
+    }
+
+    void flush_video_queue() {
+        std::lock_guard<std::mutex> lock(videoQueueMutex);
+        for (auto* p : videoPacketQueue) av_packet_free(&p);
+        videoPacketQueue.clear();
     }
 };

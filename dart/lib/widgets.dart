@@ -19,3 +19,5 @@ export 'src/widgets/stack.dart';
 export 'src/widgets/clip_rect.dart';
 export 'src/widgets/flex.dart';
 export 'src/widgets/animated.dart';
+export 'src/widgets/overlay.dart';
+export 'src/widgets/navigator.dart';

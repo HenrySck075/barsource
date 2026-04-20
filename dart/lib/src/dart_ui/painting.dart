@@ -3043,6 +3043,8 @@ abstract class Path {
   // see https://skia.org/user/api/SkPath_Reference#SkPath_getBounds
   Rect getBounds();
 
+  Rect getTightBounds();
+
   /// Combines the two paths according to the manner specified by the given
   /// `operation`.
   ///
@@ -3312,6 +3314,14 @@ base class _NativePath implements Path, Finalizable {
     return ret;
   }
 
+  @override
+  Rect getTightBounds() {
+    final Pointer<Float> rect = rina_path_get_tight_bounds(_nativePtr);
+    final ret = Rect.fromLTRB(rect[0], rect[1], rect[2], rect[3]);
+    calloc.free(rect);
+    return ret;
+  }
+
   bool _op(_NativePath path1, _NativePath path2, int operation) 
     => rina_path_combine_op(_nativePtr, path1._nativePtr, path2._nativePtr, operation);
 
@@ -3533,7 +3543,9 @@ base class _PathMeasure implements Finalizable {
     if (posTan == nullptr) {
       return null;
     } else {
-      return Tangent(Offset(posTan[1], posTan[2]), Offset(posTan[3], posTan[4]));
+      final tangent = Tangent(Offset(posTan[0], posTan[1]), Offset(posTan[2], posTan[3]));
+      malloc.free(posTan);
+      return tangent;
     }
   }
   Path extractPath(int contourIndex, double start, double end, {bool startWithMoveTo = true}) {
@@ -6708,6 +6720,18 @@ class Canvas {
     );
   }
 
+  void drawCircle(Offset center, double radius, Paint paint) {
+    debugAssertNullPointer();
+    using((arena)=>
+    rina_canvas_draw_circle(
+      _nativePtr,
+      center.dx,
+      center.dy,
+      radius,
+      paint._createPaintMetadata(arena),
+    )
+    );
+  }
   void drawRect(Rect rect, Paint paint) {
     debugAssertNullPointer();
     using((arena)=>

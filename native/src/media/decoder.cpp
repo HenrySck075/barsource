@@ -263,6 +263,7 @@ TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder) {
     if (!decoder) return;
 
     decoder->flush_audio_queue();
+    decoder->flush_video_queue();
     delete decoder->framePool;
     av_packet_free(&decoder->decodePacket);
     av_frame_free(&decoder->decodeFrame);
@@ -305,6 +306,7 @@ TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_
 
     // Flush buffered audio packets (they're from before the seek point)
     decoder->flush_audio_queue();
+    decoder->flush_video_queue();
 
     decoder->lastSeekTs = timestamp_us;
     return 0;
@@ -330,6 +332,7 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
             if (decoder->audioCodecCtx) avcodec_flush_buffers(decoder->audioCodecCtx);
             if (decoder->framePool) decoder->framePool->flush();
             decoder->flush_audio_queue();
+            decoder->flush_video_queue();
         }
     }
     
@@ -344,8 +347,22 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
     bool found = false;
 
     while (!found) {
-        int ret = av_read_frame(decoder->fmtCtx, pkt);
-        if (ret < 0) break; // EOF or error
+        int ret = 0;
+        bool fromVideoQueue = false;
+        {
+            std::lock_guard<std::mutex> lock(decoder->videoQueueMutex);
+            if (!decoder->videoPacketQueue.empty()) {
+                AVPacket* queuedPkt = decoder->videoPacketQueue.front();
+                decoder->videoPacketQueue.pop_front();
+                av_packet_move_ref(pkt, queuedPkt);
+                av_packet_free(&queuedPkt);
+                fromVideoQueue = true;
+            }
+        }
+        if (!fromVideoQueue) {
+            ret = av_read_frame(decoder->fmtCtx, pkt);
+            if (ret < 0) break; // EOF or error
+        }
 
         if (pkt->stream_index == decoder->audioStreamIdx) {
             // Stash audio packets for later draining by the encoder
@@ -431,6 +448,12 @@ TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
         int ret = av_read_frame(decoder->fmtCtx, pkt);
         if (ret < 0) break; // EOF or error
 
+        if (pkt->stream_index == decoder->videoStreamIdx) {
+            decoder->enqueue_video_packet(pkt);
+            av_packet_unref(pkt);
+            continue;
+        }
+
         if (pkt->stream_index != decoder->audioStreamIdx) {
             av_packet_unref(pkt);
             continue;
@@ -489,6 +512,9 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
             
             // Skip non-audio packets
             if (pkt->stream_index != decoder->audioStreamIdx) {
+                if (pkt->stream_index == decoder->videoStreamIdx) {
+                    decoder->enqueue_video_packet(pkt);
+                }
                 av_packet_unref(pkt);
                 av_packet_free(&pkt);
                 continue;

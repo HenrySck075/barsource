@@ -41,8 +41,10 @@ class RenderConfig {
   final String output;
   final Duration duration;
   final int fps;
+
   /// Canvas size
   final Size resolution;
+
   /// The actual video resolution, defaults to [resolution]
   /// Don't use this though, it works but it fucks up rendering for some reason
   final Size? renderResolution;
@@ -52,17 +54,12 @@ class RenderConfig {
   final bool showProgressBar;
 }
 
-enum VideoCodec {
-  h264,
-  h265;
-}
+enum VideoCodec { h264, h265 }
 
-enum AudioCodec {
-  aac,
-  opus;
-}
+enum AudioCodec { aac, opus }
 
-class Engine extends BindingBase with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
+class Engine extends BindingBase
+    with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
   Engine._(this._nativePtr);
 
   final Pointer<TennojiEngine> _nativePtr;
@@ -81,7 +78,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     String gpuBackend = 'vulkan',
   }) {
     if (_instance != null) return;
-    
+
     final config = calloc<TennojiEngineConfig>();
     final gpuBackendUtf8 = gpuBackend.toNativeUtf8(allocator: calloc);
     config.ref
@@ -107,6 +104,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   }
 
   int? _frameDuration;
+
   /// The duration in milliseconds of 1 single frame.
   ///
   /// This value is only valid when the engine is currently being [run]
@@ -121,11 +119,11 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     _frameDuration = frameDuration.inMilliseconds;
     _currentTime = Duration.zero;
 
-    _log.info('Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}');
+    _log.info(
+      'Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}',
+    );
     // 1. Initialize RenderView
-    initRenderView(ViewConfiguration(
-      size: renderResolution,
-    ));
+    initRenderView(ViewConfiguration(size: renderResolution));
 
     // Layers removed - no longer need replaceRootLayer
 
@@ -136,8 +134,10 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
     final encConfig = calloc<TennojiEncoderConfig>();
     final outputPathUtf8 = config.output.toNativeUtf8(allocator: calloc);
     final videoCodecUtf8 = config.codec.name.toNativeUtf8(allocator: calloc);
-    final audioCodecUtf8 = config.audioCodec.name.toNativeUtf8(allocator: calloc);
-    
+    final audioCodecUtf8 = config.audioCodec.name.toNativeUtf8(
+      allocator: calloc,
+    );
+
     encConfig.ref
       ..output_path = outputPathUtf8.cast()
       ..width = renderResolution.width.toInt()
@@ -148,56 +148,86 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       ..audio_sample_rate = 44100
       ..audio_channels = 2;
 
-    final encoder = rina_encoder_create(_nativePtr, encConfig); 
+    final encoder = rina_encoder_create(_nativePtr, encConfig);
 
-    final progressBar = FillingBar(
-      desc: "r", time: true, percentage: true,
-      total:(config.duration.inMilliseconds/1000*config.fps).toInt()
-    );
+    final progressBar = config.showProgressBar
+        ? FillingBar(
+            desc: "r",
+            time: true,
+            percentage: true,
+            total: (config.duration.inMilliseconds / 1000 * config.fps).toInt(),
+          )
+        : null;
 
     // This canvas is a special one, and thus does not experience the same lifecycle as every other canvas inside PaintingContext
     final canvas = Canvas(
       renderResolution.width.toInt(),
       renderResolution.height.toInt(),
     );
-    renderView.layout(BoxConstraints(
-      minWidth: renderResolution.width, minHeight: renderResolution.height,
-      maxWidth: renderResolution.width,
-      maxHeight: renderResolution.height
-    ));
-    bool doScale = config.renderResolution != null && config.resolution != config.renderResolution;
-    final scaleX = doScale ? config.renderResolution!.width / config.resolution.width : 1.0;
-    final scaleY = doScale ? config.renderResolution!.height / config.resolution.height : 1.0;
+    renderView.layout(
+      BoxConstraints(
+        minWidth: renderResolution.width,
+        minHeight: renderResolution.height,
+        maxWidth: renderResolution.width,
+        maxHeight: renderResolution.height,
+      ),
+    );
+    bool doScale =
+        config.renderResolution != null &&
+        config.resolution != config.renderResolution;
+    final scaleX = doScale
+        ? config.renderResolution!.width / config.resolution.width
+        : 1.0;
+    final scaleY = doScale
+        ? config.renderResolution!.height / config.resolution.height
+        : 1.0;
     const sampleRate = 44100;
     final samplesPerFrame = (sampleRate / config.fps).round();
     final expectedStereoSamples = samplesPerFrame * 2;
     final sampleBuffer = calloc<Float>(expectedStereoSamples);
+    final sampleBufferView = sampleBuffer.asTypedList(expectedStereoSamples);
+    final mixedAudioBuffer = Float32List(expectedStereoSamples);
     try {
       while (_currentTime < config.duration) {
         if (doScale) {
+          canvas.save();
           canvas.scale(scaleX, scaleY);
         }
         handleBeginFrame(_currentTime);
 
         // Trigger microtasks / futures
         // no, really, this is how you do it
-        await Future.delayed(Duration.zero); 
-        
+        await Future.delayed(Duration.zero);
+
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
         handleDrawFrame();
-        
+
         // Paint phase
         // ignore: invalid_use_of_protected_member
         final nativeCanvas = canvas.nativePtr;
-        rina_canvas_draw_color(nativeCanvas, 0xFF000000, BlendMode.dstOver.index);
-        
+        rina_canvas_draw_color(
+          nativeCanvas,
+          0xFF000000,
+          BlendMode.dstOver.index,
+        );
+
         // Paint directly without layers
         try {
-          final context = PaintingContext(canvas, Rect.fromLTWH(0, 0, renderResolution.width, renderResolution.height));
+          final context = PaintingContext(
+            canvas,
+            Rect.fromLTWH(
+              0,
+              0,
+              renderResolution.width,
+              renderResolution.height,
+            ),
+          );
           renderView.paint(context, Offset.zero);
         } catch (e, st) {
           _log.severe('Error during painting at $_currentTime: $e', e, st);
+          _log.severe(st);
+          break;
         }
 
         if (doScale) {
@@ -208,8 +238,10 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
 
         // NEW Audio Submission System: ALWAYS write audio for every video frame
         // to maintain sync (even if it's silence)
-        final audioBuffers = <Float32List>[];
-        
+        mixedAudioBuffer.fillRange(0, expectedStereoSamples, 0.0);
+        bool hasAudio = false;
+        bool hasInvalidSamples = false;
+
         for (final contributor in _contributors) {
           final samples = contributor.theActualValue.getAudioForFrame(
             _currentTime,
@@ -217,60 +249,54 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
             sampleRate,
           );
           if (samples != null && samples.isNotEmpty) {
-            audioBuffers.add(samples);
+            hasAudio = true;
+            final limit = samples.length < expectedStereoSamples
+                ? samples.length
+                : expectedStereoSamples;
+            for (int i = 0; i < limit; i++) {
+              final sample = samples[i];
+              if (sample.isFinite) {
+                mixedAudioBuffer[i] += sample;
+              } else {
+                hasInvalidSamples = true;
+              }
+            }
           }
         }
-        
-        Float32List audioToWrite;
-        if (audioBuffers.isNotEmpty) {
-          audioToWrite = _mixAudioSamples(audioBuffers);
-        } else {
-          // No audio available - write silence to maintain sync
-          audioToWrite = Float32List(expectedStereoSamples); // stereo, initialized to 0
-        }
-        
-        // Ensure we always have exactly the right number of samples for this frame
-        // Pad with silence if needed to maintain perfect A/V sync
-        if (audioToWrite.length < expectedStereoSamples) {
-          final padded = Float32List(expectedStereoSamples);
-          for (int i = 0; i < audioToWrite.length; i++) {
-            padded[i] = audioToWrite[i];
-          }
-          // Rest is already zero-initialized
-          audioToWrite = padded;
-        } else if (audioToWrite.length > expectedStereoSamples) {
-          // Truncate if somehow we got too many samples
-          audioToWrite = Float32List.sublistView(audioToWrite, 0, expectedStereoSamples);
-        }
-        
-        // Validate no NaN/Inf values
-        bool hasInvalidSamples = false;
-        for (int i = 0; i < audioToWrite.length; i++) {
-          if (!audioToWrite[i].isFinite) {
-            hasInvalidSamples = true;
-            audioToWrite[i] = 0.0; // Replace with silence
-          }
-        }
-        
-        if (hasInvalidSamples) {
-          _log.warning('Invalid audio samples detected at $_currentTime, replaced with silence');
-        }
-        
-        // Write audio to encoder
+
+        // Clamp and write directly into the FFI buffer.
         for (int i = 0; i < expectedStereoSamples; i++) {
-          sampleBuffer[i] = audioToWrite[i];
+          final mixed = hasAudio ? mixedAudioBuffer[i] : 0.0;
+          if (!mixed.isFinite) {
+            hasInvalidSamples = true;
+            sampleBufferView[i] = 0.0;
+            continue;
+          }
+          if (mixed > 1.0) {
+            sampleBufferView[i] = 1.0;
+          } else if (mixed < -1.0) {
+            sampleBufferView[i] = -1.0;
+          } else {
+            sampleBufferView[i] = mixed;
+          }
+        }
+
+        if (hasInvalidSamples) {
+          _log.warning(
+            'Invalid audio samples detected at $_currentTime, replaced with silence',
+          );
         }
 
         rina_encoder_write_audio_samples(
           encoder,
           sampleBuffer,
-          samplesPerFrame,  // Always write the expected frame size
+          samplesPerFrame, // Always write the expected frame size
           sampleRate,
           2, // stereo
         );
 
         _currentTime += frameDuration;
-        progressBar.increment();
+        progressBar?.increment();
       }
     } catch (e, st) {
       print('Error during render run: $e\n$st');
@@ -278,13 +304,13 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
       // this function crashes on literally any exceptions ever
       rina_encoder_finalize(encoder);
       rina_encoder_destroy(encoder);
-      
+
       calloc.free(outputPathUtf8);
       calloc.free(videoCodecUtf8);
       calloc.free(audioCodecUtf8);
       calloc.free(encConfig);
       calloc.free(sampleBuffer);
-      
+
       detachRootWidget();
       _log.info('Render run completed.');
       _frameDuration = null;
@@ -295,6 +321,7 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
   void registerAudioContributor(AudioContributor contributor) {
     _contributors.add(AudioContributorEntry(contributor));
   }
+
   void unregisterAudioContributor(AudioContributor contributor) {
     for (final entry in _contributors) {
       if (entry.theActualValue == contributor) {
@@ -302,25 +329,6 @@ class Engine extends BindingBase with SchedulerBinding, RendererBinding, Widgets
         break;
       }
     }
-  }
-
-  /// Mixes multiple audio buffers into one
-  Float32List _mixAudioSamples(List<Float32List> buffers) {
-    if (buffers.isEmpty) return Float32List(0);
-    if (buffers.length == 1) return buffers[0];
-    
-    final result = Float32List(buffers[0].length);
-    for (int i = 0; i < result.length; i++) {
-      double sum = 0.0;
-      for (var buffer in buffers) {
-        if (i < buffer.length) {
-          sum += buffer[i];
-        }
-      }
-      // Clamp to prevent clipping
-      result[i] = sum.clamp(-1.0, 1.0);
-    }
-    return result;
   }
 }
 
@@ -351,7 +359,7 @@ class EngineTimer implements Timer {
     _ticker!.start();
   }
 
-  void _handleTick(Duration elapsed) {    
+  void _handleTick(Duration elapsed) {
     if (elapsed >= _accumulated + _duration) {
       _callback();
       if (_isPeriodic) {

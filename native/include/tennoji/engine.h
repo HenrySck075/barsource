@@ -61,6 +61,12 @@ TENNOJI_EXPORT void rina_canvas_draw_paint(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paintData
 );
+
+TENNOJI_EXPORT void rina_canvas_draw_circle(
+  TennojiCanvas* canvas,
+  float cx, float cy, float radius,
+  TennojiCanvasPaintMetadata* paintData
+);
 TENNOJI_EXPORT void rina_canvas_draw_rect(
   TennojiCanvas* canvas,
   float left, float top,
@@ -541,6 +547,7 @@ TENNOJI_EXPORT bool rina_path_combine_op(
 ); 
 
 TENNOJI_EXPORT float* rina_path_get_bounds(TennojiCanvasPath* path);
+TENNOJI_EXPORT float* rina_path_get_tight_bounds(TennojiCanvasPath* path);
 
 TENNOJI_EXPORT TennojiCanvasPathMeasure* rina_path_measure_create(
   TennojiCanvasPath* path, bool forceClose

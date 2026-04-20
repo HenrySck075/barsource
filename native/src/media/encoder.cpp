@@ -195,20 +195,21 @@ static void render_loop(TennojiEncoder* enc) {
                        pixels.resize(frameBytes);
                    }
                    if (exSurface.skSurface->readPixels(readInfo, pixels.data(), enc->width * 4, 0, 0)) {
-                       {
-                          std::unique_lock<std::mutex> lock(enc->encodeMutex);
-                          enc->encodeCv.wait(lock, [&] {
-                              return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
-                          });
-                          if (!enc->running) {
-                              lock.unlock();
-                              return_surface_to_pool(enc, exSurface);
-                              continue;
-                          }
-                          enc->encodeQueue.push({std::move(pixels), exSurface, frame.pts});
-                      }
-                      enc->encodeCv.notify_one();
-                  } else {
+                        // CPU path no longer needs the surface once pixels are read.
+                        return_surface_to_pool(enc, exSurface);
+                        {
+                           std::unique_lock<std::mutex> lock(enc->encodeMutex);
+                           enc->encodeCv.wait(lock, [&] {
+                               return enc->encodeQueue.size() < kMaxEncodeQueueSize || !enc->running;
+                           });
+                           if (!enc->running) {
+                               lock.unlock();
+                               continue;
+                           }
+                           enc->encodeQueue.push({std::move(pixels), tennoji::ExportableSurface{}, frame.pts});
+                       }
+                       enc->encodeCv.notify_one();
+                   } else {
                       // Readback failed, return surface
                       return_surface_to_pool(enc, exSurface);
                   }
@@ -893,17 +894,17 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
 }
 
 TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
-                                                        const float* samples,
-                                                        int sample_count,
-                                                        int sample_rate,
-                                                        int channels) {
+                                                         const float* samples,
+                                                         int sample_count,
+                                                         int sample_rate,
+                                                         int channels) {
     if (!encoder || !encoder->audioCodecCtx) return -1;
     if (!samples || sample_count <= 0 || channels <= 0) return -1;
 
     // Initialize FIFO if needed
     if (!encoder->audioFifo) {
         encoder->audioFifo = av_audio_fifo_alloc(
-            AV_SAMPLE_FMT_FLTP,
+            encoder->audioCodecCtx->sample_fmt,
             encoder->audioCodecCtx->ch_layout.nb_channels,
             encoder->audioCodecCtx->frame_size * 4  // Buffer for multiple frames
         );
@@ -932,12 +933,19 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
     int ret = av_audio_fifo_write(encoder->audioFifo, channel_data, sample_count);
     if (ret < sample_count) return -1;
 
+    AVPacket* pkt = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+    if (!pkt || !frame) {
+        av_packet_free(&pkt);
+        av_frame_free(&frame);
+        return -1;
+    }
+
     // Encode all complete frames available in the FIFO
     while (av_audio_fifo_size(encoder->audioFifo) >= encoder_frame_size) {
-        AVFrame* frame = av_frame_alloc();
-        if (!frame) return -1;
+        av_frame_unref(frame);
 
-        frame->format = AV_SAMPLE_FMT_FLTP;
+        frame->format = encoder->audioCodecCtx->sample_fmt;
         frame->ch_layout = encoder->audioCodecCtx->ch_layout;
         frame->sample_rate = encoder->audioCodecCtx->sample_rate;
         frame->nb_samples = encoder_frame_size;
@@ -945,6 +953,7 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
         ret = av_frame_get_buffer(frame, 0);
         if (ret < 0) {
             av_frame_free(&frame);
+            av_packet_free(&pkt);
             return -1;
         }
 
@@ -952,6 +961,7 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
         ret = av_audio_fifo_read(encoder->audioFifo, (void**)frame->data, encoder_frame_size);
         if (ret < encoder_frame_size) {
             av_frame_free(&frame);
+            av_packet_free(&pkt);
             return -1;
         }
 
@@ -961,15 +971,18 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
 
         // Encode the frame
         ret = avcodec_send_frame(encoder->audioCodecCtx, frame);
-        av_frame_free(&frame);
-        if (ret < 0) return -1;
+        if (ret < 0) {
+            av_frame_free(&frame);
+            av_packet_free(&pkt);
+            return -1;
+        }
 
         // Retrieve encoded packets and write to file
-        AVPacket* pkt = av_packet_alloc();
         while (true) {
             ret = avcodec_receive_packet(encoder->audioCodecCtx, pkt);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
             if (ret < 0) {
+                av_frame_free(&frame);
                 av_packet_free(&pkt);
                 return -1;
             }
@@ -981,13 +994,15 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
             ret = av_interleaved_write_frame(encoder->fmtCtx, pkt);
             av_packet_unref(pkt);
             if (ret < 0) {
+                av_frame_free(&frame);
                 av_packet_free(&pkt);
                 return -1;
             }
         }
-        av_packet_free(&pkt);
     }
 
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
     return 0;
 }
 

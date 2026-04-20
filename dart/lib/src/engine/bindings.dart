@@ -123,6 +123,23 @@ external void rina_canvas_draw_paint(
     ffi.Float,
     ffi.Float,
     ffi.Float,
+    ffi.Pointer<TennojiCanvasPaintMetadata>,
+  )
+>(isLeaf: true)
+external void rina_canvas_draw_circle(
+  ffi.Pointer<TennojiCanvas> canvas,
+  double cx,
+  double cy,
+  double radius,
+  ffi.Pointer<TennojiCanvasPaintMetadata> paintData,
+);
+
+@ffi.Native<
+  ffi.Void Function(
+    ffi.Pointer<TennojiCanvas>,
+    ffi.Float,
+    ffi.Float,
+    ffi.Float,
     ffi.Float,
     ffi.Pointer<TennojiCanvasPaintMetadata>,
   )
@@ -1535,6 +1552,13 @@ external bool rina_path_combine_op(
   isLeaf: true,
 )
 external ffi.Pointer<ffi.Float> rina_path_get_bounds(
+  ffi.Pointer<TennojiCanvasPath> path,
+);
+
+@ffi.Native<ffi.Pointer<ffi.Float> Function(ffi.Pointer<TennojiCanvasPath>)>(
+  isLeaf: true,
+)
+external ffi.Pointer<ffi.Float> rina_path_get_tight_bounds(
   ffi.Pointer<TennojiCanvasPath> path,
 );
 

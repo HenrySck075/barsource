@@ -280,7 +280,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
         _items.length, (int itemIndex) {
           final _ActiveItem<T>? outgoingItem = _activeItemAt(_outgoingItems, itemIndex);
           if (outgoingItem != null) {
-            return outgoingItem.removedItemBuilder!(context, outgoingItem.data!, outgoingItem.controller!);
+            return (outgoingItem.removedItemBuilder ?? widget.removedItemBuilder ?? widget.itemBuilder)(context, outgoingItem.data!, outgoingItem.controller!);
           }
 
           final incomingItem = _activeItemAt(_incomingItems, itemIndex);

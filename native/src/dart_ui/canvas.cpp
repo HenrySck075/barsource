@@ -135,6 +135,7 @@ TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas) {
   if (!canvas) return;
   delete canvas;
 }
+
 TENNOJI_EXPORT void rina_canvas_draw_color(
   TennojiCanvas* canvas,
   uint32_t color, // ARGB
@@ -162,6 +163,14 @@ TENNOJI_EXPORT void rina_canvas_draw_paint(
   canvas->canvas->drawPaint(paint_create_from_encoded(paintData));
 }
 
+TENNOJI_EXPORT void rina_canvas_draw_circle(
+  TennojiCanvas* canvas,
+  float cx, float cy, float radius,
+  TennojiCanvasPaintMetadata* paintData
+) {
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->drawCircle(cx, cy, radius, paint_create_from_encoded(paintData));
+}
 TENNOJI_EXPORT void rina_canvas_draw_rect(
   TennojiCanvas* canvas,
   float left, float top,

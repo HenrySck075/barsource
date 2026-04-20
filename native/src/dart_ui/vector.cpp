@@ -257,13 +257,24 @@ TENNOJI_EXPORT bool rina_path_combine_op(
   TennojiCanvasPath* path1, TennojiCanvasPath* path2, 
   int operationId
 ) {
-  auto betterPath = new SkPath();
-  auto ret = Op(path1->builder->snapshot(), path2->builder->snapshot(), (SkPathOp)operationId, betterPath);
-  resultPath->builder.reset(new SkPathBuilder(*betterPath));
+  SkPath betterPath;
+  auto ret = Op(path1->builder->snapshot(), path2->builder->snapshot(), (SkPathOp)operationId, &betterPath);
+  resultPath->builder = std::make_unique<SkPathBuilder>(betterPath);
   return ret;
 }
 
-
+TENNOJI_EXPORT float* rina_path_get_tight_bounds(TennojiCanvasPath* path) {
+  auto bound = path->builder->computeTightBounds();
+  // calloc so if bound is nullopt everything represents a zero-sized rect
+  float* gamer = (float*)calloc(4, sizeof(float));
+  if (bound.has_value()) {
+    gamer[0] = bound->left();
+    gamer[1] = bound->top();
+    gamer[2] = bound->right();
+    gamer[3] = bound->bottom();
+  }
+  return gamer;
+}
 TENNOJI_EXPORT float* rina_path_get_bounds(TennojiCanvasPath* path) {
   auto bound = path->builder->computeFiniteBounds();
   // calloc so if bound is nullopt everything represents a zero-sized rect
@@ -292,11 +303,11 @@ TENNOJI_EXPORT void rina_path_measure_destroy(TennojiCanvasPathMeasure* measure)
 };
 
 TENNOJI_EXPORT double rina_path_measure_length(TennojiCanvasPathMeasure* measure, int32_t contourIndex) {
-  if (contourIndex >= measure->computedContours.size()) return 0;
+  if (contourIndex < 0 || contourIndex >= measure->computedContours.size()) return 0;
   return measure->computedContours[contourIndex]->length();
 }
 TENNOJI_EXPORT float* rina_path_measure_tangent_for_offset(TennojiCanvasPathMeasure* measure, int32_t contourIndex, double distance) {
-  if (contourIndex >= measure->computedContours.size()) return nullptr;
+  if (contourIndex < 0 || contourIndex >= measure->computedContours.size()) return nullptr;
   SkPoint position, tangent;
   if (!measure->computedContours[contourIndex]->getPosTan(distance, &position, &tangent)) {
     return nullptr;
@@ -308,7 +319,10 @@ TENNOJI_EXPORT float* rina_path_measure_tangent_for_offset(TennojiCanvasPathMeas
   gamer[3] = tangent.y();
   return gamer;
 } 
-TENNOJI_EXPORT bool rina_path_measure_closed(TennojiCanvasPathMeasure* measure, int32_t contourIndex); 
+TENNOJI_EXPORT bool rina_path_measure_closed(TennojiCanvasPathMeasure* measure, int32_t contourIndex) {
+  if (contourIndex < 0 || contourIndex >= measure->computedContours.size()) return false;
+  return measure->computedContours[contourIndex]->isClosed();
+} 
 TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
   TennojiCanvasPathMeasure* measure,
   int32_t contourIndex,
@@ -316,7 +330,7 @@ TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
   double end,
   bool startWithMoveTo
 ) {
-  if (contourIndex >= measure->computedContours.size()) return nullptr;
+  if (contourIndex < 0 || contourIndex >= measure->computedContours.size()) return nullptr;
   auto builder = new SkPathBuilder();
   auto extracted = measure->computedContours[contourIndex]->getSegment(start,end, builder, startWithMoveTo);
   if (!extracted) {
@@ -329,9 +343,10 @@ TENNOJI_EXPORT TennojiCanvasPath* rina_path_measure_extract(
 }
 
 TENNOJI_EXPORT bool rina_path_measure_next_contour(TennojiCanvasPathMeasure* measure) {
-  auto contourAvailable = measure->measure->nextContour();
+  auto contourAvailable = measure->doAdvanceContour ? measure->measure->nextContour() : measure->measure->currentMeasure() != nullptr;
+  measure->doAdvanceContour = true;
   if (!contourAvailable) return 0;
-  measure->computedContours.push_back(sk_sp(measure->measure->currentMeasure()));
+  measure->computedContours.push_back(sk_ref_sp(measure->measure->currentMeasure()));
   return contourAvailable;
 } 
 }

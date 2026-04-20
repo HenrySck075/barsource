@@ -9,6 +9,7 @@ import '../elements/framework.dart' as elements;
 
 export '../elements/framework.dart' show BuildContext;
 
+typedef WidgetBuilder = Widget Function(BuildContext context);
 
 @immutable
 abstract class Widget {
