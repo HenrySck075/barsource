@@ -10,7 +10,7 @@ import 'package:barsource/src/rendering/box.dart';
 import '../engine/engine.dart';
 import 'object.dart';
 
-class RenderVideoClip extends RenderBox implements AudioContributor {
+class RenderVideoClip extends RenderBox with AudioContributor {
   RenderVideoClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -46,7 +46,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    Engine.instance.registerAudioContributor(this);
     final uri = source.toNativeUtf8(allocator: calloc);
     _decoder ??= rina_decoder_open(
       Engine.instance.nativePtr,
@@ -54,8 +53,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
-    // Audio is now handled via AudioContributor interface
-    print(!_ticker.isTicking);
     if (!_ticker.isTicking) {
       _ticker.start();
     }
@@ -68,7 +65,6 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       rina_texture_destroy(_texture!);
       _texture = null;
     }
-    Engine.instance.unregisterAudioContributor(this);
     super.detach();
   }
 
@@ -102,22 +98,26 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
       _texture = rina_decoder_get_texture(_decoder!, timeUs);
       _textureTimestamp = timeUs;
     }
-    
+
     if (_texture != nullptr) {
       context.canvas.drawImageNative(_texture!, offset, Paint());
     }
 
-    SchedulerBinding.instance.addPostFrameCallback((_){
+    SchedulerBinding.instance.addPostFrameCallback((_) {
       if (attached) markNeedsPaint();
     });
   }
 
   @override
-  Float32List? getAudioForFrame(Duration frameTime, int sampleCount, int sampleRate) {
+  Float32List? getOwnAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+  ) {
     if (_decoder == null) return null;
 
     final clipTime = frameTime - trimStart;
-    
+
     // Check if we're within the clip bounds
     if (clipTime < Duration.zero) return null;
     if (trimEnd != null && clipTime > trimEnd!) return null;
@@ -158,7 +158,7 @@ class RenderVideoClip extends RenderBox implements AudioContributor {
   }
 }
 
-class RenderAudioClip extends RenderBox implements AudioContributor {
+class RenderAudioClip extends RenderBox with AudioContributor {
   RenderAudioClip({
     required this.source,
     this.trimStart = Duration.zero,
@@ -177,9 +177,7 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
 
   @override
   void attach(PipelineOwner owner) {
-    print("audio attaching");
     super.attach(owner);
-    Engine.instance.registerAudioContributor(this);
     final uri = source.toNativeUtf8(allocator: calloc);
     _decoder = rina_decoder_open(
       Engine.instance.nativePtr,
@@ -187,14 +185,6 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
       TennojiHWAccel.TENNOJI_HW_ACCEL_AUTO,
     );
     calloc.free(uri);
-    // Audio is now handled via AudioContributor interface
-  }
-
-  @override
-  void detach() {
-    print("audio detaching");
-    Engine.instance.unregisterAudioContributor(this);
-    super.detach();
   }
 
   @override
@@ -218,11 +208,15 @@ class RenderAudioClip extends RenderBox implements AudioContributor {
   }
 
   @override
-  Float32List? getAudioForFrame(Duration frameTime, int sampleCount, int sampleRate) {
+  Float32List? getOwnAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+  ) {
     if (_decoder == null) return null;
 
     final clipTime = frameTime - trimStart;
-    
+
     // Check if we're within the clip bounds
     if (clipTime < Duration.zero) return null;
     if (trimEnd != null && clipTime > trimEnd!) return null;

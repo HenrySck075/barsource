@@ -1,45 +1,87 @@
-import 'dart:collection';
 import 'dart:typed_data';
 
-/// Interface for RenderObjects that contribute audio to the mix.
-/// 
-/// Objects implementing this interface can provide audio samples for each frame,
-/// allowing the engine to collect and mix audio from multiple sources.
-/// This enables proper audio synchronization with variable playback speeds,
-/// reverse playback, and per-clip audio processing.
-abstract class AudioContributor {
-  /// Returns audio samples for the given frame time.
-  /// 
-  /// Returns `null` if no audio is available for this frame (e.g., the clip
-  /// hasn't started yet, has ended, or is trimmed at this time).
-  /// 
-  /// Parameters:
-  /// - [frameTime]: Current engine time for this frame
-  /// - [sampleCount]: Number of samples requested per channel (stereo = 2 channels)
-  /// - [sampleRate]: Sample rate in Hz (typically 44100 or 48000)
-  /// 
-  /// Returns interleaved stereo float32 samples in range [-1.0, 1.0].
-  /// For stereo, samples are interleaved: [L, R, L, R, L, R, ...]
-  /// Buffer length should be `sampleCount * 2` (stereo channels).
-  /// 
-  /// Example:
-  /// ```dart
-  /// // For 735 samples at 44100 Hz (one frame at 60 FPS):
-  /// final samples = getAudioForFrame(currentTime, 735, 44100);
-  /// // samples.length == 1470 (735 samples × 2 channels)
-  /// ```
+import 'package:barsource/src/rendering/object.dart';
+
+/// Tree-based audio contributor for render objects.
+///
+/// Contributors mix audio from descendant contributors, optionally add their own
+/// source audio, then post-process the mixed result. This allows parent render
+/// objects to implement audio effects on top of child audio.
+mixin AudioContributor on RenderObject {
+  /// Returns this node's own source audio for the frame.
+  ///
+  /// Override for leaf sources (e.g. decoded clip audio). Return `null` when
+  /// this node has no source audio at [frameTime].
+  Float32List? getOwnAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+  ) => null;
+
+  /// Applies processing to the mixed subtree audio for this contributor.
+  ///
+  /// Override to implement effects (gain, filters, etc). The default behavior
+  /// returns [mixedSamples] unchanged.
+  Float32List processMixedAudioForFrame(
+    Duration frameTime,
+    int sampleCount,
+    int sampleRate,
+    Float32List mixedSamples,
+  ) => mixedSamples;
+
+  /// Returns this contributor's final audio for the frame.
+  ///
+  /// This is the subtree mix for this contributor: descendant contributor audio
+  /// + own source audio, then [processMixedAudioForFrame].
   Float32List? getAudioForFrame(
     Duration frameTime,
     int sampleCount,
     int sampleRate,
-  );
-}
+  ) {
+    final expectedStereoSamples = sampleCount * 2;
+    Float32List? mixedSamples;
 
+    void mixInto(Float32List samples) {
+      mixedSamples ??= Float32List(expectedStereoSamples);
+      final limit = samples.length < expectedStereoSamples
+          ? samples.length
+          : expectedStereoSamples;
+      for (int i = 0; i < limit; i++) {
+        mixedSamples![i] += samples[i];
+      }
+    }
 
-final class AudioContributorEntry extends LinkedListEntry<AudioContributorEntry> {
-  AudioContributor theActualValue;
-  AudioContributorEntry(this.theActualValue);
+    void collectDescendantContributorAudio(RenderObject node) {
+      node.visitChildren((RenderObject child) {
+        if (child is AudioContributor) {
+          final childSamples = child.getAudioForFrame(
+            frameTime,
+            sampleCount,
+            sampleRate,
+          );
+          if (childSamples != null && childSamples.isNotEmpty) {
+            mixInto(childSamples);
+          }
+          return;
+        }
+        collectDescendantContributorAudio(child);
+      });
+    }
 
-  @override
-  String toString() => theActualValue.toString();
+    collectDescendantContributorAudio(this);
+    final ownSamples = getOwnAudioForFrame(frameTime, sampleCount, sampleRate);
+    if (ownSamples != null && ownSamples.isNotEmpty) {
+      mixInto(ownSamples);
+    }
+    if (mixedSamples == null) {
+      return null;
+    }
+
+    return processMixedAudioForFrame(
+      frameTime,
+      sampleCount,
+      sampleRate,
+      mixedSamples!,
+    );
+  }
 }

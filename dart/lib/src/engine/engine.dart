@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:ffi';
 import 'dart:typed_data';
 
@@ -242,8 +241,8 @@ class Engine extends BindingBase
         bool hasAudio = false;
         bool hasInvalidSamples = false;
 
-        for (final contributor in _contributors) {
-          final samples = contributor.theActualValue.getAudioForFrame(
+        _visitRootAudioContributors((AudioContributor contributor) {
+          final samples = contributor.getAudioForFrame(
             _currentTime,
             samplesPerFrame,
             sampleRate,
@@ -262,7 +261,7 @@ class Engine extends BindingBase
               }
             }
           }
-        }
+        });
 
         // Clamp and write directly into the FFI buffer.
         for (int i = 0; i < expectedStereoSamples; i++) {
@@ -317,18 +316,20 @@ class Engine extends BindingBase
     }
   }
 
-  final LinkedList<AudioContributorEntry> _contributors = LinkedList();
-  void registerAudioContributor(AudioContributor contributor) {
-    _contributors.add(AudioContributorEntry(contributor));
-  }
-
-  void unregisterAudioContributor(AudioContributor contributor) {
-    for (final entry in _contributors) {
-      if (entry.theActualValue == contributor) {
-        entry.unlink();
-        break;
+  void _visitRootAudioContributors(void Function(AudioContributor) visitor) {
+    void walk(RenderObject node, {required bool hasContributorAncestor}) {
+      final isContributor = node is AudioContributor;
+      if (isContributor && !hasContributorAncestor) {
+        visitor(node);
       }
+      final nextHasContributorAncestor =
+          hasContributorAncestor || isContributor;
+      node.visitChildren((RenderObject child) {
+        walk(child, hasContributorAncestor: nextHasContributorAncestor);
+      });
     }
+
+    walk(renderView, hasContributorAncestor: false);
   }
 }
 
