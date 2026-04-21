@@ -130,11 +130,13 @@ class _RenderLocalImage extends RenderBox {
   }
   void _tick(Duration elapsed) {
     if (currentFrameInfo == null) return;
-
-    if (durationFromLastFrame + currentFrameInfo!.duration < elapsed) {
+    var didAdvanceFrame = false;
+    while (durationFromLastFrame + currentFrameInfo!.duration <= elapsed) {
+      durationFromLastFrame += currentFrameInfo!.duration;
       currentFrameInfo = codec.getNextFrame();
-      markNeedsLayout();
+      didAdvanceFrame = true;
     }
+    if (didAdvanceFrame) markNeedsLayout();
   }
 
   @override

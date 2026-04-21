@@ -1902,6 +1902,9 @@ final class TennojiEncoderConfig extends ffi.Struct {
 
   @ffi.Int32()
   external int audio_channels;
+
+  @ffi.Int32()
+  external int output_mode;
 }
 
 final class TennojiCanvasPaintMetadata extends ffi.Struct {

@@ -62,33 +62,37 @@ class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   @override
   void performLayout() {
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
+    final parentConstraints = constraints;
+    final bool shrinkWrapWidth =
+        widthFactor != null || parentConstraints.maxWidth == double.infinity;
+    final bool shrinkWrapHeight =
+        heightFactor != null || parentConstraints.maxHeight == double.infinity;
     final bool hasChild = child != null;
 
     if (hasChild) {
       final child = this.child!;
 
       // Lay out the child with loose constraints.
-      final parentConstraints = constraints;
       BoxConstraints childConstraints = parentConstraints.loosen();
 
       child.layout(childConstraints, parentUsesSize: true);
 
       // Size ourselves.
-      size = constraints.constrain(Size(
-        widthFactor != null
-            ? child.size.width * widthFactor!
+      size = parentConstraints.constrain(Size(
+        shrinkWrapWidth
+            ? child.size.width * (widthFactor ?? 1.0)
             : double.infinity,
-        heightFactor != null
-            ? child.size.height * heightFactor!
+        shrinkWrapHeight
+            ? child.size.height * (heightFactor ?? 1.0)
             : double.infinity,
       ));
 
       // Position the child.
       _childOffset = resolvedAlignment.alongSize(size) - resolvedAlignment.alongSize(child.size);
     } else {
-      size = constraints.constrain(Size(
-        widthFactor != null ? 0 : double.infinity,
-        heightFactor != null ? 0 : double.infinity,
+      size = parentConstraints.constrain(Size(
+        shrinkWrapWidth ? 0 : double.infinity,
+        shrinkWrapHeight ? 0 : double.infinity,
       ));
     }
   }

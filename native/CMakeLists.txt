@@ -114,3 +114,11 @@ else()
     Freetype::Freetype
   )
 endif()
+
+
+
+# Post-build script: copy the compiled library to the dart package
+add_custom_command(TARGET tennoji POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tennoji> ${CMAKE_SOURCE_DIR}/../dart/lib/blob/$<TARGET_FILE_NAME:tennoji>
+  COMMENT "Copying libtennoji to dart package..."
+)

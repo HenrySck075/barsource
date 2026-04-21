@@ -34,6 +34,7 @@ class RenderConfig {
     this.renderResolution,
     this.codec = .h265,
     this.audioCodec = .aac,
+    this.outputMode = .local,
     this.logLevel = Level.INFO,
     this.showProgressBar = true,
   });
@@ -49,6 +50,7 @@ class RenderConfig {
   final Size? renderResolution;
   final VideoCodec codec;
   final AudioCodec audioCodec;
+  final OutputMode outputMode;
   final Level logLevel;
   final bool showProgressBar;
 }
@@ -56,6 +58,8 @@ class RenderConfig {
 enum VideoCodec { h264, h265 }
 
 enum AudioCodec { aac, opus }
+
+enum OutputMode { local, youtubeStream }
 
 class Engine extends BindingBase
     with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
@@ -131,9 +135,18 @@ class Engine extends BindingBase
 
     // 3. Create Encoder
     final encConfig = calloc<TennojiEncoderConfig>();
+    final useYouTubeStreaming = config.outputMode == OutputMode.youtubeStream;
+    final resolvedVideoCodec = useYouTubeStreaming
+        ? VideoCodec.h264
+        : config.codec;
+    final resolvedAudioCodec = useYouTubeStreaming
+        ? AudioCodec.aac
+        : config.audioCodec;
     final outputPathUtf8 = config.output.toNativeUtf8(allocator: calloc);
-    final videoCodecUtf8 = config.codec.name.toNativeUtf8(allocator: calloc);
-    final audioCodecUtf8 = config.audioCodec.name.toNativeUtf8(
+    final videoCodecUtf8 = resolvedVideoCodec.name.toNativeUtf8(
+      allocator: calloc,
+    );
+    final audioCodecUtf8 = resolvedAudioCodec.name.toNativeUtf8(
       allocator: calloc,
     );
 
@@ -145,7 +158,8 @@ class Engine extends BindingBase
       ..video_codec = videoCodecUtf8.cast()
       ..audio_codec = audioCodecUtf8.cast()
       ..audio_sample_rate = 44100
-      ..audio_channels = 2;
+      ..audio_channels = 2
+      ..output_mode = config.outputMode.index;
 
     final encoder = rina_encoder_create(_nativePtr, encConfig);
 

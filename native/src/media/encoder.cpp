@@ -429,6 +429,8 @@ extern "C" {
 TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                                                        const TennojiEncoderConfig* config) {
     if (!engine || !config || !config->output_path) return nullptr;
+    const bool is_youtube_stream = config->output_mode == TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM;
+    const char* format_name = is_youtube_stream ? "flv" : nullptr;
 
     auto* enc = new TennojiEncoder();
     enc->engine = engine;
@@ -437,7 +439,7 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     enc->fps = config->fps;
 
     int ret = avformat_alloc_output_context2(
-        &enc->fmtCtx, nullptr, nullptr, config->output_path);
+        &enc->fmtCtx, nullptr, format_name, config->output_path);
     if (ret < 0 || !enc->fmtCtx) {
         delete enc;
         return nullptr;
@@ -510,9 +512,18 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     const char* crf = is_h265 ? "30" : "28";
     const int qp = is_h265 ? 28 : 26;
 
-    av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0); // dont ever change this under any circumstances unless you like huge file sizes
-    av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 23);
-    // av_opt_set(enc->videoCodecCtx->priv_data, "tune", "zerolatency", 0); (enable this for streaming idk, we dont give them that option yet although the codebase is very clearly streaming oriented)
+    if (is_youtube_stream) {
+        // Keep local render settings untouched; streaming gets its own low-latency CBR profile.
+        av_opt_set(enc->videoCodecCtx->priv_data, "preset", "veryfast", 0);
+        av_opt_set(enc->videoCodecCtx->priv_data, "tune", "zerolatency", 0);
+        enc->videoCodecCtx->bit_rate = 6000000;
+        enc->videoCodecCtx->rc_min_rate = enc->videoCodecCtx->bit_rate;
+        enc->videoCodecCtx->rc_max_rate = enc->videoCodecCtx->bit_rate;
+        enc->videoCodecCtx->rc_buffer_size = enc->videoCodecCtx->bit_rate * 2;
+    } else {
+        av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0); // dont ever change this under any circumstances unless you like huge file sizes
+        av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 23);
+    }
 
     // VAAPI requires an explicit quality target for compact output.
     if (strstr(vcodec->name, "vaapi")) {

@@ -47,6 +47,11 @@ typedef enum {
   TENNOJI_HW_ACCEL_NONE,   // software only
 } TennojiHWAccel;
 
+typedef enum {
+  TENNOJI_OUTPUT_MODE_LOCAL = 0,
+  TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM = 1,
+} TennojiOutputMode;
+
 typedef struct {
   int32_t width;
   int32_t height;
@@ -63,6 +68,7 @@ typedef struct {
   const char* audio_codec; // "aac", "opus"
   int32_t audio_sample_rate;
   int32_t audio_channels;
+  int32_t output_mode; // TennojiOutputMode
 } TennojiEncoderConfig;
 
 typedef struct {

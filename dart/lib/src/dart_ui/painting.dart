@@ -6797,6 +6797,9 @@ class Canvas {
 
   void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
     debugAssertNullPointer();
+    assert(!image.debugDisposed, 'Cannot draw an image that is already disposed.');
+    assert(_rectIsValid(src), 'Source rect for drawImageRect is invalid: $src');
+    assert(_rectIsValid(dst), 'Destination rect for drawImageRect is invalid: $dst');
     using((arena)=>
     rina_canvas_draw_image_rect(
       _nativePtr,

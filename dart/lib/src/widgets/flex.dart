@@ -24,14 +24,17 @@ class Flex extends MultiChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) => RenderFlex(
-        direction: direction,
-        mainAxisAlignment: mainAxisAlignment,
-        crossAxisAlignment: crossAxisAlignment,
-        mainAxisSize: mainAxisSize,
-        clipBehavior: clipBehavior
-      );
+    direction: direction,
+    mainAxisAlignment: mainAxisAlignment,
+    crossAxisAlignment: crossAxisAlignment,
+    mainAxisSize: mainAxisSize,
+    clipBehavior: clipBehavior,
+  );
   @override
-  void updateRenderObject(BuildContext context, covariant RenderObject renderObject) {
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
     final flex = renderObject as RenderFlex;
     flex
       ..direction = direction
@@ -68,17 +71,24 @@ class Column extends Flex {
 
 /// A widget that expands a child of a [Row], [Column], or [Flex].
 class Expanded extends SingleChildRenderObjectWidget {
-  const Expanded({
-    super.key,
-    this.flex = 1,
-    required Widget super.child,
-  });
+  const Expanded({super.key, this.flex = 1, required Widget super.child});
 
   final int flex;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
       RenderExpanded(flex: flex, fit: FlexFit.tight);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    final expanded = renderObject as RenderExpanded;
+    expanded
+      ..flex = flex
+      ..fit = FlexFit.tight;
+  }
 }
 
 /// A widget like [Expanded] but does not force the child to fill the space.
@@ -96,4 +106,15 @@ class Flexible extends SingleChildRenderObjectWidget {
   @override
   RenderObject createRenderObject(BuildContext context) =>
       RenderExpanded(flex: flex, fit: fit);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
+    final expanded = renderObject as RenderExpanded;
+    expanded
+      ..flex = flex
+      ..fit = fit;
+  }
 }
