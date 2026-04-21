@@ -48,7 +48,12 @@ class ObjectKey extends LocalKey {
 
 
 abstract class GlobalKey<T extends State<StatefulWidget>> extends Key {
-  const GlobalKey();
+  factory GlobalKey({String? debugLabel}) => LabeledGlobalKey<T>(debugLabel);
+  /// Creates a global key without a label.
+  ///
+  /// Used by subclasses because the factory constructor shadows the implicit
+  /// constructor.
+  const GlobalKey.constructor() : super();
 
   Element? get _currentElement => WidgetsBinding.instance.buildOwner._globalKeyRegistry[this];
 
@@ -59,7 +64,20 @@ abstract class GlobalKey<T extends State<StatefulWidget>> extends Key {
     _ => null,
   };
 }
+/// A global key with a debugging label.
+///
+/// The debug label is useful for documentation and for debugging. The label
+/// does not affect the key's identity.
+@optionalTypeArgs
+class LabeledGlobalKey<T extends State<StatefulWidget>> extends GlobalKey<T> {
+  /// Creates a global key with a debugging label.
+  ///
+  /// The label does not affect the key's identity.
+  // ignore: prefer_const_constructors_in_immutables , never use const for this class
+  LabeledGlobalKey(this._debugLabel) : super.constructor();
 
+  final String? _debugLabel;
+}
 
 typedef ElementVisitor = void Function(Element element);
 class _InactiveElements {

@@ -1,3 +1,5 @@
+#include <csignal>
+#include <iostream>
 #include <mutex>
 #include "include/core/SkColor.h"
 #include "include/core/SkData.h"
@@ -250,17 +252,22 @@ static sk_sp<skia::textlayout::TypefaceFontProvider> g_provider;
 void LoadDefaultFontManager() {
     sk_sp<SkFontMgr> fontMgr = nullptr;
 
+    std::cout << "Attempting to use the ";
     #if defined(TENNOJI_IS_WINDOWS)
+        std::cout << "DirectWrite";
         // DirectWrite is the standard for modern Windows apps
         fontMgr = SkFontMgr_New_DirectWrite();
     #elif defined(TENNOJI_IS_MACOS)
+        std::cout << "CoreText";
         // CoreText handles macOS/iOS
         fontMgr = SkFontMgr_New_CoreText(nullptr);
     #elif defined(TENNOJI_IS_LINUX)
+        std::cout << "FontConfig (+FreeType scanner)";
         auto scanner = SkFontScanner_Make_FreeType();
         // Uses Fontconfig to locate system fonts
         fontMgr = SkFontMgr_New_FontConfig(nullptr, std::move(scanner));
     #elif defined(TENNOJI_IS_TERMUX)
+        std::cout << "g";
         // Create the scanner first (FreeType is the standard choice)
         auto scanner = SkFontScanner_Make_FreeType();
         
@@ -273,10 +280,12 @@ void LoadDefaultFontManager() {
             fFontMgr = SkFontMgr_New_Android(nullptr);
         }
     #endif
+    std::cout << " font manager." << std::endl;
 
     if (fontMgr && g_collector) {
         g_collector->setDefaultFontManager(std::move(fontMgr));
     } else {
+        std::cout << "Falling back to empty managers";
         // Fallback: You might want to load an empty font manager 
         // to prevent crashes if no system fonts are found.
         // probably
@@ -394,6 +403,7 @@ TENNOJI_EXPORT void rina_load_font_from_list(
   const uint8_t* data, uint32_t length,
   const char* fontFamily
 ) {
+    setup_font_collection();
     // 1. Wrap the raw bytes into a SkData object (ref-counted)
     // We use MakeWithCopy to ensure the engine owns the memory
     sk_sp<SkData> fontData = SkData::MakeWithCopy(data, length);
@@ -411,6 +421,30 @@ TENNOJI_EXPORT void rina_load_font_from_list(
       g_provider->registerTypeface(typeface, SkString(fontFamily));
     else
       g_provider->registerTypeface(typeface);
+}
+
+TENNOJI_EXPORT bool rina_load_font_from_file(
+  const char* filePath,
+  const char* fontFamily
+) {
+    setup_font_collection();
+    if (!filePath || !*filePath) {
+      std::cout << "Invalid file path input, apparently" << std::endl;
+      return false;
+    }
+
+    sk_sp<SkTypeface> typeface = g_collector->getFallbackManager()->makeFromFile(filePath);
+    if (!typeface) {
+      std::cout << "Typeface is null and i have no idea why" << std::endl;
+      return false;
+    }
+
+    if (fontFamily && *fontFamily) {
+      g_provider->registerTypeface(typeface, SkString(fontFamily));
+    } else {
+      g_provider->registerTypeface(typeface);
+    }
+    return true;
 }
 
 __UNEXTERN_C__

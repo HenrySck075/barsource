@@ -287,6 +287,10 @@ TENNOJI_EXPORT void rina_load_font_from_list(
   const uint8_t* data, uint32_t length,
   const char* fontFamily
 );
+TENNOJI_EXPORT bool rina_load_font_from_file(
+  const char* filePath,
+  const char* fontFamily
+);
 
 TENNOJI_EXPORT void rina_paragraph_destroy(
   TennojiParagraph* paragraph

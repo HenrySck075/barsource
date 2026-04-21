@@ -7,7 +7,7 @@ import 'package:vector_math/vector_math.dart' show Matrix4;
 
 import '../rendering/object.dart';
 import '../rendering/box.dart';
-import '../rendering/align_render.dart' show RenderAlign;
+import '../rendering/align_render.dart' show RenderAlign, RenderFractionallySizedBox;
 import 'framework.dart';
 
 export 'package:barsource/src/painting/edge_insets.dart';
@@ -348,7 +348,8 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<Rende
 
 class SizedBox extends SingleChildRenderObjectWidget {
   const SizedBox({super.key, this.width, this.height, super.child});
-  const SizedBox.shrink({super.key}) : width = 0, height = 0;
+  const SizedBox.shrink({super.key, super.child}) : width = 0, height = 0;
+  const SizedBox.expand({super.key, super.child}) : width = double.infinity, height = double.infinity;
   final double? width;
   final double? height;
 
@@ -631,6 +632,38 @@ class Align extends SingleChildRenderObjectWidget {
 
   @override
   void updateRenderObject(BuildContext context, RenderAlign renderObject) {
+    renderObject
+      ..alignment = alignment
+      ..widthFactor = widthFactor
+      ..heightFactor = heightFactor
+      ..textDirection = Directionality.maybeOf(context);
+  }
+}
+
+class FractionallySizedBox extends SingleChildRenderObjectWidget {
+  const FractionallySizedBox({
+    super.key,
+    this.alignment = Alignment.center,
+    this.widthFactor,
+    this.heightFactor,
+    super.child,
+  }) : assert(widthFactor == null || widthFactor >= 0.0),
+       assert(heightFactor == null || heightFactor >= 0.0);
+
+  final AlignmentGeometry alignment;
+  final double? widthFactor;
+  final double? heightFactor;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => RenderFractionallySizedBox(
+        alignment: alignment,
+        widthFactor: widthFactor,
+        heightFactor: heightFactor,
+        textDirection: Directionality.maybeOf(context),
+      );
+
+  @override
+  void updateRenderObject(BuildContext context, RenderFractionallySizedBox renderObject) {
     renderObject
       ..alignment = alignment
       ..widthFactor = widthFactor

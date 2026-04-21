@@ -1,9 +1,5 @@
-import 'dart:developer';
-
-import 'package:barsource/src/foundation/const.dart';
-import 'package:barsource/src/painting/basic_types.dart';
-
 import 'package:barsource/src/painting/alignment.dart';
+import 'package:barsource/src/painting/basic_types.dart';
 import 'box.dart';
 import 'object.dart';
 
@@ -55,11 +51,6 @@ class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   Offset _childOffset = Offset.zero;
 
   @override
-  void markNeedsPaint() {
-    super.markNeedsPaint();
-  }
-
-  @override
   void performLayout() {
     final Alignment resolvedAlignment = alignment.resolve(textDirection);
     final parentConstraints = constraints;
@@ -94,6 +85,103 @@ class RenderAlign extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
         shrinkWrapWidth ? 0 : double.infinity,
         shrinkWrapHeight ? 0 : double.infinity,
       ));
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child != null) {
+      context.paintChild(child!, Offset(
+        offset.dx + _childOffset.dx,
+        offset.dy + _childOffset.dy,
+      ));
+    }
+  }
+}
+
+class RenderFractionallySizedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
+  RenderFractionallySizedBox({
+    AlignmentGeometry alignment = Alignment.center,
+    double? widthFactor,
+    double? heightFactor,
+    TextDirection? textDirection,
+  }) : _alignment = alignment,
+       _widthFactor = widthFactor,
+       _heightFactor = heightFactor,
+       _textDirection = textDirection {
+    assert(_widthFactor == null || _widthFactor! >= 0.0);
+    assert(_heightFactor == null || _heightFactor! >= 0.0);
+  }
+
+  AlignmentGeometry get alignment => _alignment;
+  AlignmentGeometry _alignment;
+  set alignment(AlignmentGeometry value) {
+    if (_alignment == value) return;
+    _alignment = value;
+    markNeedsLayout();
+  }
+
+  double? get widthFactor => _widthFactor;
+  double? _widthFactor;
+  set widthFactor(double? value) {
+    assert(value == null || value >= 0.0);
+    if (_widthFactor == value) return;
+    _widthFactor = value;
+    markNeedsLayout();
+  }
+
+  double? get heightFactor => _heightFactor;
+  double? _heightFactor;
+  set heightFactor(double? value) {
+    assert(value == null || value >= 0.0);
+    if (_heightFactor == value) return;
+    _heightFactor = value;
+    markNeedsLayout();
+  }
+
+  TextDirection? get textDirection => _textDirection;
+  TextDirection? _textDirection;
+  set textDirection(TextDirection? value) {
+    if (_textDirection == value) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  Offset _childOffset = Offset.zero;
+
+  BoxConstraints _getInnerConstraints(BoxConstraints constraints) {
+    double minWidth = constraints.minWidth;
+    double maxWidth = constraints.maxWidth;
+    if (_widthFactor != null) {
+      final double width = maxWidth * _widthFactor!;
+      minWidth = width;
+      maxWidth = width;
+    }
+    double minHeight = constraints.minHeight;
+    double maxHeight = constraints.maxHeight;
+    if (_heightFactor != null) {
+      final double height = maxHeight * _heightFactor!;
+      minHeight = height;
+      maxHeight = height;
+    }
+    return BoxConstraints(
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+      minHeight: minHeight,
+      maxHeight: maxHeight,
+    );
+  }
+
+  @override
+  void performLayout() {
+    final Alignment resolvedAlignment = alignment.resolve(textDirection);
+    if (child != null) {
+      final BoxConstraints innerConstraints = _getInnerConstraints(constraints);
+      child!.layout(innerConstraints, parentUsesSize: true);
+      size = constraints.constrain(child!.size);
+      _childOffset = resolvedAlignment.alongSize(size) - resolvedAlignment.alongSize(child!.size);
+    } else {
+      size = constraints.constrain(Size.zero);
     }
   }
 

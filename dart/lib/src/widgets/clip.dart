@@ -72,40 +72,64 @@ class AudioRepeat extends SingleChildRenderObjectWidget {
     BuildContext context,
     RenderRepeatAudio renderObject,
   ) {
-    renderObject
-      ..repeatCount = repeatCount;
+    renderObject.repeatCount = repeatCount;
   }
 }
 
-class AudioFade extends SingleChildRenderObjectWidget {
-  AudioFade({
+class AudioFadeIn extends SingleChildRenderObjectWidget {
+  AudioFadeIn({
     super.key,
     super.child,
-    this.fadeInDuration = Duration.zero,
-    this.fadeOutDuration = Duration.zero,
-    this.duration = double.infinity,
-  }) : assert(!fadeInDuration.isNegative),
-       assert(!fadeOutDuration.isNegative);
+    required this.fadeInDuration,
+  }) : assert(!fadeInDuration.isNegative);
 
   final Duration fadeInDuration;
-  final Duration fadeOutDuration;
-
-  final double duration;
 
   @override
-  RenderFadeAudio createRenderObject(BuildContext context) {
-    return RenderFadeAudio(
-      fadeInDuration: fadeInDuration,
+  RenderFadeInAudio createRenderObject(BuildContext context) {
+    return RenderFadeInAudio(fadeInDuration: fadeInDuration);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderFadeInAudio renderObject,
+  ) {
+    renderObject.fadeInDuration = fadeInDuration;
+  }
+}
+
+class AudioFadeOut extends SingleChildRenderObjectWidget {
+  AudioFadeOut({
+    super.key,
+    super.child,
+    required this.fadeOutDuration,
+    Duration? activeDuration,
+  }) : assert(!fadeOutDuration.isNegative),
+       assert(!(activeDuration?.isNegative ?? false)),
+       activeDuration = activeDuration ?? fadeOutDuration;
+
+  final Duration fadeOutDuration;
+
+  /// Total active playback length measured from attach.
+  /// Defaults to [fadeOutDuration], which starts fading out immediately.
+  final Duration activeDuration;
+
+  @override
+  RenderFadeOutAudio createRenderObject(BuildContext context) {
+    return RenderFadeOutAudio(
       fadeOutDuration: fadeOutDuration,
-      duration: duration,
+      activeDuration: activeDuration,
     );
   }
 
   @override
-  void updateRenderObject(BuildContext context, RenderFadeAudio renderObject) {
+  void updateRenderObject(
+    BuildContext context,
+    RenderFadeOutAudio renderObject,
+  ) {
     renderObject
-      ..fadeInDuration = fadeInDuration
       ..fadeOutDuration = fadeOutDuration
-      ..duration = duration;
+      ..activeDuration = activeDuration;
   }
 }

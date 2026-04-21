@@ -200,6 +200,7 @@ class Engine extends BindingBase
     final sampleBuffer = calloc<Float>(expectedStereoSamples);
     final sampleBufferView = sampleBuffer.asTypedList(expectedStereoSamples);
     final mixedAudioBuffer = Float32List(expectedStereoSamples);
+    final streamWallClock = useYouTubeStreaming ? (Stopwatch()..start()) : null;
     try {
       while (_currentTime < config.duration) {
         if (doScale) {
@@ -210,7 +211,7 @@ class Engine extends BindingBase
 
         // Trigger microtasks / futures
         // no, really, this is how you do it
-        await Future.delayed(Duration.zero);
+        await Future((){});
 
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
@@ -310,6 +311,12 @@ class Engine extends BindingBase
 
         _currentTime += frameDuration;
         progressBar?.increment();
+        if (streamWallClock != null) {
+          final behindBy = _currentTime - streamWallClock.elapsed;
+          if (behindBy > Duration.zero) {
+            await Future.delayed(behindBy);
+          }
+        }
       }
     } catch (e, st) {
       print('Error during render run: $e\n$st');

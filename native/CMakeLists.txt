@@ -104,6 +104,8 @@ if(WIN32)
 elseif(APPLE)
   target_link_libraries(tennoji PRIVATE "-framework Metal" "-framework VideoToolbox")
 else()
+  # -fuse-ld=lld
+  target_link_options(tennoji PRIVATE "-fuse-ld=lld")
   find_package(Vulkan REQUIRED)
   # find fontconfig and some gang for the font loading
   find_package(Fontconfig REQUIRED)

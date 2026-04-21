@@ -751,6 +751,14 @@ external void rina_load_font_from_list(
   ffi.Pointer<ffi.Char> fontFamily,
 );
 
+@ffi.Native<
+  ffi.Bool Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)
+>(isLeaf: true)
+external bool rina_load_font_from_file(
+  ffi.Pointer<ffi.Char> filePath,
+  ffi.Pointer<ffi.Char> fontFamily,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiParagraph>)>(isLeaf: true)
 external void rina_paragraph_destroy(ffi.Pointer<TennojiParagraph> paragraph);
 

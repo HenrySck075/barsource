@@ -3817,3 +3817,16 @@ void loadFontFromList(Uint8List list, {String? fontFamily}) {
   )
   );
 }
+
+/// Loads a font from a file path and makes it available for rendering text.
+///
+/// Returns `true` when the font is successfully loaded and registered.
+bool loadFontFromFile(String filePath, {String? fontFamily}) {
+  final String normalizedPath = filePath.startsWith('file://')
+      ? Uri.parse(filePath).toFilePath()
+      : filePath;
+  return using((arena) => rina_load_font_from_file(
+    normalizedPath.asNativePointer(arena).cast<Char>(),
+    fontFamily?.asNativePointer(arena).cast<Char>() ?? nullptr
+  ));
+}
