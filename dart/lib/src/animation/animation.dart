@@ -36,10 +36,8 @@ enum AnimationStatus {
     reverse || dismissed => false,
   };
 }
-enum _AnimationDirection {
-  forward,
-  reverse,
-}
+
+enum _AnimationDirection { forward, reverse }
 
 abstract class Animation<T> extends Listenable implements ValueListenable<T> {
   const Animation();
@@ -94,9 +92,100 @@ class _AlwaysCompleteAnimation extends Animation<double> {
 /// API expects an animation but you don't actually want to animate anything.
 const Animation<double> kAlwaysCompleteAnimation = _AlwaysCompleteAnimation();
 
-class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<double> {
+class ProxyAnimation extends Animation<double> {
+  ProxyAnimation([Animation<double>? parent])
+    : _parent = parent ?? kAlwaysCompleteAnimation {
+    _parent.addListener(_notifyListeners);
+    _parent.addStatusListener(_notifyStatusListeners);
+  }
+
+  Animation<double> _parent;
+  final List<VoidCallback> _listeners = <VoidCallback>[];
+  final List<AnimationStatusListener> _statusListeners =
+      <AnimationStatusListener>[];
+
+  Animation<double> get parent => _parent;
+  set parent(Animation<double> value) {
+    if (identical(_parent, value)) {
+      return;
+    }
+    final AnimationStatus previousStatus = _parent.status;
+    final double previousValue = _parent.value;
+    _parent.removeListener(_notifyListeners);
+    _parent.removeStatusListener(_notifyStatusListeners);
+    _parent = value;
+    _parent.addListener(_notifyListeners);
+    _parent.addStatusListener(_notifyStatusListeners);
+    if (previousValue != _parent.value) {
+      _notifyListeners();
+    }
+    if (previousStatus != _parent.status) {
+      _notifyStatusListeners(_parent.status);
+    }
+  }
+
+  @override
+  double get value => _parent.value;
+
+  @override
+  AnimationStatus get status => _parent.status;
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+
+  @override
+  void addStatusListener(AnimationStatusListener listener) {
+    _statusListeners.add(listener);
+  }
+
+  @override
+  void removeStatusListener(AnimationStatusListener listener) {
+    _statusListeners.remove(listener);
+  }
+
+  void _notifyListeners() {
+    final List<VoidCallback> listeners = _listeners.toList(growable: false);
+    for (final VoidCallback listener in listeners) {
+      if (_listeners.contains(listener)) {
+        listener();
+      }
+    }
+  }
+
+  void _notifyStatusListeners(AnimationStatus status) {
+    final List<AnimationStatusListener> listeners = _statusListeners.toList(
+      growable: false,
+    );
+    for (final AnimationStatusListener listener in listeners) {
+      if (_statusListeners.contains(listener)) {
+        listener(status);
+      }
+    }
+  }
+
+  void dispose() {
+    _parent.removeListener(_notifyListeners);
+    _parent.removeStatusListener(_notifyStatusListeners);
+    _listeners.clear();
+    _statusListeners.clear();
+  }
+}
+
+class CurvedAnimation extends Animation<double>
+    with AnimationWithParentMixin<double> {
   /// Creates a curved animation.
-  CurvedAnimation({required this.parent, required this.curve, this.reverseCurve}) {
+  CurvedAnimation({
+    required this.parent,
+    required this.curve,
+    this.reverseCurve,
+  }) {
     //assert(debugMaybeDispatchCreated('animation', 'CurvedAnimation', this));
     _updateCurveDirection(parent.status);
     parent.addStatusListener(_updateCurveDirection);
@@ -114,10 +203,13 @@ class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<do
   }
 
   bool get _useForwardCurve {
-    return reverseCurve == null || (_curveDirection ?? parent.status) != AnimationStatus.reverse;
+    return reverseCurve == null ||
+        (_curveDirection ?? parent.status) != AnimationStatus.reverse;
   }
+
   bool _isDisposed = false;
   bool get isDisposed => _isDisposed;
+
   /// Cleans up any listeners added by this CurvedAnimation.
   void dispose() {
     //assert(debugMaybeDispatchDisposed(this));
@@ -136,7 +228,9 @@ class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<do
     if (t == 0.0 || t == 1.0) {
       assert(() {
         final double transformedValue = activeCurve.transform(t);
-        final double roundedTransformedValue = transformedValue.round().toDouble();
+        final double roundedTransformedValue = transformedValue
+            .round()
+            .toDouble();
         if (roundedTransformedValue != t) {
           /*
           throw FlutterError(
@@ -153,6 +247,7 @@ class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<do
     }
     return activeCurve.transform(t);
   }
+
   @override
   String toString() {
     if (reverseCurve == null) {
@@ -164,22 +259,26 @@ class CurvedAnimation extends Animation<double> with AnimationWithParentMixin<do
     return '$parent\u27A9$curve/$reverseCurve\u2092\u2099';
   }
 }
+
 /// A value that changes over a [Duration].
 ///
-/// However, said duration will always have a hard cap of 1 frame minimum because of repeating animations. 
+/// However, said duration will always have a hard cap of 1 frame minimum because of repeating animations.
 /// And also because flutter team did it
 /// (technically speaking the simulations can and is handling this, however the ticker is always guaranteed to only be called the next frame so)
-class AnimationController extends Animation<double> 
-  with AnimationEagerListenerMixin, AnimationLocalListenersMixin, AnimationLocalStatusListenersMixin {
+class AnimationController extends Animation<double>
+    with
+        AnimationEagerListenerMixin,
+        AnimationLocalListenersMixin,
+        AnimationLocalStatusListenersMixin {
   AnimationController({
     this.duration,
     this.reverseDuration,
     //required TickerProvider vsync,
     this.lowerBound = 0.0,
     this.upperBound = 1.0,
-    double? value
+    double? value,
   }) {
-    _ticker = Ticker(_tick);//vsync.createTicker(_tick);
+    _ticker = Ticker(_tick); //vsync.createTicker(_tick);
     _value = value ?? lowerBound;
     final fd = Engine.instance.frameDuration;
     if (duration != null && duration!.inMilliseconds < fd) {
@@ -187,25 +286,27 @@ class AnimationController extends Animation<double>
     }
     if (reverseDuration != null && reverseDuration!.inMilliseconds < fd) {
       reverseDuration = Duration(milliseconds: fd);
-    } 
+    }
   }
 
   Duration? duration;
   Duration? reverseDuration;
   final double lowerBound;
   final double upperBound;
-  
+
   Ticker? _ticker;
   Simulation? _simulation;
 
   double _value = 0.0;
-  @override double get value => _value;
+  @override
+  double get value => _value;
   set value(double val) {
     stop();
     _internalSetValue(val);
     notifyListeners();
     notifyStatusListeners(status);
   }
+
   void _internalSetValue(double newValue) {
     _value = clampDouble(newValue, lowerBound, upperBound);
     if (_value == lowerBound) {
@@ -221,7 +322,8 @@ class AnimationController extends Animation<double>
   }
 
   AnimationStatus _status = AnimationStatus.dismissed;
-  @override AnimationStatus get status => _status;
+  @override
+  AnimationStatus get status => _status;
 
   _AnimationDirection _direction = .forward;
 
@@ -248,12 +350,17 @@ class AnimationController extends Animation<double>
     notifyStatusListeners(status);
     return result;
   }
+
   void _tick(Duration elapsed) {
     _lastElapsedDuration = elapsed;
     final double elapsedInSeconds =
         elapsed.inMicroseconds.toDouble() / Duration.microsecondsPerSecond;
     assert(elapsedInSeconds >= 0.0);
-    _value = clampDouble(_simulation!.x(elapsedInSeconds), lowerBound, upperBound);
+    _value = clampDouble(
+      _simulation!.x(elapsedInSeconds),
+      lowerBound,
+      upperBound,
+    );
     if (_simulation!.isDone(elapsedInSeconds)) {
       _status = (_direction == _AnimationDirection.forward)
           ? AnimationStatus.completed
@@ -262,7 +369,7 @@ class AnimationController extends Animation<double>
     }
     notifyListeners();
     notifyStatusListeners(status);
-  } 
+  }
 
   TickerFuture _animateToInternal(
     double target, {
@@ -271,14 +378,18 @@ class AnimationController extends Animation<double>
   }) {
     var simulationDuration = duration;
     if (simulationDuration == null) {
-      assert(!(this.duration == null && _direction == _AnimationDirection.forward));
+      assert(
+        !(this.duration == null && _direction == _AnimationDirection.forward),
+      );
       assert(
         !(this.duration == null &&
             _direction == _AnimationDirection.reverse &&
             reverseDuration == null),
       );
       final double range = upperBound - lowerBound;
-      final double remainingFraction = range.isFinite ? (target - _value).abs() / range : 1.0;
+      final double remainingFraction = range.isFinite
+          ? (target - _value).abs() / range
+          : 1.0;
       final Duration directionDuration =
           (_direction == _AnimationDirection.reverse && reverseDuration != null)
           ? reverseDuration!
@@ -306,6 +417,7 @@ class AnimationController extends Animation<double>
       _InterpolationSimulation(_value, target, simulationDuration, curve),
     );
   }
+
   TickerFuture forward({double? from}) {
     _direction = .forward;
     if (from != null) {
@@ -325,10 +437,10 @@ class AnimationController extends Animation<double>
   TickerFuture toggle({double? from}) {
     Duration? duration = this.duration;
     assert(
-      duration != null, 
+      duration != null,
       'AnimationController.toggle() called with no default duration.\n'
       'The "duration" property should be set, either in the constructor or later, before '
-      'calling the toggle() function.'
+      'calling the toggle() function.',
     );
     assert(_ticker != null, "Function called after dispose.");
     _direction = isForwardOrCompleted ? .reverse : .forward;
@@ -356,16 +468,28 @@ class AnimationController extends Animation<double>
       'AnimationController.repeat() called without an explicit period and with no default Duration.\n'
       'Either the "period" argument to the repeat() method should be provided, or the '
       '"duration" property should be set, either in the constructor or later, before '
-      'calling the repeat() function.', 
+      'calling the repeat() function.',
     );
     assert(max >= min);
     assert(max <= upperBound && min >= lowerBound);
-    assert(count == null || count > 0, 'Count shall be greater than zero if not null');
+    assert(
+      count == null || count > 0,
+      'Count shall be greater than zero if not null',
+    );
     stop();
     return _startSimulation(
-      _RepeatingSimulation(_value, min, max, reverse, period!, _directionSetter, count),
+      _RepeatingSimulation(
+        _value,
+        min,
+        max,
+        reverse,
+        period!,
+        _directionSetter,
+        count,
+      ),
     );
   }
+
   void _directionSetter(_AnimationDirection direction) {
     _direction = direction;
     _status = (_direction == _AnimationDirection.forward)
@@ -374,31 +498,39 @@ class AnimationController extends Animation<double>
     notifyStatusListeners(status);
   }
 
-  TickerFuture animateTo(double target, {Duration? duration, Curve curve = Curves.linear}) {
+  TickerFuture animateTo(
+    double target, {
+    Duration? duration,
+    Curve curve = Curves.linear,
+  }) {
     assert(
       !(this.duration == null && duration == null),
       'AnimationController.animateTo() called with no explicit duration and no default duration.\n'
       'Either the "duration" argument to the animateTo() method should be provided, or the '
       '"duration" property should be set, either in the constructor or later, before '
-      'calling the animateTo() function.'
+      'calling the animateTo() function.',
     );
     assert(_ticker != null, "Function called after dispose.");
     _direction = .forward;
     return _animateToInternal(target, duration: duration, curve: curve);
   }
-  TickerFuture animateBack(double target, {Duration? duration, Curve curve = Curves.linear}) {
+
+  TickerFuture animateBack(
+    double target, {
+    Duration? duration,
+    Curve curve = Curves.linear,
+  }) {
     assert(
       !(this.duration == null && reverseDuration == null && duration == null),
       'AnimationController.animateBack() called with no explicit duration and no default duration.\n'
       'Either the "duration" argument to the animateBack() method should be provided, or the '
       '"duration" property should be set, either in the constructor or later, before '
-      'calling the animateBack() function.'
+      'calling the animateBack() function.',
     );
     assert(_ticker != null, "Function called after dispose.");
     _direction = .reverse;
     return _animateToInternal(target, duration: duration, curve: curve);
   }
-    
 
   void stop({bool canceled = true}) {
     assert(_ticker != null);
@@ -418,9 +550,14 @@ class AnimationController extends Animation<double>
 }
 
 class _InterpolationSimulation extends Simulation {
-  _InterpolationSimulation(this._begin, this._end, Duration duration, this._curve)
-    : assert(duration.inMicroseconds > 0),
-      _durationInSeconds = (duration.inMicroseconds) / Duration.microsecondsPerSecond;
+  _InterpolationSimulation(
+    this._begin,
+    this._end,
+    Duration duration,
+    this._curve,
+  ) : assert(duration.inMicroseconds > 0),
+      _durationInSeconds =
+          (duration.inMicroseconds) / Duration.microsecondsPerSecond;
 
   final double _durationInSeconds;
   final double _begin;
@@ -440,7 +577,8 @@ class _InterpolationSimulation extends Simulation {
   @override
   double dx(double timeInSeconds) {
     final double epsilon = tolerance.time;
-    return (x(timeInSeconds + epsilon) - x(timeInSeconds - epsilon)) / (2 * epsilon);
+    return (x(timeInSeconds + epsilon) - x(timeInSeconds - epsilon)) /
+        (2 * epsilon);
   }
 
   @override
@@ -449,10 +587,12 @@ class _InterpolationSimulation extends Simulation {
   }
 
   @override
-  String toString() => "Interpolation from $_begin to $_end over $_durationInSeconds seconds with $_curve"; 
+  String toString() =>
+      "Interpolation from $_begin to $_end over $_durationInSeconds seconds with $_curve";
 }
 
 typedef _DirectionSetter = void Function(_AnimationDirection direction);
+
 class _RepeatingSimulation extends Simulation {
   _RepeatingSimulation(
     double initialValue,
@@ -462,7 +602,10 @@ class _RepeatingSimulation extends Simulation {
     Duration period,
     this.directionSetter,
     this.count,
-  ) : assert(count == null || count > 0, 'Count shall be greater than zero if not null'),
+  ) : assert(
+        count == null || count > 0,
+        'Count shall be greater than zero if not null',
+      ),
       _periodInSeconds = period.inMicroseconds / Duration.microsecondsPerSecond,
       _initialT = (max == min)
           ? 0.0
@@ -481,7 +624,8 @@ class _RepeatingSimulation extends Simulation {
   final double _periodInSeconds;
   final double _initialT;
 
-  late final double _exitTimeInSeconds = (count! * _periodInSeconds) - _initialT;
+  late final double _exitTimeInSeconds =
+      (count! * _periodInSeconds) - _initialT;
 
   @override
   double x(double timeInSeconds) {
@@ -489,7 +633,8 @@ class _RepeatingSimulation extends Simulation {
 
     final double totalTimeInSeconds = timeInSeconds + _initialT;
     final double t = (totalTimeInSeconds / _periodInSeconds) % 1.0;
-    final bool isPlayingReverse = (totalTimeInSeconds ~/ _periodInSeconds).isOdd;
+    final bool isPlayingReverse =
+        (totalTimeInSeconds ~/ _periodInSeconds).isOdd;
 
     if (reverse && isPlayingReverse) {
       directionSetter(_AnimationDirection.reverse);
@@ -510,7 +655,6 @@ class _RepeatingSimulation extends Simulation {
     return count != null && (timeInSeconds >= _exitTimeInSeconds);
   }
 }
-
 
 mixin AnimationWithParentMixin<T> {
   /// The animation whose value this animation will proxy.
@@ -535,13 +679,15 @@ mixin AnimationWithParentMixin<T> {
   /// Calls listener every time the status of the animation changes.
   ///
   /// Listeners can be removed with [removeStatusListener].
-  void addStatusListener(AnimationStatusListener listener) => parent.addStatusListener(listener);
+  void addStatusListener(AnimationStatusListener listener) =>
+      parent.addStatusListener(listener);
 
   /// Stops calling the listener every time the status of the animation changes.
   ///
   /// Listeners can be added with [addStatusListener].
   void removeStatusListener(AnimationStatusListener listener) =>
       parent.removeStatusListener(listener);
+
   /// The current status of this animation.
   AnimationStatus get status => parent.status;
 }
@@ -553,17 +699,19 @@ mixin AnimationWithParentMixin<T> {
 abstract class Animatable<T> {
   const Animatable();
 
-  Animation<T> animate(Animation<double> parent) => _AnimatedEvaluation(parent, this);
+  Animation<T> animate(Animation<double> parent) =>
+      _AnimatedEvaluation(parent, this);
 
   T evaluate(Animation<double> animation) => transform(animation.value);
+
   /// Evaluate at progress [t] (0.0 → begin, 1.0 → end).
   T transform(double t);
-  Animatable<T> chain(Animatable<double> parent)
-    => _ChainedEvaluation<T>(parent, this);
-  
+  Animatable<T> chain(Animatable<double> parent) =>
+      _ChainedEvaluation<T>(parent, this);
 }
 
-class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<double> {
+class _AnimatedEvaluation<T> extends Animation<T>
+    with AnimationWithParentMixin<double> {
   _AnimatedEvaluation(this.parent, this._evaluatable);
 
   @override
@@ -579,13 +727,14 @@ class _AnimatedEvaluation<T> extends Animation<T> with AnimationWithParentMixin<
     return '$parent\u27A9$_evaluatable\u27A9$value';
   }
 
-/*
+  /*
   @override
   String toStringDetails() {
     return '${super.toStringDetails()} $_evaluatable';
   }
 */
 }
+
 class _ChainedEvaluation<T> extends Animatable<T> {
   _ChainedEvaluation(this._parent, this._evaluatable);
 
@@ -615,11 +764,16 @@ class Tween<T> extends Animatable<T> {
     try {
       return (begin as dynamic) + ((end as dynamic) - (begin as dynamic)) * t;
     } on NoSuchMethodError {
-      throw ArgumentError("Cannot lerp between $begin and $end, class might not implement `+`, `-`, and/or `*`.");
+      throw ArgumentError(
+        "Cannot lerp between $begin and $end, class might not implement `+`, `-`, and/or `*`.",
+      );
     } on TypeError {
-      throw ArgumentError("Cannot lerp between $begin and $end, the return type of the `*` operation with a double (time) returns an incompatibe type");
+      throw ArgumentError(
+        "Cannot lerp between $begin and $end, the return type of the `*` operation with a double (time) returns an incompatibe type",
+      );
     }
   }
+
   @override
   T transform(double t) {
     if (t == 0.0) {
@@ -631,6 +785,7 @@ class Tween<T> extends Animatable<T> {
     return lerp(t);
   }
 }
+
 class CurveTween extends Animatable<double> {
   /// Creates a curve tween.
   CurveTween({required this.curve});
@@ -648,8 +803,10 @@ class CurveTween extends Animatable<double> {
   }
 
   @override
-  String toString() => '${objectRuntimeType(this, 'CurveTween')}(curve: $curve)';
+  String toString() =>
+      '${objectRuntimeType(this, 'CurveTween')}(curve: $curve)';
 }
+
 class StepTween extends Tween<int> {
   /// Creates an [int] tween that floors.
   ///
@@ -663,6 +820,7 @@ class StepTween extends Tween<int> {
   @override
   int lerp(double t) => (begin! + (end! - begin!) * t).floor();
 }
+
 /// A tween with a constant value.
 class ConstantTween<T> extends Tween<T> {
   /// Create a tween whose [begin] and [end] values equal [value].
@@ -673,8 +831,10 @@ class ConstantTween<T> extends Tween<T> {
   T lerp(double t) => begin as T;
 
   @override
-  String toString() => '${objectRuntimeType(this, 'ConstantTween')}(value: $begin)';
+  String toString() =>
+      '${objectRuntimeType(this, 'ConstantTween')}(value: $begin)';
 }
+
 class ReverseTween<T extends Object?> extends Tween<T> {
   /// Construct a [Tween] that evaluates its [parent] in reverse.
   ReverseTween(this.parent) : super(begin: parent.end, end: parent.begin);
@@ -785,8 +945,7 @@ class _ElasticCurve extends Curve {
     if (t == 0.0 || t == 1.0) return t;
     final p = 0.3;
     final s = p / 4.0;
-    return math.pow(2.0, -10.0 * t) *
-            math.sin((t - s) * (2.0 * math.pi) / p) +
+    return math.pow(2.0, -10.0 * t) * math.sin((t - s) * (2.0 * math.pi) / p) +
         1.0;
   }
 }
@@ -811,9 +970,9 @@ class _FlippedCurve extends Curve {
 /// output, applying an optional [curve] within that interval.
 class Interval extends Curve {
   const Interval(this.begin, this.end, {this.curve = Curves.linear})
-      : assert(begin >= 0.0 && begin <= 1.0),
-        assert(end >= 0.0 && end <= 1.0),
-        assert(end >= begin);
+    : assert(begin >= 0.0 && begin <= 1.0),
+      assert(end >= 0.0 && end <= 1.0),
+      assert(end >= begin);
 
   final double begin;
   final double end;

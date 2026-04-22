@@ -76,60 +76,22 @@ class AudioRepeat extends SingleChildRenderObjectWidget {
   }
 }
 
-class AudioFadeIn extends SingleChildRenderObjectWidget {
-  AudioFadeIn({
-    super.key,
-    super.child,
-    required this.fadeInDuration,
-  }) : assert(!fadeInDuration.isNegative);
+class AudioVolume extends SingleChildRenderObjectWidget {
+  AudioVolume({super.key, super.child, required this.volume})
+    : assert(volume >= 0.0 && volume <= 1.0);
 
-  final Duration fadeInDuration;
+  final double volume;
 
   @override
-  RenderFadeInAudio createRenderObject(BuildContext context) {
-    return RenderFadeInAudio(fadeInDuration: fadeInDuration);
+  RenderVolumeAudio createRenderObject(BuildContext context) {
+    return RenderVolumeAudio(volume: volume);
   }
 
   @override
   void updateRenderObject(
     BuildContext context,
-    RenderFadeInAudio renderObject,
+    RenderVolumeAudio renderObject,
   ) {
-    renderObject.fadeInDuration = fadeInDuration;
-  }
-}
-
-class AudioFadeOut extends SingleChildRenderObjectWidget {
-  AudioFadeOut({
-    super.key,
-    super.child,
-    required this.fadeOutDuration,
-    Duration? activeDuration,
-  }) : assert(!fadeOutDuration.isNegative),
-       assert(!(activeDuration?.isNegative ?? false)),
-       activeDuration = activeDuration ?? fadeOutDuration;
-
-  final Duration fadeOutDuration;
-
-  /// Total active playback length measured from attach.
-  /// Defaults to [fadeOutDuration], which starts fading out immediately.
-  final Duration activeDuration;
-
-  @override
-  RenderFadeOutAudio createRenderObject(BuildContext context) {
-    return RenderFadeOutAudio(
-      fadeOutDuration: fadeOutDuration,
-      activeDuration: activeDuration,
-    );
-  }
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    RenderFadeOutAudio renderObject,
-  ) {
-    renderObject
-      ..fadeOutDuration = fadeOutDuration
-      ..activeDuration = activeDuration;
+    renderObject.volume = volume;
   }
 }

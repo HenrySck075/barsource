@@ -5,7 +5,7 @@ import 'package:logging/logging.dart';
 
 export 'engine.dart';
 
-Future<void> render(Widget root, RenderConfig config) async {
+Future<void> render(Widget root, RenderConfig config, [void Function()? postEngineInit]) async {
   Logger.root.level = config.logLevel;
   Logger.root.onRecord.listen((record) {
     // print('${record.level.name}: ${record.time}: ${record.message}');
@@ -17,6 +17,7 @@ Future<void> render(Widget root, RenderConfig config) async {
     height: config.resolution.height.toInt(),
     fps: config.fps,
   );
+  postEngineInit?.call();
   
   await Engine.instance.run(root, config);
   

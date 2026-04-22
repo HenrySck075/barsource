@@ -327,7 +327,7 @@ class RenderAnimatedSize extends RenderProxyBox {
     );
 
     context.canvas.save();
-    context.canvas.clipRect(offset & clipRect.size, false);
+    context.canvas.clipRect((offset + clipRect.topLeft) & clipRect.size, false);
     context.paintChild(child, offset);
     context.canvas.restore();
   }

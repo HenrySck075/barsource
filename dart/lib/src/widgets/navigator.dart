@@ -61,7 +61,9 @@ const Animation<double> _kAlwaysDismissedAnimation =
 abstract class Route<T> {
   /// Creates a route with optional [settings].
   Route({RouteSettings? settings})
-    : settings = settings ?? const RouteSettings();
+    : settings = settings ?? const RouteSettings() {
+    _secondaryAnimation.addListener(_handleSecondaryAnimationTick);
+  }
 
   /// The settings used to identify and configure this route.
   final RouteSettings settings;
@@ -69,6 +71,9 @@ abstract class Route<T> {
   NavigatorState? _navigator;
   final Completer<T?> _popCompleter = Completer<T?>();
   late final OverlayEntry _overlayEntry = createOverlayEntry();
+  final ProxyAnimation _secondaryAnimation = ProxyAnimation(
+    _kAlwaysDismissedAnimation,
+  );
 
   /// The [NavigatorState] currently hosting this route, if any.
   NavigatorState? get navigator => _navigator;
@@ -81,6 +86,12 @@ abstract class Route<T> {
 
   /// The overlay entry that renders this route.
   OverlayEntry get overlayEntry => _overlayEntry;
+
+  /// The primary transition animation for this route.
+  Animation<double> get animation => kAlwaysCompleteAnimation;
+
+  /// The animation driven by the route above this route.
+  Animation<double> get secondaryAnimation => _secondaryAnimation;
 
   /// Whether this route fully obscures routes below it.
   bool get opaque => true;
@@ -126,6 +137,20 @@ abstract class Route<T> {
   @mustCallSuper
   void didPush() {}
 
+  @protected
+  @mustCallSuper
+  void setSecondaryAnimation(Animation<double> animation) {
+    if (identical(_secondaryAnimation.parent, animation)) {
+      return;
+    }
+    _secondaryAnimation.parent = animation;
+    overlayEntry.markNeedsBuild();
+  }
+
+  void _handleSecondaryAnimationTick() {
+    overlayEntry.markNeedsBuild();
+  }
+
   /// Completes this route with [result] if it has not completed yet.
   @mustCallSuper
   void didComplete(T? result) {
@@ -137,6 +162,8 @@ abstract class Route<T> {
   /// Releases resources held by this route.
   @mustCallSuper
   void dispose() {
+    _secondaryAnimation.removeListener(_handleSecondaryAnimationTick);
+    _secondaryAnimation.dispose();
     _navigator = null;
     if (!_popCompleter.isCompleted) {
       _popCompleter.complete(null);
@@ -166,6 +193,7 @@ class PageRoute<T> extends Route<T> {
   final bool _opaque;
   final bool _maintainState;
   AnimationController? _controller;
+  bool _isPopping = false;
 
   @override
   bool get opaque => _opaque;
@@ -176,18 +204,53 @@ class PageRoute<T> extends Route<T> {
   Animation<double> get _animation => _controller ?? kAlwaysCompleteAnimation;
 
   @override
+  Animation<double> get animation => _animation;
+
+  bool get _effectiveOpaque {
+    if (!_opaque) {
+      return false;
+    }
+    final AnimationController? controller = _controller;
+    if (controller == null) {
+      return true;
+    }
+    if (_isPopping) {
+      return false;
+    }
+    return controller.status == AnimationStatus.completed;
+  }
+
+  void _updateOverlayOpacity() {
+    overlayEntry.opaque = _effectiveOpaque;
+  }
+
+  void _handleAnimationTick() {
+    overlayEntry.markNeedsBuild();
+  }
+
+  void _handleAnimationStatusChanged(AnimationStatus status) {
+    _updateOverlayOpacity();
+  }
+
+  @override
   void install(NavigatorState navigator) {
     super.install(navigator);
-    _controller = AnimationController(
-      duration: transitionDuration,
-      reverseDuration: reverseTransitionDuration ?? transitionDuration,
-      value: 1.0,
-    )..addListener(overlayEntry.markNeedsBuild);
+    _controller =
+        AnimationController(
+            duration: transitionDuration,
+            reverseDuration: reverseTransitionDuration ?? transitionDuration,
+            value: 1.0,
+          )
+          ..addListener(_handleAnimationTick)
+          ..addStatusListener(_handleAnimationStatusChanged);
+    _updateOverlayOpacity();
   }
 
   @override
   void didPush() {
     super.didPush();
+    _isPopping = false;
+    _updateOverlayOpacity();
     _controller?.forward(from: 0.0);
   }
 
@@ -197,6 +260,8 @@ class PageRoute<T> extends Route<T> {
     if (controller == null) {
       return super.didPop(result);
     }
+    _isPopping = true;
+    _updateOverlayOpacity();
     controller.reverse().then((_) {
       didComplete(result);
     });
@@ -205,7 +270,10 @@ class PageRoute<T> extends Route<T> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    final AnimationController? controller = _controller;
+    controller?.removeListener(_handleAnimationTick);
+    controller?.removeStatusListener(_handleAnimationStatusChanged);
+    controller?.dispose();
     _controller = null;
     super.dispose();
   }
@@ -217,12 +285,7 @@ class PageRoute<T> extends Route<T> {
     if (transitionBuilder == null) {
       return page;
     }
-    return transitionBuilder(
-      context,
-      _animation,
-      _kAlwaysDismissedAnimation,
-      page,
-    );
+    return transitionBuilder(context, _animation, secondaryAnimation, page);
   }
 }
 
@@ -232,7 +295,7 @@ class Navigator extends StatefulWidget {
   const Navigator({
     super.key,
     this.initialRoute = '/',
-    this.routes = const <String, WidgetBuilder>{},
+    this.routes = const <String, Route<dynamic>>{},
     this.onGenerateRoute,
     this.onUnknownRoute,
   });
@@ -240,8 +303,8 @@ class Navigator extends StatefulWidget {
   /// The route name used to resolve the first route.
   final String initialRoute;
 
-  /// A map of route names to widget builders.
-  final Map<String, WidgetBuilder> routes;
+  /// A map of route names to preconfigured routes.
+  final Map<String, Route<dynamic>> routes;
 
   /// Called to lazily create routes not found in [routes].
   final RouteFactory? onGenerateRoute;
@@ -346,6 +409,45 @@ class NavigatorState extends State<Navigator> {
     return push<T>(route as Route<T>);
   }
 
+  /// Replaces the current top route with [newRoute].
+  ///
+  /// Completes the replaced route with [result].
+  Future<T?> replace<T, TO>(Route<T> newRoute, {TO? result}) {
+    if (_history.isEmpty) {
+      throw StateError('No route available to replace.');
+    }
+
+    final Route<dynamic> oldRoute = _history.last;
+    _installRoute(newRoute, insertIntoOverlay: true);
+
+    void finalizeReplacement() {
+      if (!_history.contains(oldRoute)) {
+        return;
+      }
+      _history.remove(oldRoute);
+      oldRoute.didComplete(result);
+      oldRoute.overlayEntry.remove();
+      oldRoute.dispose();
+      _updateSecondaryAnimations();
+    }
+
+    final Animation<double> newRouteAnimation = newRoute.animation;
+    if (newRouteAnimation.status == AnimationStatus.completed) {
+      finalizeReplacement();
+    } else {
+      late final AnimationStatusListener statusListener;
+      statusListener = (AnimationStatus status) {
+        if (status == AnimationStatus.completed) {
+          newRouteAnimation.removeStatusListener(statusListener);
+          finalizeReplacement();
+        }
+      };
+      newRouteAnimation.addStatusListener(statusListener);
+    }
+
+    return newRoute.popped;
+  }
+
   /// Pops the current route with an optional [result].
   ///
   /// Returns `false` if there is no route to pop or if the route rejects
@@ -355,22 +457,30 @@ class NavigatorState extends State<Navigator> {
       return false;
     }
     final Route<dynamic> route = _history.removeLast();
+    final Route<dynamic>? previousRoute = _history.isNotEmpty
+        ? _history.last
+        : null;
+    if (previousRoute != null) {
+      previousRoute.setSecondaryAnimation(route.animation);
+    }
     final bool popped = route.didPop(result);
     if (!popped) {
       _history.add(route);
+      _updateSecondaryAnimations();
       return false;
     }
     route.popped.whenComplete(() {
       route.overlayEntry.remove();
       route.dispose();
+      _updateSecondaryAnimations();
     });
     return true;
   }
 
   Route<dynamic>? _routeNamed(RouteSettings settings) {
-    final WidgetBuilder? builder = widget.routes[settings.name];
-    if (builder != null) {
-      return PageRoute<dynamic>(builder: builder, settings: settings);
+    final Route<dynamic>? route = widget.routes[settings.name];
+    if (route != null) {
+      return route;
     }
     final Route<dynamic>? generated = widget.onGenerateRoute?.call(settings);
     if (generated != null) {
@@ -387,6 +497,16 @@ class NavigatorState extends State<Navigator> {
         _overlayController.insert(route.overlayEntry);
       }
       route.didPush();
+    }
+    _updateSecondaryAnimations();
+  }
+
+  void _updateSecondaryAnimations() {
+    for (int i = 0; i < _history.length; i += 1) {
+      final Animation<double> secondary = i + 1 < _history.length
+          ? _history[i + 1].animation
+          : _kAlwaysDismissedAnimation;
+      _history[i].setSecondaryAnimation(secondary);
     }
   }
 

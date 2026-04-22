@@ -499,41 +499,18 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
   }
 }
 
-class RenderFadeInAudio extends RenderProxyBox with AudioContributor {
-  RenderFadeInAudio({Duration fadeInDuration = Duration.zero})
-    : assert(!fadeInDuration.isNegative),
-      _fadeInDuration = fadeInDuration;
+class RenderVolumeAudio extends RenderProxyBox with AudioContributor {
+  RenderVolumeAudio({double volume = 1.0})
+    : assert(volume >= 0.0 && volume <= 1.0),
+      _volume = volume;
 
-  Duration _fadeInDuration;
-  Duration get fadeInDuration => _fadeInDuration;
-  set fadeInDuration(Duration value) {
-    assert(!value.isNegative);
-    if (_fadeInDuration == value) return;
-    _fadeInDuration = value;
+  double _volume;
+  double get volume => _volume;
+  set volume(double value) {
+    assert(value >= 0.0 && value <= 1.0);
+    if (_volume == value) return;
+    _volume = value;
     markNeedsLayout();
-  }
-
-  Duration? _attachedAt;
-
-  Duration _resolveAttachTime(Duration frameTime) {
-    final attachedAt = _attachedAt;
-    if (attachedAt != null) {
-      return attachedAt;
-    }
-    _attachedAt = frameTime;
-    return frameTime;
-  }
-
-  @override
-  void attach(PipelineOwner owner) {
-    super.attach(owner);
-    _attachedAt = Engine.instance.currentTime;
-  }
-
-  @override
-  void detach() {
-    _attachedAt = null;
-    super.detach();
   }
 
   @override
@@ -543,132 +520,16 @@ class RenderFadeInAudio extends RenderProxyBox with AudioContributor {
     int sampleRate,
     Float32List mixedSamples,
   ) {
-    final fadeInUs = _fadeInDuration.inMicroseconds;
-    if (fadeInUs <= 0) {
+    final volume = _volume;
+    if (volume >= 1.0) {
       return mixedSamples;
     }
-    final attachedAt = _resolveAttachTime(frameTime);
-    final elapsedUs = frameTime >= attachedAt
-        ? frameTime.inMicroseconds - attachedAt.inMicroseconds
-        : 0;
-    if (elapsedUs >= fadeInUs) {
-      return mixedSamples;
-    }
-    final gain = elapsedUs / fadeInUs;
-    if (gain <= 0.0) {
+    if (volume <= 0.0) {
       mixedSamples.fillRange(0, mixedSamples.length, 0.0);
       return mixedSamples;
     }
     for (int i = 0; i < mixedSamples.length; i++) {
-      mixedSamples[i] *= gain;
-    }
-    return mixedSamples;
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    if (child != null) context.paintChild(child!, offset);
-  }
-}
-
-class RenderFadeOutAudio extends RenderProxyBox with AudioContributor {
-  RenderFadeOutAudio({
-    required Duration fadeOutDuration,
-    required Duration activeDuration,
-  }) : assert(!fadeOutDuration.isNegative),
-       assert(!activeDuration.isNegative),
-       _fadeOutDuration = fadeOutDuration,
-       _activeDuration = activeDuration;
-
-  Duration _fadeOutDuration;
-  Duration get fadeOutDuration => _fadeOutDuration;
-  set fadeOutDuration(Duration value) {
-    assert(!value.isNegative);
-    if (_fadeOutDuration == value) return;
-    _fadeOutDuration = value;
-    markNeedsLayout();
-  }
-
-  Duration _activeDuration;
-  Duration get activeDuration => _activeDuration;
-  set activeDuration(Duration value) {
-    assert(!value.isNegative);
-    if (_activeDuration == value) return;
-    _activeDuration = value;
-    markNeedsLayout();
-  }
-
-  Duration? _attachedAt;
-
-  Duration _resolveAttachTime(Duration frameTime) {
-    final attachedAt = _attachedAt;
-    if (attachedAt != null) {
-      return attachedAt;
-    }
-    _attachedAt = frameTime;
-    return frameTime;
-  }
-
-  @override
-  double get duration =>
-      _activeDuration.inMicroseconds / Duration.microsecondsPerSecond;
-
-  @override
-  set duration(double value) {
-    assert(value >= 0, 'duration must be >= 0');
-    final nextDurationUs = (value * Duration.microsecondsPerSecond).round();
-    final nextDuration = Duration(microseconds: nextDurationUs);
-    if (_activeDuration == nextDuration) return;
-    _activeDuration = nextDuration;
-    markNeedsLayout();
-  }
-
-  @override
-  void attach(PipelineOwner owner) {
-    super.attach(owner);
-    _attachedAt = Engine.instance.currentTime;
-  }
-
-  @override
-  void detach() {
-    _attachedAt = null;
-    super.detach();
-  }
-
-  @override
-  Float32List processMixedAudioForFrame(
-    Duration frameTime,
-    int sampleCount,
-    int sampleRate,
-    Float32List mixedSamples,
-  ) {
-    final attachedAt = _resolveAttachTime(frameTime);
-    final elapsedUs = frameTime >= attachedAt
-        ? frameTime.inMicroseconds - attachedAt.inMicroseconds
-        : 0;
-    final activeUs = _activeDuration.inMicroseconds;
-    if (elapsedUs >= activeUs) {
-      mixedSamples.fillRange(0, mixedSamples.length, 0.0);
-      return mixedSamples;
-    }
-    final fadeOutUs = _fadeOutDuration.inMicroseconds;
-    if (fadeOutUs <= 0) {
-      return mixedSamples;
-    }
-    final fadeOutStartUs = activeUs - fadeOutUs;
-    if (elapsedUs <= fadeOutStartUs) {
-      return mixedSamples;
-    }
-    final gain = (activeUs - elapsedUs) / fadeOutUs;
-    if (gain <= 0.0) {
-      mixedSamples.fillRange(0, mixedSamples.length, 0.0);
-      return mixedSamples;
-    }
-    if (gain >= 1.0) {
-      return mixedSamples;
-    }
-    for (int i = 0; i < mixedSamples.length; i++) {
-      mixedSamples[i] *= gain;
+      mixedSamples[i] *= volume;
     }
     return mixedSamples;
   }
