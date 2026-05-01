@@ -16,6 +16,7 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/audio_fifo.h>
+#include <libavutil/error.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <libavutil/hwcontext_drm.h>
@@ -88,6 +89,7 @@ struct TennojiEncoder {
     std::queue<tennoji::ExportableSurface> freeSurfaces;
     std::queue<std::vector<uint8_t>> freePixelBuffers;
     std::mutex poolMutex;
+    std::mutex muxMutex;
 
     std::atomic<bool> running{true};
     std::atomic<bool> renderFinished{false};
@@ -97,6 +99,17 @@ struct TennojiEncoder {
 
 static constexpr size_t kMaxRenderQueueSize = 8;
 static constexpr size_t kMaxEncodeQueueSize = 8;
+
+static void log_ffmpeg_error(const char* context, int error_code) {
+    char error_buf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(error_code, error_buf, sizeof(error_buf));
+    std::cerr << context << ": " << error_buf << " (" << error_code << ")" << std::endl;
+}
+
+static int write_interleaved_frame_locked(TennojiEncoder* encoder, AVPacket* pkt) {
+    std::lock_guard<std::mutex> lock(encoder->muxMutex);
+    return av_interleaved_write_frame(encoder->fmtCtx, pkt);
+}
 
 static void return_surface_to_pool(TennojiEncoder* enc, const tennoji::ExportableSurface& surface) {
     if (!surface.skSurface) return;
@@ -366,10 +379,22 @@ static void encode_loop(TennojiEncoder* encoder) {
                                  encoder->videoStream->time_base);
             pkt->stream_index = encoder->videoStream->index;
 
-            av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            ret = write_interleaved_frame_locked(encoder, pkt);
+            if (ret < 0) {
+                log_ffmpeg_error("video mux write failed", ret);
+                encoder->running = false;
+                encoder->renderCv.notify_all();
+                encoder->encodeCv.notify_all();
+                av_packet_unref(pkt);
+                break;
+            }
             av_packet_unref(pkt);
         }
         av_packet_unref(pkt);
+        if (!encoder->running) {
+            return_pixels_to_pool(encoder, frameData.pixels);
+            break;
+        }
         return_pixels_to_pool(encoder, frameData.pixels);
     }
     av_packet_free(&pkt);
@@ -702,7 +727,12 @@ TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
                                      encoder->audioStream->time_base);
                 outPkt->stream_index = encoder->audioStream->index;
 
-                av_interleaved_write_frame(encoder->fmtCtx, outPkt);
+                ret = write_interleaved_frame_locked(encoder, outPkt);
+                if (ret < 0) {
+                    log_ffmpeg_error("audio mux write failed", ret);
+                    av_packet_free(&outPkt);
+                    goto done;
+                }
             }
             av_packet_free(&outPkt);
         }
@@ -772,7 +802,12 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
                                      encoder->audioStream->time_base);
                 outPkt->stream_index = encoder->audioStream->index;
 
-                av_interleaved_write_frame(encoder->fmtCtx, outPkt);
+                ret = write_interleaved_frame_locked(encoder, outPkt);
+                if (ret < 0) {
+                    log_ffmpeg_error("audio queue mux write failed", ret);
+                    av_packet_free(&outPkt);
+                    goto frame_done;
+                }
             }
             av_packet_free(&outPkt);
         }
@@ -804,7 +839,11 @@ TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
             av_packet_rescale_ts(pkt, encoder->videoCodecCtx->time_base,
                                  encoder->videoStream->time_base);
             pkt->stream_index = encoder->videoStream->index;
-            av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            ret = write_interleaved_frame_locked(encoder, pkt);
+            if (ret < 0) {
+                log_ffmpeg_error("finalize video mux write failed", ret);
+                break;
+            }
         }
         av_packet_free(&pkt);
     }
@@ -853,12 +892,20 @@ TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
             av_packet_rescale_ts(pkt, encoder->audioCodecCtx->time_base,
                                  encoder->audioStream->time_base);
             pkt->stream_index = encoder->audioStream->index;
-            av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            ret = write_interleaved_frame_locked(encoder, pkt);
+            if (ret < 0) {
+                log_ffmpeg_error("finalize audio mux write failed", ret);
+                break;
+            }
         }
         av_packet_free(&pkt);
     }
 
-    return av_write_trailer(encoder->fmtCtx);
+    int trailer_ret = av_write_trailer(encoder->fmtCtx);
+    if (trailer_ret < 0) {
+        log_ffmpeg_error("write trailer failed", trailer_ret);
+    }
+    return trailer_ret;
 }
 
 TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
@@ -907,10 +954,11 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
 TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
                                                          const float* samples,
                                                          int sample_count,
-                                                         int sample_rate,
+                                                         int /*sample_rate*/,
                                                          int channels) {
-    if (!encoder || !encoder->audioCodecCtx) return -1;
-    if (!samples || sample_count <= 0 || channels <= 0) return -1;
+    if (!encoder || !encoder->audioCodecCtx) return AVERROR(EINVAL);
+    if (!samples || sample_count <= 0 || channels <= 0) return AVERROR(EINVAL);
+    if (!encoder->running) return AVERROR_EOF;
 
     // Initialize FIFO if needed
     if (!encoder->audioFifo) {
@@ -919,7 +967,7 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
             encoder->audioCodecCtx->ch_layout.nb_channels,
             encoder->audioCodecCtx->frame_size * 4  // Buffer for multiple frames
         );
-        if (!encoder->audioFifo) return -1;
+        if (!encoder->audioFifo) return AVERROR(ENOMEM);
     }
 
     // AAC encoder has a fixed frame size (typically 1024)
@@ -942,14 +990,22 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
     
     void* channel_data[2] = { encoder->audioLeftScratch.data(), encoder->audioRightScratch.data() };
     int ret = av_audio_fifo_write(encoder->audioFifo, channel_data, sample_count);
-    if (ret < sample_count) return -1;
+    if (ret < 0) {
+        log_ffmpeg_error("audio fifo write failed", ret);
+        return ret;
+    }
+    if (ret < sample_count) {
+        std::cerr << "audio fifo short write: wrote " << ret
+                  << " requested " << sample_count << std::endl;
+        return AVERROR(EIO);
+    }
 
     AVPacket* pkt = av_packet_alloc();
     AVFrame* frame = av_frame_alloc();
     if (!pkt || !frame) {
         av_packet_free(&pkt);
         av_frame_free(&frame);
-        return -1;
+        return AVERROR(ENOMEM);
     }
 
     // Encode all complete frames available in the FIFO
@@ -963,17 +1019,26 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
 
         ret = av_frame_get_buffer(frame, 0);
         if (ret < 0) {
+            log_ffmpeg_error("audio frame buffer alloc failed", ret);
             av_frame_free(&frame);
             av_packet_free(&pkt);
-            return -1;
+            return ret;
         }
 
         // Read from FIFO directly into frame
         ret = av_audio_fifo_read(encoder->audioFifo, (void**)frame->data, encoder_frame_size);
         if (ret < encoder_frame_size) {
+            if (ret < 0) {
+                log_ffmpeg_error("audio fifo read failed", ret);
+                av_frame_free(&frame);
+                av_packet_free(&pkt);
+                return ret;
+            }
+            std::cerr << "audio fifo short read: read " << ret
+                      << " requested " << encoder_frame_size << std::endl;
             av_frame_free(&frame);
             av_packet_free(&pkt);
-            return -1;
+            return AVERROR(EIO);
         }
 
         // Set presentation timestamp
@@ -983,9 +1048,10 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
         // Encode the frame
         ret = avcodec_send_frame(encoder->audioCodecCtx, frame);
         if (ret < 0) {
+            log_ffmpeg_error("audio send frame failed", ret);
             av_frame_free(&frame);
             av_packet_free(&pkt);
-            return -1;
+            return ret;
         }
 
         // Retrieve encoded packets and write to file
@@ -993,21 +1059,26 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
             ret = avcodec_receive_packet(encoder->audioCodecCtx, pkt);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
             if (ret < 0) {
+                log_ffmpeg_error("audio receive packet failed", ret);
                 av_frame_free(&frame);
                 av_packet_free(&pkt);
-                return -1;
+                return ret;
             }
 
             av_packet_rescale_ts(pkt, encoder->audioCodecCtx->time_base,
                                  encoder->audioStream->time_base);
             pkt->stream_index = encoder->audioStream->index;
 
-            ret = av_interleaved_write_frame(encoder->fmtCtx, pkt);
+            ret = write_interleaved_frame_locked(encoder, pkt);
             av_packet_unref(pkt);
             if (ret < 0) {
+                log_ffmpeg_error("audio sample mux write failed", ret);
                 av_frame_free(&frame);
                 av_packet_free(&pkt);
-                return -1;
+                encoder->running = false;
+                encoder->renderCv.notify_all();
+                encoder->encodeCv.notify_all();
+                return ret;
             }
         }
     }

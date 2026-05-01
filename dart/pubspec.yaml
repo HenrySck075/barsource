@@ -1,6 +1,6 @@
 name: barsource
 description: A declarative, Flutter-inspired video editor library with a C++ backend.
-version: 0.0.1
+version: 0.2.0
 
 environment:
   sdk: ^3.10.0

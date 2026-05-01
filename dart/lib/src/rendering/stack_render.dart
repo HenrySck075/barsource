@@ -1,8 +1,8 @@
 import 'package:meta/meta.dart';
 import 'package:barsource/src/dart_ui/dart_ui.dart';
 import 'package:barsource/src/foundation/debug.dart';
+import 'package:barsource/src/painting/alignment.dart';
 
-import '../foundation/geometry.dart';
 import 'box.dart';
 import 'object.dart';
 import 'dart:math' as math;
@@ -59,7 +59,12 @@ class RelativeRect {
   }
 
   RelativeRect inflate(double delta) {
-    return RelativeRect.fromLTRB(left - delta, top - delta, right - delta, bottom - delta);
+    return RelativeRect.fromLTRB(
+      left - delta,
+      top - delta,
+      right - delta,
+      bottom - delta,
+    );
   }
 
   RelativeRect deflate(double delta) {
@@ -76,11 +81,19 @@ class RelativeRect {
   }
 
   Rect toRect(Rect container) {
-    return Rect.fromLTRB(left, top, container.width - right, container.height - bottom);
+    return Rect.fromLTRB(
+      left,
+      top,
+      container.width - right,
+      container.height - bottom,
+    );
   }
 
   Size toSize(Size container) {
-    return Size(container.width - left - right, container.height - top - bottom);
+    return Size(
+      container.width - left - right,
+      container.height - top - bottom,
+    );
   }
 
   static RelativeRect? lerp(RelativeRect? a, RelativeRect? b, double t) {
@@ -88,11 +101,21 @@ class RelativeRect {
       return a;
     }
     if (a == null) {
-      return RelativeRect.fromLTRB(b!.left * t, b.top * t, b.right * t, b.bottom * t);
+      return RelativeRect.fromLTRB(
+        b!.left * t,
+        b.top * t,
+        b.right * t,
+        b.bottom * t,
+      );
     }
     if (b == null) {
       final double k = 1.0 - t;
-      return RelativeRect.fromLTRB(b!.left * k, b.top * k, b.right * k, b.bottom * k);
+      return RelativeRect.fromLTRB(
+        b!.left * k,
+        b.top * k,
+        b.right * k,
+        b.bottom * k,
+      );
     }
     return RelativeRect.fromLTRB(
       lerpDouble(a.left, b.left, t)!,
@@ -121,6 +144,7 @@ class RelativeRect {
   String toString() =>
       'RelativeRect.fromLTRB(${left.toStringAsFixed(1)}, ${top.toStringAsFixed(1)}, ${right.toStringAsFixed(1)}, ${bottom.toStringAsFixed(1)})';
 }
+
 class StackParentData extends ContainerBoxParentData<RenderBox> {
   double? top;
 
@@ -153,12 +177,14 @@ class StackParentData extends ContainerBoxParentData<RenderBox> {
   BoxConstraints positionedChildConstraints(Size stackSize) {
     assert(isPositioned);
     final double? width = switch ((left, right)) {
-      (final double left?, final double right?) => stackSize.width - right - left,
+      (final double left?, final double right?) =>
+        stackSize.width - right - left,
       (_, _) => this.width,
     };
 
     final double? height = switch ((top, bottom)) {
-      (final double top?, final double bottom?) => stackSize.height - bottom - top,
+      (final double top?, final double bottom?) =>
+        stackSize.height - bottom - top,
       (_, _) => this.height,
     };
     assert(height == null || !height.isNaN);
@@ -186,39 +212,203 @@ class StackParentData extends ContainerBoxParentData<RenderBox> {
     return values.join('; ');
   }
 }
-class RenderStack extends RenderBox with ContainerRenderObjectMixin<RenderBox,ContainerParentDataMixin<RenderBox>> {
+
+enum StackFit { loose, expand, passthrough }
+
+class RenderStack extends RenderBox
+    with ContainerRenderObjectMixin<RenderBox, StackParentData> {
+  RenderStack({
+    AlignmentGeometry alignment = AlignmentDirectional.topStart,
+    TextDirection? textDirection,
+    StackFit fit = StackFit.loose,
+    Clip clipBehavior = Clip.hardEdge,
+  }) : _alignment = alignment,
+       _textDirection = textDirection,
+       _fit = fit,
+       _clipBehavior = clipBehavior;
+
+  AlignmentGeometry get alignment => _alignment;
+  AlignmentGeometry _alignment;
+  set alignment(AlignmentGeometry value) {
+    if (_alignment == value) {
+      return;
+    }
+    _alignment = value;
+    markNeedsLayout();
+  }
+
+  TextDirection? get textDirection => _textDirection;
+  TextDirection? _textDirection;
+  set textDirection(TextDirection? value) {
+    if (_textDirection == value) {
+      return;
+    }
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  StackFit get fit => _fit;
+  StackFit _fit;
+  set fit(StackFit value) {
+    if (_fit == value) {
+      return;
+    }
+    _fit = value;
+    markNeedsLayout();
+  }
+
+  Clip get clipBehavior => _clipBehavior;
+  Clip _clipBehavior;
+  set clipBehavior(Clip value) {
+    if (_clipBehavior == value) {
+      return;
+    }
+    _clipBehavior = value;
+    markNeedsPaint();
+  }
+
+  bool _hasVisualOverflow = false;
+
   @override
   void setupParentData(RenderBox child) {
     if (child.parentData is! StackParentData) {
       child.parentData = StackParentData();
     }
   }
-  
+
+  BoxConstraints _nonPositionedConstraints(BoxConstraints constraints) {
+    return switch (fit) {
+      StackFit.loose => constraints.loosen(),
+      StackFit.expand => BoxConstraints.tight(constraints.biggest),
+      StackFit.passthrough => constraints,
+    };
+  }
+
+  Offset _resolvedOffset(Alignment resolvedAlignment, Size childSize) {
+    return resolvedAlignment.alongOffset(
+      Offset(size.width - childSize.width, size.height - childSize.height),
+    );
+  }
+
+  void _setChildOffset(
+    StackParentData parentData,
+    RenderBox child,
+    Alignment resolvedAlignment,
+  ) {
+    final x = switch ((parentData.left, parentData.right)) {
+      (final double left?, _) => left,
+      (_, final double right?) => size.width - right - child.size.width,
+      _ => _resolvedOffset(resolvedAlignment, child.size).dx,
+    };
+
+    final y = switch ((parentData.top, parentData.bottom)) {
+      (final double top?, _) => top,
+      (_, final double bottom?) => size.height - bottom - child.size.height,
+      _ => _resolvedOffset(resolvedAlignment, child.size).dy,
+    };
+
+    parentData.offset = Offset(x, y);
+    _hasVisualOverflow =
+        _hasVisualOverflow ||
+        x < 0.0 ||
+        y < 0.0 ||
+        x + child.size.width > size.width ||
+        y + child.size.height > size.height;
+  }
+
   @override
   void performLayout() {
     final parentConstraints = constraints;
-    double maxWidth = 0;
-    double maxHeight = 0;
-    visitChildren((child) {
-      child.layout(BoxConstraints(
-        minWidth: 0,
-        maxWidth: parentConstraints.maxWidth,
-        minHeight: 0,
-        maxHeight: parentConstraints.maxHeight,
-      ));
-      if (child.size.width > maxWidth) maxWidth = child.size.width;
-      if (child.size.height > maxHeight) maxHeight = child.size.height;
-    });
-    size = Size(
-      maxWidth.isFinite ? maxWidth : parentConstraints.maxWidth,
-      maxHeight.isFinite ? maxHeight : parentConstraints.maxHeight,
+    final nonPositionedConstraints = _nonPositionedConstraints(
+      parentConstraints,
     );
+    var maxWidth = parentConstraints.minWidth;
+    var maxHeight = parentConstraints.minHeight;
+    var hasNonPositionedChildren = false;
+    _hasVisualOverflow = false;
+
+    for (
+      RenderBox? child = firstChild;
+      child != null;
+      child = childAfter(child)
+    ) {
+      final childParentData = child.parentData! as StackParentData;
+      if (childParentData.isPositioned) {
+        continue;
+      }
+      hasNonPositionedChildren = true;
+      child.layout(nonPositionedConstraints, parentUsesSize: true);
+      maxWidth = math.max(maxWidth, child.size.width);
+      maxHeight = math.max(maxHeight, child.size.height);
+    }
+
+    size = hasNonPositionedChildren
+        ? parentConstraints.constrain(Size(maxWidth, maxHeight))
+        : parentConstraints.biggest;
+    final resolvedAlignment = alignment.resolve(textDirection);
+
+    for (
+      RenderBox? child = firstChild;
+      child != null;
+      child = childAfter(child)
+    ) {
+      final childParentData = child.parentData! as StackParentData;
+      if (!childParentData.isPositioned) {
+        continue;
+      }
+      child.layout(
+        childParentData.positionedChildConstraints(size),
+        parentUsesSize: true,
+      );
+      _setChildOffset(childParentData, child, resolvedAlignment);
+    }
+
+    for (
+      RenderBox? child = firstChild;
+      child != null;
+      child = childAfter(child)
+    ) {
+      final childParentData = child.parentData! as StackParentData;
+      if (childParentData.isPositioned) {
+        continue;
+      }
+      childParentData.offset = _resolvedOffset(resolvedAlignment, child.size);
+      _hasVisualOverflow =
+          _hasVisualOverflow ||
+          childParentData.offset.dx < 0.0 ||
+          childParentData.offset.dy < 0.0 ||
+          childParentData.offset.dx + child.size.width > size.width ||
+          childParentData.offset.dy + child.size.height > size.height;
+    }
+  }
+
+  void _paintStack(PaintingContext context, Offset offset) {
+    for (
+      RenderBox? child = firstChild;
+      child != null;
+      child = childAfter(child)
+    ) {
+      final childParentData = child.parentData! as StackParentData;
+      context.paintChild(
+        child,
+        Offset(
+          offset.dx + childParentData.offset.dx,
+          offset.dy + childParentData.offset.dy,
+        ),
+      );
+    }
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    visitChildren((child) {
-      context.paintChild(child, offset);
-    });
+    if (!_hasVisualOverflow || clipBehavior == Clip.none) {
+      _paintStack(context, offset);
+      return;
+    }
+
+    context.canvas.save();
+    context.canvas.clipRect(offset & size, clipBehavior == Clip.antiAlias);
+    _paintStack(context, offset);
+    context.canvas.restore();
   }
 }

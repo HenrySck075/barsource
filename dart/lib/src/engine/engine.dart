@@ -28,31 +28,30 @@ export '../scheduler/ticker.dart';
 class RenderConfig {
   const RenderConfig({
     required this.output,
-    required this.duration,
+    this.duration,
     required this.fps,
     required this.resolution,
-    this.renderResolution,
     this.codec = .h265,
     this.audioCodec = .aac,
     this.outputMode = .local,
     this.logLevel = Level.INFO,
     this.showProgressBar = true,
+    this.throttleRenderTime = false,
   });
   final String output;
-  final Duration duration;
+  final Duration? duration;
   final int fps;
 
   /// Canvas size
   final Size resolution;
 
-  /// The actual video resolution, defaults to [resolution]
-  /// Don't use this though, it works but it fucks up rendering for some reason
-  final Size? renderResolution;
   final VideoCodec codec;
   final AudioCodec audioCodec;
   final OutputMode outputMode;
   final Level logLevel;
   final bool showProgressBar;
+
+  final bool throttleRenderTime;
 }
 
 enum VideoCodec { h264, h265 }
@@ -107,23 +106,37 @@ class Engine extends BindingBase
   }
 
   int? _frameDuration;
+  bool _stopRequested = false;
 
   /// The duration in milliseconds of 1 single frame.
   ///
   /// This value is only valid when the engine is currently being [run]
   int get frameDuration => _frameDuration!;
 
+  void stopRendering() {
+    _stopRequested = true;
+  }
+
   /// Render the video.
   /// The entire operation is designed to be synchronous. The function was set to async to give room for event queues
   /// (otherwise all of them will run after the loop ends)
   Future<void> run(Widget app, RenderConfig config) async {
-    final renderResolution = config.renderResolution ?? config.resolution;
+    final useYouTubeStreaming = config.outputMode == OutputMode.youtubeStream;
+    if (!useYouTubeStreaming && config.duration == null) {
+      throw ArgumentError(
+        'duration is required when outputMode is OutputMode.local',
+      );
+    }
+    _stopRequested = false;
+    final renderResolution = config.resolution;
+    final renderDuration = config.duration;
     final frameDuration = Duration(microseconds: 1000000 ~/ config.fps);
     _frameDuration = frameDuration.inMilliseconds;
     _currentTime = Duration.zero;
+    final durationLabel = renderDuration?.toString() ?? 'streaming (unbounded)';
 
     _log.info(
-      'Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: ${config.duration}',
+      'Starting render run. Resolution: ${config.resolution}, FPS: ${config.fps}, Duration: $durationLabel',
     );
     // 1. Initialize RenderView
     initRenderView(ViewConfiguration(size: renderResolution));
@@ -135,7 +148,6 @@ class Engine extends BindingBase
 
     // 3. Create Encoder
     final encConfig = calloc<TennojiEncoderConfig>();
-    final useYouTubeStreaming = config.outputMode == OutputMode.youtubeStream;
     final resolvedVideoCodec = useYouTubeStreaming
         ? VideoCodec.h264
         : config.codec;
@@ -162,13 +174,22 @@ class Engine extends BindingBase
       ..output_mode = config.outputMode.index;
 
     final encoder = rina_encoder_create(_nativePtr, encConfig);
+    if (encoder == nullptr) {
+      calloc.free(outputPathUtf8);
+      calloc.free(videoCodecUtf8);
+      calloc.free(audioCodecUtf8);
+      calloc.free(encConfig);
+      throw StateError(
+        'Failed to create native encoder for output: ${config.output}',
+      );
+    }
 
-    final progressBar = config.showProgressBar
+    final progressBar = (config.showProgressBar && config.outputMode == .local)
         ? FillingBar(
             desc: "r",
             time: true,
             percentage: true,
-            total: (config.duration.inMilliseconds / 1000 * config.fps).toInt(),
+            total: (renderDuration!.inMilliseconds / 1000 * config.fps).toInt(),
           )
         : null;
 
@@ -185,33 +206,24 @@ class Engine extends BindingBase
         maxHeight: renderResolution.height,
       ),
     );
-    bool doScale =
-        config.renderResolution != null &&
-        config.resolution != config.renderResolution;
-    final scaleX = doScale
-        ? config.renderResolution!.width / config.resolution.width
-        : 1.0;
-    final scaleY = doScale
-        ? config.renderResolution!.height / config.resolution.height
-        : 1.0;
     const sampleRate = 44100;
     final samplesPerFrame = (sampleRate / config.fps).round();
     final expectedStereoSamples = samplesPerFrame * 2;
     final sampleBuffer = calloc<Float>(expectedStereoSamples);
     final sampleBufferView = sampleBuffer.asTypedList(expectedStereoSamples);
     final mixedAudioBuffer = Float32List(expectedStereoSamples);
-    final streamWallClock = useYouTubeStreaming ? (Stopwatch()..start()) : null;
+    final streamWallClock = (useYouTubeStreaming || config.throttleRenderTime)
+        ? (Stopwatch()..start())
+        : null;
+    String? exitReason;
     try {
-      while (_currentTime < config.duration) {
-        if (doScale) {
-          canvas.save();
-          canvas.scale(scaleX, scaleY);
-        }
+      while (!_stopRequested &&
+          (useYouTubeStreaming || _currentTime < renderDuration!)) {
         handleBeginFrame(_currentTime);
 
         // Trigger microtasks / futures
         // no, really, this is how you do it
-        await Future((){});
+        await Future(() {});
 
         // Draw frame (Build + Layout)
         _log.fine('Drawing frame at $_currentTime');
@@ -241,14 +253,20 @@ class Engine extends BindingBase
         } catch (e, st) {
           _log.severe('Error during painting at $_currentTime: $e', e, st);
           _log.severe(st);
+          exitReason = 'paint failed at $_currentTime';
           break;
         }
 
-        if (doScale) {
-          canvas.restore();
-        }
         // Encode video
-        rina_encoder_write_frame(encoder, nativeCanvas);
+        final videoWriteResult = rina_encoder_write_frame(
+          encoder,
+          nativeCanvas,
+        );
+        if (videoWriteResult < 0) {
+          exitReason =
+              'native video write failed (code=$videoWriteResult) at $_currentTime';
+          break;
+        }
 
         // NEW Audio Submission System: ALWAYS write audio for every video frame
         // to maintain sync (even if it's silence)
@@ -301,13 +319,18 @@ class Engine extends BindingBase
           );
         }
 
-        rina_encoder_write_audio_samples(
+        final audioWriteResult = rina_encoder_write_audio_samples(
           encoder,
           sampleBuffer,
           samplesPerFrame, // Always write the expected frame size
           sampleRate,
           2, // stereo
         );
+        if (audioWriteResult < 0) {
+          exitReason =
+              'native audio write failed (code=$audioWriteResult) at $_currentTime';
+          break;
+        }
 
         _currentTime += frameDuration;
         progressBar?.increment();
@@ -318,6 +341,16 @@ class Engine extends BindingBase
           }
         }
       }
+      if (exitReason == null) {
+        if (_stopRequested) {
+          exitReason = 'stop requested';
+        } else if (!useYouTubeStreaming) {
+          exitReason = 'duration reached';
+        } else {
+          exitReason = 'stream loop ended';
+        }
+      }
+      _log.info('Render loop exit reason: $exitReason');
     } catch (e, st) {
       print('Error during render run: $e\n$st');
     } finally {

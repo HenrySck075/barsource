@@ -448,6 +448,17 @@ class NavigatorState extends State<Navigator> {
     return newRoute.popped;
   }
 
+  /// Resolves and pushes a named route.
+  Future<T?> replaceNamed<T>(String name, {Object? arguments}) {
+    final Route<dynamic>? route = _routeNamed(
+      RouteSettings(name: name, arguments: arguments),
+    );
+    if (route == null) {
+      throw StateError('No route defined for "$name".');
+    }
+    return replace(route as Route<T>);
+  }
+
   /// Pops the current route with an optional [result].
   ///
   /// Returns `false` if there is no route to pop or if the route rejects
