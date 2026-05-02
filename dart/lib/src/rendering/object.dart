@@ -422,6 +422,16 @@ abstract class RenderObject {
       return _debugDisposed = true;
     }());
   }
+
+
+  void reassemble() {
+    markNeedsLayout();
+    //markNeedsCompositingBitsUpdate();
+    markNeedsPaint();
+    visitChildren((RenderObject child) {
+      child.reassemble();
+    });
+  }
 }
 
 mixin RenderObjectWithChildMixin<ChildType extends RenderObject>

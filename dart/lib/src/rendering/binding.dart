@@ -29,4 +29,9 @@ mixin RendererBinding on BindingBase, SchedulerBinding {
     pipelineOwner.flushPaint();
     // Painting is handled by Engine manually for now due to canvas requirement
   }
+
+  @override
+  void reassembleApplication() {
+    _renderView?.reassemble();
+  }
 }

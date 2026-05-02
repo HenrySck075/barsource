@@ -5,10 +5,14 @@ import 'package:barsource/src/elements/framework.dart';
 import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/widgets/root.dart';
 import 'package:barsource/src/rendering/box.dart';
+import 'package:meta/meta.dart';
 
 mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
   BuildOwner? _buildOwner;
   Element? _renderViewElement;
+
+  @protected
+  Element get renderViewElement => _renderViewElement!;
 
   BuildOwner get buildOwner => _buildOwner!;
 
@@ -49,6 +53,15 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
     _renderViewElement?.deactivate();
     _renderViewElement?.unmount();
     _renderViewElement = null;
+  }
+
+  @override
+  void reassembleApplication() {
+    if (_renderViewElement != null) {
+      _renderViewElement!.reassemble();
+    }
+
+    super.reassembleApplication();
   }
 }
 

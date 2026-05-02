@@ -568,6 +568,16 @@ abstract class Element implements BuildContext {
     _dirty = false;
   }
 
+
+  @mustCallSuper
+  @protected
+  void reassemble() {
+    markNeedsBuild();
+    visitChildren((Element child) {
+      child.reassemble();
+    });
+  }
+
   void update(covariant Widget newWidget) {
     _widget = newWidget;
   }
@@ -897,6 +907,12 @@ class StatefulElement extends ComponentElement {
 
   @override
   Widget build() => _state.build(this);
+
+  @override
+  void reassemble() {
+    _state.reassemble();
+    super.reassemble();
+  }
 }
 
 abstract class RenderObjectElement extends Element {

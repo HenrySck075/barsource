@@ -60,6 +60,8 @@ abstract class State<T extends StatefulWidget> {
     fn();
     _element!.markNeedsBuild();
   }
+
+  void reassemble() {}
 }
 
 abstract class RenderObjectWidget extends Widget {

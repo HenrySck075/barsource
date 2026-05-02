@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:ffi';
 import 'dart:typed_data';
+import 'dart:isolate' as isolate;
 
 import 'package:ffi/ffi.dart';
 import 'package:barsource/src/dart_ui/dart_ui.dart';
@@ -19,6 +21,8 @@ import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/scheduler/ticker.dart';
 
 import 'package:console_bars/console_bars.dart';
+import 'package:vm_service/vm_service.dart';
+import 'package:vm_service/vm_service_io.dart';
 
 export 'bindings.dart';
 export 'audio_binding.dart';
@@ -116,6 +120,50 @@ class Engine extends BindingBase
   void stopRendering() {
     _stopRequested = true;
   }
+
+  bool _devtoolsEnabled = false;
+  VmService? _vmService;
+
+  Completer<void>? _reassembleCompleter;
+
+  // idc
+  // runs only if the Engine is rendering and devtools extensions is enabled
+  Future<ServiceExtensionResponse> _serviceMethodHandler(String method, Map<String, String> parameters) {
+    if (!_rendering || !_devtoolsEnabled) {
+      return Future.value(
+        ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Service extension called when not rendering or devtools not enabled',
+        ),
+      );
+    }
+
+    if (method == "ext.barsource.reassemble") {
+      // cancel if _reassembleCompleter != null (a reload is happening)
+      if (_reassembleCompleter != null) {
+        _log.warning("Received reassemble request while another reassemble is in progress, ignoring");
+        return Future.value(
+          ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'Reassemble already in progress',
+          ),
+        );
+      }
+      _log.info("Received reassemble request from DevTools");
+      _reassembleCompleter = Completer();
+      return _reassembleCompleter!.future.then((_)=>ServiceExtensionResponse.result("{}"));
+    }
+
+    return Future.value(
+      ServiceExtensionResponse.error(
+        ServiceExtensionResponse.invalidParams,
+        'Unimplemented service extension method: $method',
+      ),
+    );
+  }
+
+
+  bool _rendering = false;
 
   /// Render the video.
   /// The entire operation is designed to be synchronous. The function was set to async to give room for event queues
@@ -216,6 +264,23 @@ class Engine extends BindingBase
         ? (Stopwatch()..start())
         : null;
     String? exitReason;
+
+    _devtoolsEnabled = useYouTubeStreaming;
+    if (_devtoolsEnabled) {
+      // try to connect to the vm service
+      final info = await Service.getInfo();
+      final url = info.serverWebSocketUri;
+
+      if (url != null) {
+        _vmService = await vmServiceConnectUri(url.toString());
+      } else {
+        _devtoolsEnabled = false;
+      }
+    }
+    if (_devtoolsEnabled) {
+      registerExtension("ext.barsource.reassemble", _serviceMethodHandler);
+    }
+    _rendering = true;
     try {
       while (!_stopRequested &&
           (useYouTubeStreaming || _currentTime < renderDuration!)) {
@@ -332,6 +397,16 @@ class Engine extends BindingBase
           break;
         }
 
+        // reassemble
+        if (_reassembleCompleter != null) {
+          _log.info("Performing hot reload reassemble");
+          final isolateId = Service.getIsolateId(isolate.Isolate.current)!;
+          await _vmService!.reloadSources(isolateId);
+          reassembleApplication();
+          _reassembleCompleter!.complete();
+          _reassembleCompleter = null;
+        }
+
         _currentTime += frameDuration;
         progressBar?.increment();
         if (streamWallClock != null) {
@@ -367,6 +442,7 @@ class Engine extends BindingBase
       detachRootWidget();
       _log.info('Render run completed.');
       _frameDuration = null;
+      _rendering = false;
     }
   }
 

@@ -14,4 +14,5 @@ abstract class BindingBase {
     return instance;
   }
     
+  void reassembleApplication() {}
 }
