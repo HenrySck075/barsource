@@ -11,6 +11,7 @@ extern "C" {
 
 TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture) {
   if (!texture) return;
+  if (texture->managedByDecoder) return;
   delete texture;
 }
 

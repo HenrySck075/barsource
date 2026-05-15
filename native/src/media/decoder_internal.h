@@ -17,6 +17,7 @@ extern "C" {
 #include "frame_pool.h"
 
 struct TennojiEngine;
+struct TennojiCanvasImage;
 
 struct TennojiDecoder {
     AVFormatContext* fmtCtx = nullptr;
@@ -39,6 +40,8 @@ struct TennojiDecoder {
     AVPacket* decodePacket = nullptr;
     AVFrame* decodeFrame = nullptr;
     AVFrame* audioDecodeFrame = nullptr;
+    TennojiCanvasImage* cachedTexture = nullptr;
+    int64_t cachedTextureTsUs = INT64_MIN;
 
     // Audio packet queue: video decode stashes audio packets here
     // instead of discarding them, so they can be drained by the encoder.

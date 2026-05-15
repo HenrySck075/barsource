@@ -7,6 +7,7 @@
 #include <atomic>
 #include <vector>
 #include <cstring>
+#include <cerrno>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -663,6 +664,12 @@ TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
 TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
                                                 TennojiDecoder* audio_decoder,
                                                 int64_t duration_us) {
+#if !TENNOJI_ENABLE_LEGACY_AUDIO_API
+    (void)encoder;
+    (void)audio_decoder;
+    (void)duration_us;
+    return AVERROR(ENOSYS);
+#else
     if (!encoder || !encoder->audioCodecCtx || !audio_decoder) return -1;
 
     if (!audio_decoder->audioCodecCtx || audio_decoder->audioStreamIdx < 0) return -1;
@@ -744,10 +751,16 @@ done:
     av_frame_free(&frame);
     av_packet_free(&pkt);
     return 0;
+#endif
 }
 
 TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
-                                                      TennojiDecoder* decoder) {
+                                                       TennojiDecoder* decoder) {
+#if !TENNOJI_ENABLE_LEGACY_AUDIO_API
+    (void)encoder;
+    (void)decoder;
+    return AVERROR(ENOSYS);
+#else
     if (!encoder || !encoder->audioCodecCtx || !decoder) return -1;
     if (!decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return 0;
 
@@ -818,6 +831,7 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
 
     av_frame_free(&frame);
     return 0;
+#endif
 }
 
 TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {

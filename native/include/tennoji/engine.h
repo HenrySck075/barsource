@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifndef TENNOJI_ENABLE_LEGACY_AUDIO_API
+#define TENNOJI_ENABLE_LEGACY_AUDIO_API 0
+#endif
+
 #ifdef _WIN32
   #ifdef TENNOJI_BUILD
     #define TENNOJI_EXPORT __declspec(dllexport)

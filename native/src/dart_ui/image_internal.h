@@ -8,6 +8,7 @@
 extern "C" {
 struct TennojiCanvasImage {
   sk_sp<SkImage> image;
+  bool managedByDecoder = false;
 };
 struct TennojiImageDescriptor {
   // This must be kept in sync with the enum in painting.dart

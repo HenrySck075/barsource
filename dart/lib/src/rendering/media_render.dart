@@ -134,11 +134,8 @@ class RenderVideoClip extends RenderBox with AudioContributor {
 
   @override
   void detach() {
-    if (_texture != null) {
-      // ask the lib to call delete
-      rina_texture_destroy(_texture!);
-      _texture = null;
-    }
+    _texture = null;
+    _textureTimestamp = null;
     super.detach();
   }
 
@@ -185,11 +182,6 @@ class RenderVideoClip extends RenderBox with AudioContributor {
     final clipTime = _position - trimStart;
 
     final timeUs = (clipTime.inMicroseconds * playbackSpeed).toInt();
-
-    // Release previous texture before acquiring a new one
-    if (_texture != null && timeUs != _textureTimestamp) {
-      rina_texture_destroy(_texture!);
-    }
 
     if (timeUs != _textureTimestamp) {
       _texture = rina_decoder_get_texture(_decoder!, timeUs);

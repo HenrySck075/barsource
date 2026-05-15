@@ -23,6 +23,7 @@ extern "C" {
 #include "demuxer.h"
 #include <cstring>
 #include <cstdlib>
+#include <cerrno>
 
 // HW pixel format callback for hw-accel decoding
 static enum AVPixelFormat get_hw_format(AVCodecContext* ctx,
@@ -314,6 +315,7 @@ TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder) {
     av_packet_free(&decoder->decodePacket);
     av_frame_free(&decoder->decodeFrame);
     av_frame_free(&decoder->audioDecodeFrame);
+    delete decoder->cachedTexture;
     if (decoder->audioFifo) av_audio_fifo_free(decoder->audioFifo);
     if (decoder->swrCtx) swr_free(&decoder->swrCtx);
     if (decoder->videoSwsCtx) sws_freeContext(decoder->videoSwsCtx);
@@ -368,6 +370,9 @@ TENNOJI_EXPORT int rina_decoder_seek(TennojiDecoder* decoder, int64_t timestamp_
 TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* decoder,
                                                 int64_t timestamp_us) {
     if (!decoder || !decoder->videoCodecCtx || !decoder->engine) return nullptr;
+    if (decoder->cachedTexture && decoder->cachedTextureTsUs == timestamp_us) {
+        return decoder->cachedTexture;
+    }
 
     AVRational tb = decoder->fmtCtx->streams[decoder->videoStreamIdx]->time_base;
     int64_t target_pts = av_rescale_q(timestamp_us,
@@ -454,7 +459,16 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
     if (bestFrame) {
         sk_sp<SkImage> image = avframe_to_skimage(decoder, bestFrame);
         if (image) {
-            return new TennojiCanvasImage{.image = std::move(image)};
+            if (!decoder->cachedTexture) {
+                decoder->cachedTexture = new TennojiCanvasImage{
+                    .image = std::move(image),
+                    .managedByDecoder = true,
+                };
+            } else {
+                decoder->cachedTexture->image = std::move(image);
+            }
+            decoder->cachedTextureTsUs = timestamp_us;
+            return decoder->cachedTexture;
         }
     }
 
@@ -503,6 +517,11 @@ TENNOJI_EXPORT int64_t rina_media_source_duration(
 
 TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
                                                int64_t timestamp_us) {
+#if !TENNOJI_ENABLE_LEGACY_AUDIO_API
+    (void)decoder;
+    (void)timestamp_us;
+    return AVERROR(ENOSYS);
+#else
     if (!decoder || !decoder->fmtCtx || decoder->audioStreamIdx < 0) return -1;
 
     AVRational tb = decoder->fmtCtx->streams[decoder->audioStreamIdx]->time_base;
@@ -539,6 +558,7 @@ TENNOJI_EXPORT int rina_decoder_read_audio(TennojiDecoder* decoder,
 
     av_packet_free(&pkt);
     return 0;
+#endif
 }
 
 TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
