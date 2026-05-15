@@ -173,11 +173,11 @@ static void render_loop(TennojiEncoder* enc) {
              exSurface.skSurface->getCanvas()->clear(SK_ColorTRANSPARENT);
              exSurface.skSurface->getCanvas()->drawPicture(frame.picture);
              
-               if (exSurface.fd != -1) {
-                   if (auto* grCtx = exSurface.skSurface->recordingContext()) {
-                       static_cast<GrDirectContext*>(grCtx)->flushAndSubmit();
-                   }
-                   // Zero copy path
+                if (exSurface.fd != -1) {
+                    if (auto* grCtx = exSurface.skSurface->recordingContext()) {
+                        static_cast<GrDirectContext*>(grCtx)->flushAndSubmit(GrSyncCpu::kNo);
+                    }
+                    // Zero copy path
                    {
                       std::unique_lock<std::mutex> lock(enc->encodeMutex);
                       enc->encodeCv.wait(lock, [&] {

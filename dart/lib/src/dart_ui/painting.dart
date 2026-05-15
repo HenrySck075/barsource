@@ -33,29 +33,42 @@ bool _rrectIsValid(RRect rrect) {
 }
 
 bool _rsuperellipseIsValid(RSuperellipse rsuperellipse) {
-  assert(!rsuperellipse.hasNaN, 'RSuperellipse argument contained a NaN value.');
+  assert(
+    !rsuperellipse.hasNaN,
+    'RSuperellipse argument contained a NaN value.',
+  );
   return true;
 }
 
 bool _offsetIsValid(Offset offset) {
-  assert(!offset.dx.isNaN && !offset.dy.isNaN, 'Offset argument contained a NaN value.');
+  assert(
+    !offset.dx.isNaN && !offset.dy.isNaN,
+    'Offset argument contained a NaN value.',
+  );
   return true;
 }
 
 bool _matrix4IsValid(Float32List matrix4) {
   assert(matrix4.length == 16, 'Matrix4 must have 16 entries.');
-  assert(matrix4.every((double value) => value.isFinite), 'Matrix4 entries must be finite.');
+  assert(
+    matrix4.every((double value) => value.isFinite),
+    'Matrix4 entries must be finite.',
+  );
   return true;
 }
 
 bool _radiusIsValid(Radius radius) {
-  assert(!radius.x.isNaN && !radius.y.isNaN, 'Radius argument contained a NaN value.');
+  assert(
+    !radius.x.isNaN && !radius.y.isNaN,
+    'Radius argument contained a NaN value.',
+  );
   return true;
 }
 
 Color _scaleAlpha(Color x, double factor) {
   return x.withValues(alpha: clampDouble(x.a * factor, 0, 1));
 }
+
 /// An immutable color value in ARGB format.
 ///
 /// Consider the light teal of the [Flutter logo](https://flutter.dev/brand). It
@@ -125,7 +138,13 @@ class Color {
   /// is one of the four components (alpha, red, green, blue).
   /// {@endtemplate}
   const Color(int value)
-    : this._fromARGBC(value >> 24, value >> 16, value >> 8, value, ColorSpace.sRGB);
+    : this._fromARGBC(
+        value >> 24,
+        value >> 16,
+        value >> 8,
+        value,
+        ColorSpace.sRGB,
+      );
 
   /// Construct a color with floating-point color components.
   ///
@@ -170,10 +189,16 @@ class Color {
   /// value.
   ///
   /// {@macro dart.ui.Color.componentsStoredAsFloatingPoint}
-  const Color.fromARGB(int a, int r, int g, int b) : this._fromARGBC(a, r, g, b, ColorSpace.sRGB);
+  const Color.fromARGB(int a, int r, int g, int b)
+    : this._fromARGBC(a, r, g, b, ColorSpace.sRGB);
 
-  const Color._fromARGBC(int alpha, int red, int green, int blue, ColorSpace colorSpace)
-    : this._fromRGBOC(red, green, blue, (alpha & 0xff) / 255, colorSpace);
+  const Color._fromARGBC(
+    int alpha,
+    int red,
+    int green,
+    int blue,
+    ColorSpace colorSpace,
+  ) : this._fromRGBOC(red, green, blue, (alpha & 0xff) / 255, colorSpace);
 
   /// Create an sRGB color from red, green, blue, and opacity, similar to
   /// `rgba()` in CSS.
@@ -221,7 +246,9 @@ class Color {
   ///
   /// This getter is a _stub_. It is recommended instead to use the explicit
   /// [toARGB32] method.
-  @Deprecated('Use component accessors like .r or .g, or toARGB32 for an explicit conversion')
+  @Deprecated(
+    'Use component accessors like .r or .g, or toARGB32 for an explicit conversion',
+  )
   int get value => toARGB32();
 
   /// Returns a 32-bit value representing this color.
@@ -317,7 +344,10 @@ class Color {
       );
     }
     if (colorSpace != null && colorSpace != this.colorSpace) {
-      final _ColorTransform transform = _getColorTransform(this.colorSpace, colorSpace);
+      final _ColorTransform transform = _getColorTransform(
+        this.colorSpace,
+        colorSpace,
+      );
       return transform.transform(updatedComponents ?? this, colorSpace);
     } else {
       return updatedComponents ?? this;
@@ -1315,7 +1345,8 @@ final class Paint {
   static const int _kStrokeMiterLimitOffset = _kStrokeMiterLimitIndex << 2;
   static const int _kFilterQualityOffset = _kFilterQualityIndex << 2;
   static const int _kMaskFilterOffset = _kMaskFilterIndex << 2;
-  static const int _kMaskFilterBlurStyleOffset = _kMaskFilterBlurStyleIndex << 2;
+  static const int _kMaskFilterBlurStyleOffset =
+      _kMaskFilterBlurStyleIndex << 2;
   static const int _kMaskFilterSigmaOffset = _kMaskFilterSigmaIndex << 2;
   static const int _kInvertColorOffset = _kInvertColorIndex << 2;
 
@@ -1326,15 +1357,50 @@ final class Paint {
   // C++ unit tests access this.
   @pragma('vm:entry-point')
   List<Object?>? _objects;
+  Pointer<Uint32>? _nativeEncodedData;
+  Uint32List? _nativeEncodedDataView;
+  static final Finalizer<Pointer<Uint32>> _encodedDataFinalizer =
+      Finalizer<Pointer<Uint32>>((ptr) => calloc.free(ptr));
 
   List<Object?> _ensureObjectsInitialized() {
     return _objects ??= List<Object?>.filled(_kObjectCount, null);
   }
 
+  void _ensureNativeEncodedDataUpToDate() {
+    final encodedData = _data.buffer.asUint32List();
+    final len = (_kDataByteCount / 4).toInt();
+    if (encodedData.length < len) {
+      throw StateError('paint encoded data is smaller than expected');
+    }
+
+    if (_nativeEncodedData == null || _nativeEncodedDataView?.length != len) {
+      if (_nativeEncodedData != null) {
+        _encodedDataFinalizer.detach(this);
+        calloc.free(_nativeEncodedData!);
+      }
+      _nativeEncodedData = calloc<Uint32>(len);
+      _nativeEncodedDataView = _nativeEncodedData!.asTypedList(len);
+      _encodedDataFinalizer.attach(this, _nativeEncodedData!, detach: this);
+    }
+
+    final nativeView = _nativeEncodedDataView!;
+    bool changed = false;
+    for (int i = 0; i < len; i++) {
+      if (nativeView[i] != encodedData[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (changed) {
+      nativeView.setAll(0, encodedData);
+    }
+  }
+
   static const int _kShaderIndex = 0;
   static const int _kColorFilterIndex = 1;
   static const int _kImageFilterIndex = 2;
-  static const int _kObjectCount = 3; // Must be one larger than the largest index.
+  static const int _kObjectCount =
+      3; // Must be one larger than the largest index.
 
   /// Whether to apply anti-aliasing to lines and images drawn on the
   /// canvas.
@@ -1370,11 +1436,18 @@ final class Paint {
     final double red = _data.getFloat32(_kColorRedOffset, _kFakeHostEndian);
     final double green = _data.getFloat32(_kColorGreenOffset, _kFakeHostEndian);
     final double blue = _data.getFloat32(_kColorBlueOffset, _kFakeHostEndian);
-    final double alpha = 1.0 - _data.getFloat32(_kColorAlphaOffset, _kFakeHostEndian);
+    final double alpha =
+        1.0 - _data.getFloat32(_kColorAlphaOffset, _kFakeHostEndian);
     final ColorSpace colorSpace = _indexToColorSpace(
       _data.getInt32(_kColorSpaceOffset, _kFakeHostEndian),
     );
-    return Color.from(alpha: alpha, red: red, green: green, blue: blue, colorSpace: colorSpace);
+    return Color.from(
+      alpha: alpha,
+      red: red,
+      green: green,
+      blue: blue,
+      colorSpace: colorSpace,
+    );
   }
 
   set color(Color value) {
@@ -1382,7 +1455,11 @@ final class Paint {
     _data.setFloat32(_kColorGreenOffset, value.g, _kFakeHostEndian);
     _data.setFloat32(_kColorBlueOffset, value.b, _kFakeHostEndian);
     _data.setFloat32(_kColorAlphaOffset, 1.0 - value.a, _kFakeHostEndian);
-    _data.setInt32(_kColorSpaceOffset, _colorSpaceToIndex(value.colorSpace), _kFakeHostEndian);
+    _data.setInt32(
+      _kColorSpaceOffset,
+      _colorSpaceToIndex(value.colorSpace),
+      _kFakeHostEndian,
+    );
   }
 
   // Must be kept in sync with the default in paint.cc.
@@ -1420,7 +1497,10 @@ final class Paint {
   ///
   /// Defaults to [PaintingStyle.fill].
   PaintingStyle get style {
-    return PaintingStyle.values[_data.getInt32(_kStyleOffset, _kFakeHostEndian)];
+    return PaintingStyle.values[_data.getInt32(
+      _kStyleOffset,
+      _kFakeHostEndian,
+    )];
   }
 
   set style(PaintingStyle value) {
@@ -1447,7 +1527,10 @@ final class Paint {
   ///
   /// Defaults to [StrokeCap.butt], i.e. no caps.
   StrokeCap get strokeCap {
-    return StrokeCap.values[_data.getInt32(_kStrokeCapOffset, _kFakeHostEndian)];
+    return StrokeCap.values[_data.getInt32(
+      _kStrokeCapOffset,
+      _kFakeHostEndian,
+    )];
   }
 
   set strokeCap(StrokeCap value) {
@@ -1481,7 +1564,10 @@ final class Paint {
   ///  * [strokeCap] to control what is drawn at the ends of the stroke.
   ///  * [StrokeJoin] for the definitive list of stroke joins.
   StrokeJoin get strokeJoin {
-    return StrokeJoin.values[_data.getInt32(_kStrokeJoinOffset, _kFakeHostEndian)];
+    return StrokeJoin.values[_data.getInt32(
+      _kStrokeJoinOffset,
+      _kFakeHostEndian,
+    )];
   }
 
   set strokeJoin(StrokeJoin value) {
@@ -1537,7 +1623,10 @@ final class Paint {
         return null;
       case MaskFilter._TypeBlur:
         return MaskFilter.blur(
-          BlurStyle.values[_data.getInt32(_kMaskFilterBlurStyleOffset, _kFakeHostEndian)],
+          BlurStyle.values[_data.getInt32(
+            _kMaskFilterBlurStyleOffset,
+            _kFakeHostEndian,
+          )],
           _data.getFloat32(_kMaskFilterSigmaOffset, _kFakeHostEndian),
         );
     }
@@ -1546,14 +1635,26 @@ final class Paint {
 
   set maskFilter(MaskFilter? value) {
     if (value == null) {
-      _data.setInt32(_kMaskFilterOffset, MaskFilter._TypeNone, _kFakeHostEndian);
+      _data.setInt32(
+        _kMaskFilterOffset,
+        MaskFilter._TypeNone,
+        _kFakeHostEndian,
+      );
       _data.setInt32(_kMaskFilterBlurStyleOffset, 0, _kFakeHostEndian);
       _data.setFloat32(_kMaskFilterSigmaOffset, 0.0, _kFakeHostEndian);
     } else {
       // For now we only support one kind of MaskFilter, so we don't need to
       // check what the type is if it's not null.
-      _data.setInt32(_kMaskFilterOffset, MaskFilter._TypeBlur, _kFakeHostEndian);
-      _data.setInt32(_kMaskFilterBlurStyleOffset, value._style.index, _kFakeHostEndian);
+      _data.setInt32(
+        _kMaskFilterOffset,
+        MaskFilter._TypeBlur,
+        _kFakeHostEndian,
+      );
+      _data.setInt32(
+        _kMaskFilterBlurStyleOffset,
+        value._style.index,
+        _kFakeHostEndian,
+      );
       _data.setFloat32(_kMaskFilterSigmaOffset, value._sigma, _kFakeHostEndian);
     }
   }
@@ -1565,7 +1666,10 @@ final class Paint {
   /// Defaults to [FilterQuality.none].
   // TODO(ianh): verify that the image drawing methods actually respect this
   FilterQuality get filterQuality {
-    return FilterQuality.values[_data.getInt32(_kFilterQualityOffset, _kFakeHostEndian)];
+    return FilterQuality.values[_data.getInt32(
+      _kFilterQualityOffset,
+      _kFakeHostEndian,
+    )];
   }
 
   set filterQuality(FilterQuality value) {
@@ -1589,7 +1693,10 @@ final class Paint {
 
   set shader(Shader? value) {
     assert(() {
-      assert(value == null || !value.debugDisposed, 'Attempted to set a disposed shader to $this');
+      assert(
+        value == null || !value.debugDisposed,
+        'Attempted to set a disposed shader to $this',
+      );
       return true;
     }());
     /*
@@ -1604,6 +1711,7 @@ final class Paint {
     */
     _ensureObjectsInitialized()[_kShaderIndex] = value;
   }
+
   /// A color filter to apply when a shape is drawn or when a layer is
   /// composited.
   ///
@@ -1647,6 +1755,7 @@ final class Paint {
     final nativeFilter = _objects?[_kImageFilterIndex] as _ImageFilter?;
     return nativeFilter?.creator;
   }
+
   set imageFilter(ImageFilter? value) {
     if (value == null) {
       if (_objects != null) {
@@ -1676,11 +1785,8 @@ final class Paint {
 
   Pointer<TennojiCanvasPaintMetadata> _createPaintMetadata(Arena arena) {
     final ret = arena<TennojiCanvasPaintMetadata>();
-    final encodedData = _data.buffer.asUint32List();
-    final len = (_kDataByteCount/4).toInt();
-    final encodedDataPtr = arena<Uint32>(len);
-    encodedDataPtr.asTypedList(len).setAll(0, encodedData);
-    ret.ref.encodedData = encodedDataPtr;
+    _ensureNativeEncodedDataUpToDate();
+    ret.ref.encodedData = _nativeEncodedData!;
 
     final sh = shader;
     if (sh != null) {
@@ -1724,7 +1830,9 @@ final class Paint {
       }
       if (strokeJoin == StrokeJoin.miter) {
         if (strokeMiterLimit != _kStrokeMiterLimitDefault) {
-          result.write(' $strokeJoin up to ${strokeMiterLimit.toStringAsFixed(1)}');
+          result.write(
+            ' $strokeJoin up to ${strokeMiterLimit.toStringAsFixed(1)}',
+          );
         }
       } else {
         result.write(' $strokeJoin');
@@ -2029,9 +2137,12 @@ class Image {
       return true;
     }());
     return disposed ??
-        (throw StateError('Image.debugDisposed is only available when asserts are enabled.'));
+        (throw StateError(
+          'Image.debugDisposed is only available when asserts are enabled.',
+        ));
   }
-/*
+
+  /*
   /// Converts the [Image] object into a byte array.
   ///
   /// The [format] argument specifies the format in which the bytes will be
@@ -2082,7 +2193,9 @@ class Image {
   List<StackTrace>? debugGetOpenHandleStackTraces() {
     List<StackTrace>? stacks;
     assert(() {
-      stacks = _image._handles.map((Image handle) => handle._debugStack!).toList();
+      stacks = _image._handles
+          .map((Image handle) => handle._debugStack!)
+          .toList();
       return true;
     }());
     return stacks;
@@ -2212,9 +2325,9 @@ base class _Image {
 
   int get height => rina_texture_get_height(_nativePtr);
 
-// usually you dont have to do this. until the demand is high then.
-// but even then, its probably going to be synchronous
-/*
+  // usually you dont have to do this. until the demand is high then.
+  // but even then, its probably going to be synchronous
+  /*
   Future<ByteData?> toByteData({ImageByteFormat format = ImageByteFormat.rawRgba}) {
     return _futurizeWithError((_CallbackWithError<ByteData?> callback) {
       return _toByteData(format.index, (Uint8List? encoded, String? error) {
@@ -2249,7 +2362,9 @@ base class _Image {
 
   final Set<Image> _handles = <Image>{};
 
-  final int colorSpace = ColorSpace.sRGB.index; // skia images use this color space and we only use skia anyway
+  final int colorSpace = ColorSpace
+      .sRGB
+      .index; // skia images use this color space and we only use skia anyway
 
   @override
   String toString() => '[$width\u00D7$height]';
@@ -2425,8 +2540,8 @@ base class _NativeCodec implements Codec {
     // todo: ?
     rina_frame_info_destroy(bart);
     return FrameInfo._(
-      duration: Duration(milliseconds: duration), 
-      image: Image._(img, img.width, img.height)
+      duration: Duration(milliseconds: duration),
+      image: Image._(img, img.width, img.height),
     );
   }
 
@@ -2434,8 +2549,10 @@ base class _NativeCodec implements Codec {
   void dispose() => rina_codec_destroy(_nativePtr);
 
   @override
-  String toString() => 'Codec(${_cachedFrameCount == null ? "" : "$_cachedFrameCount frames"})';
+  String toString() =>
+      'Codec(${_cachedFrameCount == null ? "" : "$_cachedFrameCount frames"})';
 }
+
 /// Instantiates an image [Codec].
 ///
 /// This method is a convenience wrapper around the [ImageDescriptor] API, and
@@ -2535,7 +2652,10 @@ Codec instantiateImageCodecWithSize(
   getTargetSize ??= _getDefaultImageSize;
   final ImageDescriptor descriptor = ImageDescriptor.encoded(buffer);
   try {
-    final TargetImageSize targetSize = getTargetSize(descriptor.width, descriptor.height);
+    final TargetImageSize targetSize = getTargetSize(
+      descriptor.width,
+      descriptor.height,
+    );
     assert(targetSize.width == null || targetSize.width! > 0);
     assert(targetSize.height == null || targetSize.height! > 0);
     return descriptor.instantiateCodec(
@@ -2558,7 +2678,8 @@ TargetImageSize _getDefaultImageSize(int intrinsicWidth, int intrinsicHeight) {
 ///
 ///  * [instantiateImageCodecWithSize], which used this signature for its
 ///    `getTargetSize` argument.
-typedef TargetImageSizeCallback = TargetImageSize Function(int intrinsicWidth, int intrinsicHeight);
+typedef TargetImageSizeCallback =
+    TargetImageSize Function(int intrinsicWidth, int intrinsicHeight);
 
 /// A specification of the size to which an image should be decoded.
 ///
@@ -2684,12 +2805,11 @@ Image? decodeImageFromPixels(
     }
   }
 
-  final codec = descriptor
-      .instantiateCodec(
-        targetWidth: targetWidth,
-        targetHeight: targetHeight,
-        targetFormat: targetFormat,
-      );
+  final codec = descriptor.instantiateCodec(
+    targetWidth: targetWidth,
+    targetHeight: targetHeight,
+    targetFormat: targetFormat,
+  );
 
   final frameInfo = codec.getNextFrame();
   codec.dispose();
@@ -2853,13 +2973,27 @@ abstract class Path {
   ///
   /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/path_cubic_to.png#gh-light-mode-only)
   /// ![](https://flutter.github.io/assets-for-api-docs/assets/dart-ui/path_cubic_to_dark.png#gh-dark-mode-only)
-  void cubicTo(double x1, double y1, double x2, double y2, double x3, double y3);
+  void cubicTo(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double x3,
+    double y3,
+  );
 
   /// Adds a cubic bezier segment that curves from the current point
   /// to the point at the offset (x3,y3) from the current point, using
   /// the control points at the offsets (x1,y1) and (x2,y2) from the
   /// current point.
-  void relativeCubicTo(double x1, double y1, double x2, double y2, double x3, double y3);
+  void relativeCubicTo(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double x3,
+    double y3,
+  );
 
   /// Adds a bezier segment that curves from the current point to the
   /// given point (x2,y2), using the control points (x1,y1) and the
@@ -3097,8 +3231,9 @@ abstract class Path {
 
 base class _NativePath implements Path, Finalizable {
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    addresses.rina_path_destroy.cast<NativeFinalizerFunction>()
+    addresses.rina_path_destroy.cast<NativeFinalizerFunction>(),
   );
+
   /// Create a new empty [Path] object.
   _NativePath() {
     _nativePtr = rina_path_create();
@@ -3124,54 +3259,82 @@ base class _NativePath implements Path, Finalizable {
   late final Pointer<TennojiCanvasPath> _nativePtr;
 
   @override
-  PathFillType get fillType => PathFillType.values[rina_path_get_fill_type(_nativePtr)];
+  PathFillType get fillType =>
+      PathFillType.values[rina_path_get_fill_type(_nativePtr)];
   @override
-  set fillType(PathFillType value) => rina_path_set_fill_type(_nativePtr, value.index);
+  set fillType(PathFillType value) =>
+      rina_path_set_fill_type(_nativePtr, value.index);
 
   @override
   void moveTo(double x, double y) => rina_path_move_to(_nativePtr, x, y);
 
   @override
-  void relativeMoveTo(double dx, double dy) => rina_path_relative_move_to(_nativePtr, dx, dy);
+  void relativeMoveTo(double dx, double dy) =>
+      rina_path_relative_move_to(_nativePtr, dx, dy);
 
   @override
-  void lineTo(double x, double y) => rina_path_line_to(_nativePtr, x ,y);
+  void lineTo(double x, double y) => rina_path_line_to(_nativePtr, x, y);
 
   @override
-  void relativeLineTo(double dx, double dy) => rina_path_relative_line_to(_nativePtr, dx, dy);
+  void relativeLineTo(double dx, double dy) =>
+      rina_path_relative_line_to(_nativePtr, dx, dy);
 
   @override
-  void quadraticBezierTo(double x1, double y1, double x2, double y2) 
-    => rina_path_quadratic_to(_nativePtr, x1,y1,x2,y2);
+  void quadraticBezierTo(double x1, double y1, double x2, double y2) =>
+      rina_path_quadratic_to(_nativePtr, x1, y1, x2, y2);
 
   @override
-  void relativeQuadraticBezierTo(double x1, double y1, double x2, double y2)
-    => rina_path_relative_quadratic_to(_nativePtr, x1,y1,x2,y2);
+  void relativeQuadraticBezierTo(double x1, double y1, double x2, double y2) =>
+      rina_path_relative_quadratic_to(_nativePtr, x1, y1, x2, y2);
 
   @override
-  void cubicTo(double x1, double y1, double x2, double y2, double x3, double y3)
-    => rina_path_cubic_to(_nativePtr, x1,y1,x2,y2,x3,y3);
+  void cubicTo(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double x3,
+    double y3,
+  ) => rina_path_cubic_to(_nativePtr, x1, y1, x2, y2, x3, y3);
 
   @override
-  void relativeCubicTo(double x1, double y1, double x2, double y2, double x3, double y3)
-    => rina_path_relative_cubic_to(_nativePtr, x1,y1,x2,y2,x3,y3);
+  void relativeCubicTo(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double x3,
+    double y3,
+  ) => rina_path_relative_cubic_to(_nativePtr, x1, y1, x2, y2, x3, y3);
 
   @override
-  void conicTo(double x1, double y1, double x2, double y2, double w)
-    => rina_path_conic_to(_nativePtr, x1,y1,x2,y2,w);
+  void conicTo(double x1, double y1, double x2, double y2, double w) =>
+      rina_path_conic_to(_nativePtr, x1, y1, x2, y2, w);
 
   @override
-  void relativeConicTo(double x1, double y1, double x2, double y2, double w)
-    => rina_path_relative_conic_to(_nativePtr, x1,y1,x2,y2,w);
+  void relativeConicTo(double x1, double y1, double x2, double y2, double w) =>
+      rina_path_relative_conic_to(_nativePtr, x1, y1, x2, y2, w);
 
   @override
-  void arcTo(Rect rect, double startAngle, double sweepAngle, bool forceMoveTo) {
+  void arcTo(
+    Rect rect,
+    double startAngle,
+    double sweepAngle,
+    bool forceMoveTo,
+  ) {
     assert(_rectIsValid(rect));
     rina_path_arc_to_rect(
       _nativePtr,
-      rect.left, rect.top, rect.right, rect.bottom, startAngle, sweepAngle, forceMoveTo
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+      startAngle,
+      sweepAngle,
+      forceMoveTo,
     );
   }
+
   @override
   void arcToPoint(
     Offset arcEnd, {
@@ -3184,10 +3347,15 @@ base class _NativePath implements Path, Finalizable {
     assert(_radiusIsValid(radius));
     rina_path_arc_to_point(
       _nativePtr,
-      arcEnd.dx, arcEnd.dy, radius.x, radius.y, rotation, largeArc, clockwise
+      arcEnd.dx,
+      arcEnd.dy,
+      radius.x,
+      radius.y,
+      rotation,
+      largeArc,
+      clockwise,
     );
   }
-
 
   @override
   void relativeArcToPoint(
@@ -3214,29 +3382,54 @@ base class _NativePath implements Path, Finalizable {
   @override
   void addRect(Rect rect) {
     assert(_rectIsValid(rect));
-    rina_path_add_rect(_nativePtr, rect.left, rect.top, rect.right, rect.bottom);
+    rina_path_add_rect(
+      _nativePtr,
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    );
   }
+
   @override
   void addOval(Rect oval) {
     assert(_rectIsValid(oval));
-    rina_path_add_oval(_nativePtr, oval.left, oval.top, oval.right, oval.bottom);
+    rina_path_add_oval(
+      _nativePtr,
+      oval.left,
+      oval.top,
+      oval.right,
+      oval.bottom,
+    );
   }
+
   @override
   void addArc(Rect oval, double startAngle, double sweepAngle) {
     assert(_rectIsValid(oval));
-    rina_path_add_arc(_nativePtr, oval.left, oval.top, oval.right, oval.bottom, startAngle, sweepAngle);
+    rina_path_add_arc(
+      _nativePtr,
+      oval.left,
+      oval.top,
+      oval.right,
+      oval.bottom,
+      startAngle,
+      sweepAngle,
+    );
   }
+
   @override
   void addPolygon(List<Offset> points, bool close) {
     final encoded = _encodePointList(points);
     rina_path_add_polygon(_nativePtr, encoded.$1, points.length, close);
     malloc.free(encoded.$1);
   }
+
   @override
   void addRRect(RRect rrect) {
     assert(_rrectIsValid(rrect));
     rina_path_add_rrect(_nativePtr, rrect._getValue32().address);
   }
+
   @override
   void addRSuperellipse(RSuperellipse rsuperellipse) {
     assert(_rsuperellipseIsValid(rsuperellipse));
@@ -3257,24 +3450,52 @@ base class _NativePath implements Path, Finalizable {
 
     rina_path_add_rsuperellipse(_nativePtr, data.address);
   }
+
   @override
   void addPath(Path path, Offset offset, {Float32List? matrix4}) {
     assert(_offsetIsValid(offset));
     if (matrix4 != null) {
       assert(_matrix4IsValid(matrix4));
-      rina_path_add_path_with_matrix(_nativePtr, (path as _NativePath)._nativePtr, false, offset.dx, offset.dy, matrix4.address);
+      rina_path_add_path_with_matrix(
+        _nativePtr,
+        (path as _NativePath)._nativePtr,
+        false,
+        offset.dx,
+        offset.dy,
+        matrix4.address,
+      );
     } else {
-      rina_path_add_path(_nativePtr, (path as _NativePath)._nativePtr, false, offset.dx, offset.dy);
+      rina_path_add_path(
+        _nativePtr,
+        (path as _NativePath)._nativePtr,
+        false,
+        offset.dx,
+        offset.dy,
+      );
     }
   }
+
   @override
   void extendWithPath(Path path, Offset offset, {Float32List? matrix4}) {
     assert(_offsetIsValid(offset));
     if (matrix4 != null) {
       assert(_matrix4IsValid(matrix4));
-      rina_path_add_path_with_matrix(_nativePtr, (path as _NativePath)._nativePtr, true, offset.dx, offset.dy, matrix4.address);
+      rina_path_add_path_with_matrix(
+        _nativePtr,
+        (path as _NativePath)._nativePtr,
+        true,
+        offset.dx,
+        offset.dy,
+        matrix4.address,
+      );
     } else {
-      rina_path_add_path(_nativePtr, (path as _NativePath)._nativePtr, true, offset.dx, offset.dy);
+      rina_path_add_path(
+        _nativePtr,
+        (path as _NativePath)._nativePtr,
+        true,
+        offset.dx,
+        offset.dy,
+      );
     }
   }
 
@@ -3298,6 +3519,7 @@ base class _NativePath implements Path, Finalizable {
     rina_path_shift(path._nativePtr, offset.dx, offset.dy);
     return path;
   }
+
   @override
   Path transform(Float32List matrix4) {
     assert(_matrix4IsValid(matrix4));
@@ -3306,6 +3528,7 @@ base class _NativePath implements Path, Finalizable {
     rina_path_transform(path._nativePtr, matrix4.address);
     return path;
   }
+
   @override
   Rect getBounds() {
     final Pointer<Float> rect = rina_path_get_bounds(_nativePtr);
@@ -3322,8 +3545,13 @@ base class _NativePath implements Path, Finalizable {
     return ret;
   }
 
-  bool _op(_NativePath path1, _NativePath path2, int operation) 
-    => rina_path_combine_op(_nativePtr, path1._nativePtr, path2._nativePtr, operation);
+  bool _op(_NativePath path1, _NativePath path2, int operation) =>
+      rina_path_combine_op(
+        _nativePtr,
+        path1._nativePtr,
+        path2._nativePtr,
+        operation,
+      );
 
   @override
   PathMetrics computeMetrics({bool forceClosed = false}) {
@@ -3397,7 +3625,9 @@ class Tangent {
 /// use [toList] on this object.
 class PathMetrics extends collection.IterableBase<PathMetric> {
   PathMetrics._(Path path, bool forceClosed)
-    : _iterator = PathMetricIterator._(_PathMeasure(path as _NativePath, forceClosed));
+    : _iterator = PathMetricIterator._(
+        _PathMeasure(path as _NativePath, forceClosed),
+      );
 
   final Iterator<PathMetric> _iterator;
 
@@ -3506,7 +3736,12 @@ class PathMetric {
   /// `start` and `end` are clamped to legal values (0..[length])
   /// Begin the segment with a moveTo if `startWithMoveTo` is true.
   Path extractPath(double start, double end, {bool startWithMoveTo = true}) {
-    return _measure.extractPath(contourIndex, start, end, startWithMoveTo: startWithMoveTo);
+    return _measure.extractPath(
+      contourIndex,
+      start,
+      end,
+      startWithMoveTo: startWithMoveTo,
+    );
   }
 
   @override
@@ -3516,8 +3751,8 @@ class PathMetric {
 
 base class _PathMeasure implements Finalizable {
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    addresses.rina_path_measure_destroy.cast<NativeFinalizerFunction>()
-  ); 
+    addresses.rina_path_measure_destroy.cast<NativeFinalizerFunction>(),
+  );
   _PathMeasure(_NativePath path, bool forceClosed) {
     _nativePtr = rina_path_measure_create(path._nativePtr, forceClosed);
     _finalizer.attach(this, _nativePtr.cast(), detach: this);
@@ -3533,29 +3768,50 @@ base class _PathMeasure implements Finalizable {
     return rina_path_measure_length(_nativePtr, contourIndex);
   }
 
-
   Tangent? getTangentForOffset(int contourIndex, double distance) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    final Pointer<Float> posTan = rina_path_measure_tangent_for_offset(_nativePtr, contourIndex, distance);
+    final Pointer<Float> posTan = rina_path_measure_tangent_for_offset(
+      _nativePtr,
+      contourIndex,
+      distance,
+    );
     if (posTan == nullptr) {
       return null;
     } else {
-      final tangent = Tangent(Offset(posTan[0], posTan[1]), Offset(posTan[2], posTan[3]));
+      final tangent = Tangent(
+        Offset(posTan[0], posTan[1]),
+        Offset(posTan[2], posTan[3]),
+      );
       malloc.free(posTan);
       return tangent;
     }
   }
-  Path extractPath(int contourIndex, double start, double end, {bool startWithMoveTo = true}) {
+
+  Path extractPath(
+    int contourIndex,
+    double start,
+    double end, {
+    bool startWithMoveTo = true,
+  }) {
     assert(
       contourIndex <= currentContourIndex,
       'Iterator must be advanced before index $contourIndex can be used.',
     );
-    final path = _NativePath.fromPointer(rina_path_measure_extract(_nativePtr, contourIndex, start, end, startWithMoveTo));
+    final path = _NativePath.fromPointer(
+      rina_path_measure_extract(
+        _nativePtr,
+        contourIndex,
+        start,
+        end,
+        startWithMoveTo,
+      ),
+    );
     return path;
   }
+
   bool isClosed(int contourIndex) {
     assert(
       contourIndex <= currentContourIndex,
@@ -3563,6 +3819,7 @@ base class _PathMeasure implements Finalizable {
     );
     return rina_path_measure_closed(_nativePtr, contourIndex);
   }
+
   // Move to the next contour in the path.
   //
   // A path can have a next contour if [Path.moveTo] was called after drawing began.
@@ -3574,6 +3831,7 @@ base class _PathMeasure implements Finalizable {
     }
     return next;
   }
+
   /// The index of the current contour in the list of contours in the path.
   ///
   /// [nextContour] will increment this to the zero based index.
@@ -3640,7 +3898,9 @@ class MaskFilter {
 
   @override
   bool operator ==(Object other) {
-    return other is MaskFilter && other._style == _style && other._sigma == _sigma;
+    return other is MaskFilter &&
+        other._style == _style &&
+        other._sigma == _sigma;
   }
 
   @override
@@ -3689,7 +3949,9 @@ double _srgbEOTF(double v) {
   if (v <= _kSrgbLinearThreshold) {
     return v / _kSrgbLinearSlope;
   }
-  return math.pow((v + _kSrgbEncodedOffset) / _kSrgbEncodedDivisor, _kSrgbGamma).toDouble();
+  return math
+      .pow((v + _kSrgbEncodedOffset) / _kSrgbEncodedDivisor, _kSrgbGamma)
+      .toDouble();
 }
 
 /// sRGB opto-electronic transfer function (linear to gamma encode).
@@ -3697,7 +3959,8 @@ double _srgbOETF(double v) {
   if (v <= _kSrgbLinearToEncodedThreshold) {
     return v * _kSrgbLinearSlope;
   }
-  return _kSrgbEncodedDivisor * math.pow(v, 1.0 / _kSrgbGamma).toDouble() - _kSrgbEncodedOffset;
+  return _kSrgbEncodedDivisor * math.pow(v, 1.0 / _kSrgbGamma).toDouble() -
+      _kSrgbEncodedOffset;
 }
 
 /// Extended versions that handle negative values by mirroring.
@@ -3748,11 +4011,17 @@ class _P3ToSrgbTransform implements _ColorTransform {
     final double bLin = _srgbEOTFExtended(color.b);
 
     final double rOut =
-        _kP3ToSrgbLinear[0] * rLin + _kP3ToSrgbLinear[1] * gLin + _kP3ToSrgbLinear[2] * bLin;
+        _kP3ToSrgbLinear[0] * rLin +
+        _kP3ToSrgbLinear[1] * gLin +
+        _kP3ToSrgbLinear[2] * bLin;
     final double gOut =
-        _kP3ToSrgbLinear[3] * rLin + _kP3ToSrgbLinear[4] * gLin + _kP3ToSrgbLinear[5] * bLin;
+        _kP3ToSrgbLinear[3] * rLin +
+        _kP3ToSrgbLinear[4] * gLin +
+        _kP3ToSrgbLinear[5] * bLin;
     final double bOut =
-        _kP3ToSrgbLinear[6] * rLin + _kP3ToSrgbLinear[7] * gLin + _kP3ToSrgbLinear[8] * bLin;
+        _kP3ToSrgbLinear[6] * rLin +
+        _kP3ToSrgbLinear[7] * gLin +
+        _kP3ToSrgbLinear[8] * bLin;
 
     return Color.from(
       alpha: color.a,
@@ -3776,11 +4045,17 @@ class _SrgbToP3Transform implements _ColorTransform {
     final double bLin = _srgbEOTFExtended(color.b);
 
     final double rOut =
-        _kSrgbToP3Linear[0] * rLin + _kSrgbToP3Linear[1] * gLin + _kSrgbToP3Linear[2] * bLin;
+        _kSrgbToP3Linear[0] * rLin +
+        _kSrgbToP3Linear[1] * gLin +
+        _kSrgbToP3Linear[2] * bLin;
     final double gOut =
-        _kSrgbToP3Linear[3] * rLin + _kSrgbToP3Linear[4] * gLin + _kSrgbToP3Linear[5] * bLin;
+        _kSrgbToP3Linear[3] * rLin +
+        _kSrgbToP3Linear[4] * gLin +
+        _kSrgbToP3Linear[5] * bLin;
     final double bOut =
-        _kSrgbToP3Linear[6] * rLin + _kSrgbToP3Linear[7] * gLin + _kSrgbToP3Linear[8] * bLin;
+        _kSrgbToP3Linear[6] * rLin +
+        _kSrgbToP3Linear[7] * gLin +
+        _kSrgbToP3Linear[8] * bLin;
 
     return Color.from(
       alpha: color.a,
@@ -3997,7 +4272,12 @@ class ColorFilter implements ImageFilter {
   @override
   int get hashCode {
     final List<double>? matrix = _matrix;
-    return Object.hash(_color, _blendMode, matrix == null ? null : Object.hashAll(matrix), _type);
+    return Object.hash(
+      _color,
+      _blendMode,
+      matrix == null ? null : Object.hashAll(matrix),
+      _type,
+    );
   }
 
   @override
@@ -4042,7 +4322,7 @@ class ColorFilter implements ImageFilter {
 base class _ColorFilter implements Finalizable {
   late final Pointer<TennojiColorFilter> _nativePtr;
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    addresses.rina_color_filter_destroy.cast<NativeFinalizerFunction>()
+    addresses.rina_color_filter_destroy.cast<NativeFinalizerFunction>(),
   );
   void _postSetup() {
     if (_nativePtr == nullptr) {
@@ -4050,13 +4330,21 @@ base class _ColorFilter implements Finalizable {
     }
     _finalizer.attach(this, _nativePtr.cast(), detach: this);
   }
-  _ColorFilter.mode(this.creator) : assert(creator._type == ColorFilter._kTypeMode) {
-    _nativePtr = rina_color_filter_create_mode(creator._color!.value, creator._blendMode!.index);
+
+  _ColorFilter.mode(this.creator)
+    : assert(creator._type == ColorFilter._kTypeMode) {
+    _nativePtr = rina_color_filter_create_mode(
+      creator._color!.value,
+      creator._blendMode!.index,
+    );
     _postSetup();
   }
 
-  _ColorFilter.matrix(this.creator) : assert(creator._type == ColorFilter._kTypeMatrix) {
-    _nativePtr = rina_color_filter_create_matrix(Float32List.fromList(creator._matrix!).address);
+  _ColorFilter.matrix(this.creator)
+    : assert(creator._type == ColorFilter._kTypeMatrix) {
+    _nativePtr = rina_color_filter_create_matrix(
+      Float32List.fromList(creator._matrix!).address,
+    );
     _postSetup();
   }
   _ColorFilter.linearToSrgbGamma(this.creator)
@@ -4071,11 +4359,11 @@ base class _ColorFilter implements Finalizable {
     _postSetup();
   }
 
-
   /// The original Dart object that created the native wrapper, which retains
   /// the values used for the filter.
   final ColorFilter creator;
 }
+
 /// A filter operation to apply to a raster image.
 ///
 /// See also:
@@ -4151,7 +4439,10 @@ abstract class ImageFilter {
     if (matrix4.length != 16) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
-    return _MatrixImageFilter(data: Float32List.fromList(matrix4), filterQuality: filterQuality);
+    return _MatrixImageFilter(
+      data: Float32List.fromList(matrix4),
+      filterQuality: filterQuality,
+    );
   }
 
   /// Composes the `inner` filter with `outer`, to combine their effects.
@@ -4159,7 +4450,10 @@ abstract class ImageFilter {
   /// Creates a single [ImageFilter] that when applied, has the same effect as
   /// subsequently applying `inner` and `outer`, i.e.,
   /// result = outer(inner(source)).
-  factory ImageFilter.compose({required ImageFilter outer, required ImageFilter inner}) {
+  factory ImageFilter.compose({
+    required ImageFilter outer,
+    required ImageFilter inner,
+  }) {
     return _ComposeImageFilter(innerFilter: inner, outerFilter: outer);
   }
 
@@ -4321,12 +4615,14 @@ class _GaussianBlurImageFilter implements ImageFilter {
   }
 
   @override
-  String get debugShortDescription => 'blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
+  String get debugShortDescription =>
+      'blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
 
   String _boundsString() => bounds == null ? '' : ', bounds: $bounds';
 
   @override
-  String toString() => 'ImageFilter.blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
+  String toString() =>
+      'ImageFilter.blur($sigmaX, $sigmaY, $_modeString${_boundsString()})';
 
   @override
   bool operator ==(Object other) {
@@ -4365,7 +4661,9 @@ class _DilateImageFilter implements ImageFilter {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    return other is _DilateImageFilter && other.radiusX == radiusX && other.radiusY == radiusY;
+    return other is _DilateImageFilter &&
+        other.radiusX == radiusX &&
+        other.radiusY == radiusY;
   }
 
   @override
@@ -4393,7 +4691,9 @@ class _ErodeImageFilter implements ImageFilter {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    return other is _ErodeImageFilter && other.radiusX == radiusX && other.radiusY == radiusY;
+    return other is _ErodeImageFilter &&
+        other.radiusX == radiusX &&
+        other.radiusY == radiusY;
   }
 
   @override
@@ -4416,7 +4716,8 @@ class _ComposeImageFilter implements ImageFilter {
       '${innerFilter.debugShortDescription} -> ${outerFilter.debugShortDescription}';
 
   @override
-  String toString() => 'ImageFilter.compose(source -> $debugShortDescription -> result)';
+  String toString() =>
+      'ImageFilter.compose(source -> $debugShortDescription -> result)';
 
   @override
   bool operator ==(Object other) {
@@ -4431,6 +4732,7 @@ class _ComposeImageFilter implements ImageFilter {
   @override
   int get hashCode => Object.hash(innerFilter, outerFilter);
 }
+
 /*
 class _FragmentShaderImageFilter implements ImageFilter {
   _FragmentShaderImageFilter(this.shader);
@@ -4473,7 +4775,7 @@ class _FragmentShaderImageFilter implements ImageFilter {
 base class _ImageFilter implements Finalizable {
   late final Pointer<TennojiImageFilter> _nativePtr;
   static final NativeFinalizer _finalizer = NativeFinalizer(
-    addresses.rina_image_filter_destroy.cast<NativeFinalizerFunction>()
+    addresses.rina_image_filter_destroy.cast<NativeFinalizerFunction>(),
   );
   void _postSetup() {
     if (_nativePtr == nullptr) {
@@ -4481,6 +4783,7 @@ base class _ImageFilter implements Finalizable {
     }
     _finalizer.attach(this, _nativePtr.cast<Void>(), detach: this);
   }
+
   /// Creates an image filter that applies a Gaussian blur.
   _ImageFilter.blur(_GaussianBlurImageFilter filter) : creator = filter {
     final Rect bounds = filter.bounds ?? Rect.zero;
@@ -4500,7 +4803,10 @@ base class _ImageFilter implements Finalizable {
   /// Creates an image filter that dilates each input pixel's channel values
   /// to the max value within the given radii along the x and y axes.
   _ImageFilter.dilate(_DilateImageFilter filter) : creator = filter {
-    _nativePtr = rina_image_filter_create_dilate(filter.radiusX, filter.radiusY);
+    _nativePtr = rina_image_filter_create_dilate(
+      filter.radiusX,
+      filter.radiusY,
+    );
     _postSetup();
   }
 
@@ -4519,23 +4825,33 @@ base class _ImageFilter implements Finalizable {
     if (filter.data.length != 16) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
-    _nativePtr = rina_image_filter_create_matrix(filter.data.address, filter.filterQuality.index);
+    _nativePtr = rina_image_filter_create_matrix(
+      filter.data.address,
+      filter.filterQuality.index,
+    );
     _postSetup();
   }
 
   /// Converts a color filter to an image filter.
   _ImageFilter.fromColorFilter(ColorFilter filter) : creator = filter {
     final nativeFilter = filter._toNativeColorFilter();
-    _nativePtr = rina_image_filter_create_from_cf(nativeFilter?._nativePtr ?? nullptr);
+    _nativePtr = rina_image_filter_create_from_cf(
+      nativeFilter?._nativePtr ?? nullptr,
+    );
   }
 
   /// Composes `_innerFilter` with `_outerFilter`.
   _ImageFilter.composed(_ComposeImageFilter filter) : creator = filter {
-    final _ImageFilter nativeFilterInner = filter.innerFilter._toNativeImageFilter();
-    final _ImageFilter nativeFilterOuter = filter.outerFilter._toNativeImageFilter();
-    _nativePtr = rina_image_filter_create_composed(nativeFilterOuter._nativePtr, nativeFilterInner._nativePtr);
+    final _ImageFilter nativeFilterInner = filter.innerFilter
+        ._toNativeImageFilter();
+    final _ImageFilter nativeFilterOuter = filter.outerFilter
+        ._toNativeImageFilter();
+    _nativePtr = rina_image_filter_create_composed(
+      nativeFilterOuter._nativePtr,
+      nativeFilterInner._nativePtr,
+    );
   }
-/*
+  /*
   _ImageFilter.shader(_FragmentShaderImageFilter filter) : creator = filter {
     _constructor();
     _initShader(filter.shader);
@@ -4587,7 +4903,8 @@ base class Shader {
       _debugDisposed = true;
       return true;
     }());
-    /// Consumer of this pointer should rina_shader_copy before disposing. 
+
+    /// Consumer of this pointer should rina_shader_copy before disposing.
     // It's lightwieght since the actual SkShader is not copied, only its pointer is.
     //rina_shader_destroy(_nativePtr);
   }
@@ -4705,11 +5022,13 @@ enum TileMode {
   decal,
 }
 
-Pointer<Float>  _encodeWideColorList(List<Color> colors) {
+Pointer<Float> _encodeWideColorList(List<Color> colors) {
   final int colorCount = colors.length;
   final result = malloc<Float>(colorCount * 4);
   for (var i = 0; i < colorCount; i++) {
-    final Color colorXr = colors[i].withValues(colorSpace: ColorSpace.extendedSRGB);
+    final Color colorXr = colors[i].withValues(
+      colorSpace: ColorSpace.extendedSRGB,
+    );
     result[i * 4 + 0] = colorXr.a;
     result[i * 4 + 1] = colorXr.r;
     result[i * 4 + 2] = colorXr.g;
@@ -4738,23 +5057,24 @@ Pointer<Float>  _encodeWideColorList(List<Color> colors) {
     result[xIndex] = point.dx;
     result[yIndex] = point.dy;
   }
-  return (result, pointCount*2);
+  return (result, pointCount * 2);
 }
-
 
 Pointer<Float> _createArrayFromList(List<double>? l) {
-  if (l==null) return nullptr;
+  if (l == null) return nullptr;
   final Pointer<Float> result = malloc<Float>(l.length);
   result.asTypedList(l.length).setAll(0, l);
   return result;
 }
+
 /// PLEASE just let me pin the addresses
 Pointer<Float> _createArrayFromTypedList(Float32List? l) {
-  if (l==null) return nullptr;
+  if (l == null) return nullptr;
   final Pointer<Float> result = malloc<Float>(l.length);
   result.asTypedList(l.length).setAll(0, l);
   return result;
 }
+
 /// A shader (as used by [Paint.shader]) that renders a color gradient.
 ///
 /// There are several types of gradients, represented by the various constructors
@@ -4807,14 +5127,18 @@ base class Gradient extends Shader {
     final Pointer<Float> colorStopsBuffer = _createArrayFromList(colorStops);
     final matrix = _createArrayFromTypedList(matrix4);
     _nativePtr = rina_gradient_create_linear(
-      from.dx, from.dy, to.dx, to.dy, 
-      colorsBuffer, colorStopsBuffer, colors.length,
-      tileMode.index, 
-      matrix
+      from.dx,
+      from.dy,
+      to.dx,
+      to.dy,
+      colorsBuffer,
+      colorStopsBuffer,
+      colors.length,
+      tileMode.index,
+      matrix,
     );
     malloc.free(matrix);
   }
-
 
   /// Creates a radial gradient centered at `center` that ends at `radius`
   /// distance from the center.
@@ -4982,14 +5306,21 @@ base class Gradient extends Shader {
     );
   }
 
-  static void _validateColorStops(List<Color> colors, List<double>? colorStops) {
+  static void _validateColorStops(
+    List<Color> colors,
+    List<double>? colorStops,
+  ) {
     if (colorStops == null) {
       if (colors.length != 2) {
-        throw ArgumentError('"colors" must have length 2 if "colorStops" is omitted.');
+        throw ArgumentError(
+          '"colors" must have length 2 if "colorStops" is omitted.',
+        );
       }
     } else {
       if (colors.length != colorStops.length) {
-        throw ArgumentError('"colors" and "colorStops" arguments must have equal length.');
+        throw ArgumentError(
+          '"colors" and "colorStops" arguments must have equal length.',
+        );
       }
     }
   }
@@ -5048,8 +5379,10 @@ typedef _UniformFloatInfo = ({int index, int size});
 base class FragmentProgram {
   @pragma('vm:entry-point')
   FragmentProgram._fromFile(String filePath) {
-    using((arena){
-      final ret = rina_fragment_create(filePath.asNativePointer(arena).cast<Char>());
+    using((arena) {
+      final ret = rina_fragment_create(
+        filePath.asNativePointer(arena).cast<Char>(),
+      );
       _nativePtr = ret.result;
       if (_nativePtr == nullptr) {
         throw Exception(ret.errorDetails.toString());
@@ -5064,7 +5397,9 @@ base class FragmentProgram {
   late final Pointer<TennojiFragmentProgram> _nativePtr;
 
   String? _debugName;
-  final List<WeakReference<FragmentShader>> _shaders = <WeakReference<FragmentShader>>[];
+  final List<WeakReference<FragmentShader>> _shaders =
+      <WeakReference<FragmentShader>>[];
+
   /// Creates a fragment program from the asset with key [filePath].
   ///
   /// The asset must be a file produced as the output of the `impellerc`
@@ -5080,13 +5415,15 @@ base class FragmentProgram {
     }
     return program;
   }
+
   // This is a cache of shaders that have been loaded by
   // FragmentProgram.fromAsset. It holds a strong reference to theFragmentPrograms
   // The native engine will retain the resources associated with this shader
   // program (PSO variants) until shutdown, so maintaining a strong reference
   // here ensures we do not perform extra work if the dart object is continually
   // re-initialized.
-  static final Map<String, FragmentProgram> _shaderRegistry = <String, FragmentProgram>{};
+  static final Map<String, FragmentProgram> _shaderRegistry =
+      <String, FragmentProgram>{};
 
   int _getImageSamplerIndex(String name) {
     var index = 0;
@@ -5164,7 +5501,9 @@ base class FragmentProgram {
   /// Returns a fresh instance of [FragmentShader].
   FragmentShader fragmentShader() {
     final result = FragmentShader._(this, debugName: _debugName);
-    _shaders.removeWhere((WeakReference<FragmentShader> ref) => ref.target == null);
+    _shaders.removeWhere(
+      (WeakReference<FragmentShader> ref) => ref.target == null,
+    );
     _shaders.add(WeakReference<FragmentShader>(result));
     return result;
   }
@@ -5358,15 +5697,21 @@ base class ImageSamplerSlot {
 /// are required to exist simultaneously, they must be obtained from two
 /// different calls to [FragmentProgram.fragmentShader].
 base class FragmentShader extends Shader {
-  FragmentShader._(this._program, {String? debugName}) : _debugName = debugName, super._() {
+  FragmentShader._(this._program, {String? debugName})
+    : _debugName = debugName,
+      super._() {
     _nativePtr = rina_fragment_create_shader(
-      _program._nativePtr, 
-      _program._uniformFloatCount, _program._samplerCount
+      _program._nativePtr,
+      _program._uniformFloatCount,
+      _program._samplerCount,
     ).cast<TennojiShader>();
-    _floats = rina_fragment_shader_get_uniform_buffer(_nativePtrCasted).asTypedList(_program._uniformFloatCount);
+    _floats = rina_fragment_shader_get_uniform_buffer(
+      _nativePtrCasted,
+    ).asTypedList(_program._uniformFloatCount);
   }
 
-  late final Pointer<TennojiFragmentShader> _nativePtrCasted = _nativePtr.cast<TennojiFragmentShader>();
+  late final Pointer<TennojiFragmentShader> _nativePtrCasted = _nativePtr
+      .cast<TennojiFragmentShader>();
 
   final FragmentProgram _program;
 
@@ -5374,21 +5719,27 @@ base class FragmentShader extends Shader {
 
   static final Float32List _kEmptyFloat32List = Float32List(0);
   Float32List _floats = _kEmptyFloat32List;
-  final List<WeakReference<UniformFloatSlot>> _slots = <WeakReference<UniformFloatSlot>>[];
-  final List<WeakReference<ImageSamplerSlot>> _samplers = <WeakReference<ImageSamplerSlot>>[];
+  final List<WeakReference<UniformFloatSlot>> _slots =
+      <WeakReference<UniformFloatSlot>>[];
+  final List<WeakReference<ImageSamplerSlot>> _samplers =
+      <WeakReference<ImageSamplerSlot>>[];
 
   List<UniformFloatSlot> _getSlotsForUniform(String name, int size) {
     final _UniformFloatInfo info = _program._getUniformFloatInfo(name);
 
     if (info.size != size) {
-      throw ArgumentError('Uniform `$name` has size ${info.size}, not size $size.');
+      throw ArgumentError(
+        'Uniform `$name` has size ${info.size}, not size $size.',
+      );
     }
 
     final slots = List<UniformFloatSlot>.generate(
       size,
       (i) => UniformFloatSlot._(this, name, i, info.index + i),
     );
-    _slots.removeWhere((WeakReference<UniformFloatSlot> ref) => ref.target == null);
+    _slots.removeWhere(
+      (WeakReference<UniformFloatSlot> ref) => ref.target == null,
+    );
     _slots.addAll(slots.map((slot) => WeakReference<UniformFloatSlot>(slot)));
     return slots;
   }
@@ -5437,7 +5788,10 @@ base class FragmentShader extends Shader {
   ///
   /// Any float uniforms that are left uninitialized will default to `0`.
   void setFloat(int index, double value) {
-    assert(!debugDisposed, 'Tried to accesss uniforms on a disposed Shader: $this');
+    assert(
+      !debugDisposed,
+      'Tried to accesss uniforms on a disposed Shader: $this',
+    );
     _floats[index] = value;
   }
 
@@ -5469,10 +5823,16 @@ base class FragmentShader extends Shader {
 
     final _UniformFloatInfo info = _program._getUniformFloatInfo(name);
 
-    IndexError.check(index, info.size, message: 'Index `$index` out of bounds for `$name`.');
+    IndexError.check(
+      index,
+      info.size,
+      message: 'Index `$index` out of bounds for `$name`.',
+    );
 
     final result = UniformFloatSlot._(this, name, index, info.index + index);
-    _slots.removeWhere((WeakReference<UniformFloatSlot> ref) => ref.target == null);
+    _slots.removeWhere(
+      (WeakReference<UniformFloatSlot> ref) => ref.target == null,
+    );
     _slots.add(WeakReference<UniformFloatSlot>(result));
     return result;
   }
@@ -5554,13 +5914,16 @@ base class FragmentShader extends Shader {
     final elements = List<T>.generate(numElements, (i) {
       final slots = List<UniformFloatSlot>.generate(
         info.size,
-        (j) => UniformFloatSlot._(this, name, j, info.index + i * elementSize + j),
+        (j) =>
+            UniformFloatSlot._(this, name, j, info.index + i * elementSize + j),
       );
       _slots.addAll(slots.map((slot) => WeakReference<UniformFloatSlot>(slot)));
       return elementFactory(slots);
     });
 
-    _slots.removeWhere((WeakReference<UniformFloatSlot> ref) => ref.target == null);
+    _slots.removeWhere(
+      (WeakReference<UniformFloatSlot> ref) => ref.target == null,
+    );
 
     return UniformArray<T>._(elements);
   }
@@ -5626,7 +5989,11 @@ base class FragmentShader extends Shader {
     return _getUniformArray<UniformVec3Slot>(
       name,
       3, // 3 floats per element
-      (components) => UniformVec3Slot._(components[0], components[1], components[2]), // Create Vec3
+      (components) => UniformVec3Slot._(
+        components[0],
+        components[1],
+        components[2],
+      ), // Create Vec3
     );
   }
 
@@ -5665,7 +6032,9 @@ base class FragmentShader extends Shader {
   ImageSamplerSlot getImageSampler(String name) {
     final int index = _program._getImageSamplerIndex(name);
     final slot = ImageSamplerSlot._(this, name, index);
-    _samplers.removeWhere((WeakReference<ImageSamplerSlot> ref) => ref.target == null);
+    _samplers.removeWhere(
+      (WeakReference<ImageSamplerSlot> ref) => ref.target == null,
+    );
     _samplers.add(WeakReference<ImageSamplerSlot>(slot));
     return slot;
   }
@@ -5682,14 +6051,21 @@ base class FragmentShader extends Shader {
   /// results will be undefined.
   ///
   /// TODO(henrysck): Currently, if the index is out of bounds, this does nothing.
-  void setImageSampler(int index, Image image, {FilterQuality filterQuality = FilterQuality.none}) {
-    assert(!debugDisposed, 'Tried to access uniforms on a disposed Shader: $this');
+  void setImageSampler(
+    int index,
+    Image image, {
+    FilterQuality filterQuality = FilterQuality.none,
+  }) {
+    assert(
+      !debugDisposed,
+      'Tried to access uniforms on a disposed Shader: $this',
+    );
     assert(!image.debugDisposed, 'Image has been disposed');
     rina_fragment_shader_set_image_sampler(
       _nativePtr.cast<TennojiFragmentShader>(),
-      index, 
-      image._image._nativePtr, 
-      filterQuality.index
+      index,
+      image._image._nativePtr,
+      filterQuality.index,
     );
   }
 
@@ -5815,8 +6191,11 @@ base class Vertices {
     if (colors != null && colors.length != positions.length) {
       throw ArgumentError('"positions" and "colors" lengths must match.');
     }
-    if (textureCoordinates != null && textureCoordinates.length != positions.length) {
-      throw ArgumentError('"positions" and "textureCoordinates" lengths must match.');
+    if (textureCoordinates != null &&
+        textureCoordinates.length != positions.length) {
+      throw ArgumentError(
+        '"positions" and "textureCoordinates" lengths must match.',
+      );
     }
     assert(() {
       if (indices != null) {
@@ -5835,13 +6214,13 @@ base class Vertices {
     final encodedPositions = _encodePointList(positions);
     final encodedTextureCoordinates = (textureCoordinates != null)
         ? _encodePointList(textureCoordinates)
-        : (nullptr.cast<Float>(),0);
+        : (nullptr.cast<Float>(), 0);
     final encodedColors = (colors != null)
         ? _encodeColorList(colors)
-        : (nullptr.cast<Int32>(),0);
-    final encodedIndices = (indices != null) 
+        : (nullptr.cast<Int32>(), 0);
+    final encodedIndices = (indices != null)
         ? _encodeIndicesList(indices)
-        : (nullptr.cast<Uint16>(),0);
+        : (nullptr.cast<Uint16>(), 0);
 
     _nativePtr = rina_vertices_init(
       mode.index,
@@ -5849,7 +6228,8 @@ base class Vertices {
       encodedPositions.$1,
       encodedTextureCoordinates.$1,
       encodedColors.$1,
-      encodedIndices.$1, encodedIndices.$2,
+      encodedIndices.$1,
+      encodedIndices.$2,
     );
     if (_nativePtr == nullptr) {
       throw ArgumentError('Invalid configuration for vertices.');
@@ -5864,9 +6244,10 @@ base class Vertices {
   static (Pointer<Uint16>, int) _encodeIndicesList(List<int> indices) {
     final indicesCount = indices.length;
     final list = malloc<Uint16>(indicesCount);
-    list.asTypedList(indicesCount).setAll(0,indices);
+    list.asTypedList(indicesCount).setAll(0, indices);
     return (list, indicesCount);
   }
+
   /// Creates a set of vertex data for use with [Canvas.drawVertices], using the
   /// encoding expected by the Flutter engine.
   ///
@@ -5926,8 +6307,11 @@ base class Vertices {
     if (colors != null && colors.length * 2 != positions.length) {
       throw ArgumentError('"positions" and "colors" lengths must match.');
     }
-    if (textureCoordinates != null && textureCoordinates.length != positions.length) {
-      throw ArgumentError('"positions" and "textureCoordinates" lengths must match.');
+    if (textureCoordinates != null &&
+        textureCoordinates.length != positions.length) {
+      throw ArgumentError(
+        '"positions" and "textureCoordinates" lengths must match.',
+      );
     }
     assert(() {
       if (indices != null) {
@@ -5945,25 +6329,35 @@ base class Vertices {
     }());
 
     // because these fuckers does not allow real address pinning of typed_data objects
-    final tcPtr = textureCoordinates != null ? malloc<Float>(textureCoordinates.length) : nullptr.cast<Float>();
+    final tcPtr = textureCoordinates != null
+        ? malloc<Float>(textureCoordinates.length)
+        : nullptr.cast<Float>();
     if (textureCoordinates != null) {
-      tcPtr.asTypedList(textureCoordinates.length).setAll(0, textureCoordinates);
+      tcPtr
+          .asTypedList(textureCoordinates.length)
+          .setAll(0, textureCoordinates);
     }
-    final cPtr = colors != null ? malloc<Int32>(colors.length) : nullptr.cast<Int32>();
+    final cPtr = colors != null
+        ? malloc<Int32>(colors.length)
+        : nullptr.cast<Int32>();
     if (colors != null) {
       cPtr.asTypedList(colors.length).setAll(0, colors);
     }
-    final iPtr = indices != null ? malloc<Uint16>(indices.length) : nullptr.cast<Uint16>();
+    final iPtr = indices != null
+        ? malloc<Uint16>(indices.length)
+        : nullptr.cast<Uint16>();
     if (indices != null) {
       iPtr.asTypedList(indices.length).setAll(0, indices);
     }
-    
+
     _nativePtr = rina_vertices_init(
-      mode.index, 
+      mode.index,
       positions.length,
-      positions.address, 
-      tcPtr, cPtr, 
-      iPtr, indices?.length ?? 0
+      positions.address,
+      tcPtr,
+      cPtr,
+      iPtr,
+      indices?.length ?? 0,
     );
     if (_nativePtr == nullptr) {
       throw ArgumentError('Invalid configuration for vertices.');
@@ -5972,7 +6366,7 @@ base class Vertices {
 
   late final Pointer<TennojiCanvasVertices> _nativePtr;
 
-/*
+  /*
   static bool _init(
     Vertices outVertices,
     int mode,
@@ -5993,6 +6387,7 @@ base class Vertices {
     }());
     rina_vertices_destroy(_nativePtr);
   }
+
   bool _disposed = false;
 
   /// Whether this reference to the underlying vertex data is [dispose]d.
@@ -6006,7 +6401,9 @@ base class Vertices {
       return true;
     }());
     return disposed ??
-        (throw StateError('Vertices.debugDisposed is only available when asserts are enabled.'));
+        (throw StateError(
+          'Vertices.debugDisposed is only available when asserts are enabled.',
+        ));
   }
 }
 
@@ -6078,7 +6475,6 @@ abstract class Picture {
   /// allows multiple callbacks.
   static PictureEventCallback? onDispose;
 
-
   /// Synchronously creates a handle to an image of this picture.
   ///
   /// {@template dart.ui.painting.Picture.toImageSync}
@@ -6132,7 +6528,10 @@ base class _NativePicture implements Picture {
   ///
   /// To create a [Picture], use a [PictureRecorder].
   _NativePicture._(this._nativePtr) {
-    if (_nativePtr == nullptr) throw StateError("Error in creating the Picture object."); // marking for now
+    if (_nativePtr == nullptr)
+      throw StateError(
+        "Error in creating the Picture object.",
+      ); // marking for now
     Picture.onCreate?.call(this);
   }
 
@@ -6151,7 +6550,8 @@ base class _NativePicture implements Picture {
 
     return Image._(
       _Image._(rina_picture_to_image(_nativePtr, Engine.instance.nativePtr)),
-      width, height
+      width,
+      height,
     );
   }
 
@@ -6177,17 +6577,21 @@ base class _NativePicture implements Picture {
       return true;
     }());
     return disposed ??
-        (throw StateError('Picture.debugDisposed is only available when asserts are enabled.'));
+        (throw StateError(
+          'Picture.debugDisposed is only available when asserts are enabled.',
+        ));
   }
 
   @override
-  int get approximateBytesUsed => rina_picture_approximate_bytes_used(_nativePtr); 
+  int get approximateBytesUsed =>
+      rina_picture_approximate_bytes_used(_nativePtr);
   @override
-  int get approximateOpCount => rina_picture_approximate_op_count(_nativePtr); 
+  int get approximateOpCount => rina_picture_approximate_op_count(_nativePtr);
 
   @override
   String toString() => 'Picture';
 }
+
 /// A single shadow.
 ///
 /// Multiple shadows are stacked together in a [TextStyle].
@@ -6206,7 +6610,10 @@ class Shadow {
     this.color = const Color(_kColorDefault),
     this.offset = Offset.zero,
     this.blurRadius = 0.0,
-  }) : assert(blurRadius >= 0.0, 'Text shadow blur radius should be non-negative.');
+  }) : assert(
+         blurRadius >= 0.0,
+         'Text shadow blur radius should be non-negative.',
+       );
 
   static const int _kColorDefault = 0xFF000000;
   // Constants for shadow encoding.
@@ -6266,7 +6673,11 @@ class Shadow {
   /// Returns a new shadow with its [offset] and [blurRadius] scaled by the given
   /// factor.
   Shadow scale(double factor) {
-    return Shadow(color: color, offset: offset * factor, blurRadius: blurRadius * factor);
+    return Shadow(
+      color: color,
+      offset: offset * factor,
+      blurRadius: blurRadius * factor,
+    );
   }
 
   /// Linearly interpolate between two shadows.
@@ -6352,7 +6763,7 @@ class Shadow {
   // bytes for each shadow.
   static ByteData _encodeShadows(List<Shadow>? shadows) {
     if (shadows == null) {
-      return ByteData(4)..setUint32(0,0,_kFakeHostEndian);
+      return ByteData(4)..setUint32(0, 0, _kFakeHostEndian);
     }
 
     final int byteCount = shadows.length * _kBytesPerShadow + 4;
@@ -6370,12 +6781,24 @@ class Shadow {
         _kFakeHostEndian,
       );
 
-      shadowsData.setFloat32(_kXOffset + shadowOffset, shadow.offset.dx, _kFakeHostEndian);
+      shadowsData.setFloat32(
+        _kXOffset + shadowOffset,
+        shadow.offset.dx,
+        _kFakeHostEndian,
+      );
 
-      shadowsData.setFloat32(_kYOffset + shadowOffset, shadow.offset.dy, _kFakeHostEndian);
+      shadowsData.setFloat32(
+        _kYOffset + shadowOffset,
+        shadow.offset.dy,
+        _kFakeHostEndian,
+      );
 
       final double blurSigma = Shadow.convertRadiusToSigma(shadow.blurRadius);
-      shadowsData.setFloat32(_kBlurOffset + shadowOffset, blurSigma, _kFakeHostEndian);
+      shadowsData.setFloat32(
+        _kBlurOffset + shadowOffset,
+        blurSigma,
+        _kFakeHostEndian,
+      );
     }
 
     return shadowsData;
@@ -6411,7 +6834,8 @@ abstract class ImageDescriptor {
   }) = _NativeImageDescriptor.raw;
 
   /// Creates an image descriptor from encoded data in a supported format.
-  factory ImageDescriptor.encoded(Uint8List buffer) = _NativeImageDescriptor.encoded; 
+  factory ImageDescriptor.encoded(Uint8List buffer) =
+      _NativeImageDescriptor.encoded;
 
   /// The width, in pixels, of the image.
   ///
@@ -6486,7 +6910,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
     );
   }
 
-  _NativeImageDescriptor.encoded(Uint8List buffer) { 
+  _NativeImageDescriptor.encoded(Uint8List buffer) {
     _buffer = _createNativeBuffer(buffer);
     _nativePtr = rina_idesc_from_encoded(_buffer.$1, _buffer.$2);
   }
@@ -6553,7 +6977,12 @@ base class _NativeImageDescriptor implements ImageDescriptor {
     assert(targetHeight != null);
 
     final Codec codec = _NativeCodec._(
-      rina_idesc_instantiate_codec(_nativePtr, targetWidth!, targetHeight!, targetFormat.index)
+      rina_idesc_instantiate_codec(
+        _nativePtr,
+        targetWidth!,
+        targetHeight!,
+        targetFormat.index,
+      ),
     );
     return codec;
   }
@@ -6562,6 +6991,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
   String toString() =>
       'ImageDescriptor(width: ${_width ?? '?'}, height: ${_height ?? '?'}, bytes per pixel: ${_bytesPerPixel ?? '?'})';
 }
+
 /*
 /// Generic callback signature, used by [_futurize].
 typedef _Callback<T> = void Function(T result);
@@ -6684,12 +7114,10 @@ class PictureRasterizationException implements Exception {
   }
 }
 
-
-
 /// Wrapper around native canvas handle.
 class Canvas {
-  Canvas(int width, int height) : _nativePtr = 
-    rina_canvas_create(Engine.instance.nativePtr,width,height);
+  Canvas(int width, int height)
+    : _nativePtr = rina_canvas_create(Engine.instance.nativePtr, width, height);
   Pointer<TennojiCanvas> _nativePtr;
 
   @protected
@@ -6712,124 +7140,137 @@ class Canvas {
 
   void drawPaint(Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_paint(
-      _nativePtr, 
-      paint._createPaintMetadata(arena)
-    )
+    using(
+      (arena) =>
+          rina_canvas_draw_paint(_nativePtr, paint._createPaintMetadata(arena)),
     );
   }
 
   void drawCircle(Offset center, double radius, Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_circle(
-      _nativePtr,
-      center.dx,
-      center.dy,
-      radius,
-      paint._createPaintMetadata(arena),
-    )
-    );
-  }
-  void drawRect(Rect rect, Paint paint) {
-    debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_rect(
-      _nativePtr,
-      rect.left,
-      rect.top,
-      rect.width,
-      rect.height,
-      paint._createPaintMetadata(arena),
-    )
-    );
-  }
-  void drawRRect(RRect rrect, Paint paint) {
-    debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_rrect(
-      _nativePtr,
-      rrect.left,
-      rrect.top,
-      rrect.width,
-      rrect.height,
-      rrect.tlRadiusX,
-      rrect.tlRadiusY,
-      rrect.trRadiusX,
-      rrect.trRadiusY,
-      rrect.blRadiusX,
-      rrect.blRadiusY,
-      rrect.brRadiusX,
-      rrect.brRadiusY,
-      paint._createPaintMetadata(arena),
-    )
+    using(
+      (arena) => rina_canvas_draw_circle(
+        _nativePtr,
+        center.dx,
+        center.dy,
+        radius,
+        paint._createPaintMetadata(arena),
+      ),
     );
   }
 
-  /// this is specifically used by RenderVideoClip.paint 
-  /// because it has the pointer 
-  void drawImageNative(Pointer<TennojiCanvasImage> image, Offset offset, Paint paint) {
+  void drawRect(Rect rect, Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_image(
-      _nativePtr,
-      image,
-      offset.dx,
-      offset.dy,
-      paint._createPaintMetadata(arena)
-    )
+    using(
+      (arena) => rina_canvas_draw_rect(
+        _nativePtr,
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+        paint._createPaintMetadata(arena),
+      ),
+    );
+  }
+
+  void drawRRect(RRect rrect, Paint paint) {
+    debugAssertNullPointer();
+    using(
+      (arena) => rina_canvas_draw_rrect(
+        _nativePtr,
+        rrect.left,
+        rrect.top,
+        rrect.width,
+        rrect.height,
+        rrect.tlRadiusX,
+        rrect.tlRadiusY,
+        rrect.trRadiusX,
+        rrect.trRadiusY,
+        rrect.blRadiusX,
+        rrect.blRadiusY,
+        rrect.brRadiusX,
+        rrect.brRadiusY,
+        paint._createPaintMetadata(arena),
+      ),
+    );
+  }
+
+  /// this is specifically used by RenderVideoClip.paint
+  /// because it has the pointer
+  void drawImageNative(
+    Pointer<TennojiCanvasImage> image,
+    Offset offset,
+    Paint paint,
+  ) {
+    debugAssertNullPointer();
+    using(
+      (arena) => rina_canvas_draw_image(
+        _nativePtr,
+        image,
+        offset.dx,
+        offset.dy,
+        paint._createPaintMetadata(arena),
+      ),
     );
   }
 
   void drawImage(Image image, Offset offset, Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_image(
-      _nativePtr,
-      image._image._nativePtr,
-      offset.dx,
-      offset.dy,
-      paint._createPaintMetadata(arena)
-    )
+    using(
+      (arena) => rina_canvas_draw_image(
+        _nativePtr,
+        image._image._nativePtr,
+        offset.dx,
+        offset.dy,
+        paint._createPaintMetadata(arena),
+      ),
     );
   }
 
   void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
     debugAssertNullPointer();
-    assert(!image.debugDisposed, 'Cannot draw an image that is already disposed.');
+    assert(
+      !image.debugDisposed,
+      'Cannot draw an image that is already disposed.',
+    );
     assert(_rectIsValid(src), 'Source rect for drawImageRect is invalid: $src');
-    assert(_rectIsValid(dst), 'Destination rect for drawImageRect is invalid: $dst');
-    using((arena)=>
-    rina_canvas_draw_image_rect(
-      _nativePtr,
-      image._image._nativePtr,
-      src.left,
-      src.top,
-      src.width,
-      src.height,
-      dst.left,
-      dst.top,
-      dst.width,
-      dst.height,
-      paint._createPaintMetadata(arena),
-    )
+    assert(
+      _rectIsValid(dst),
+      'Destination rect for drawImageRect is invalid: $dst',
+    );
+    using(
+      (arena) => rina_canvas_draw_image_rect(
+        _nativePtr,
+        image._image._nativePtr,
+        src.left,
+        src.top,
+        src.width,
+        src.height,
+        dst.left,
+        dst.top,
+        dst.width,
+        dst.height,
+        paint._createPaintMetadata(arena),
+      ),
     );
   }
 
   void drawPicture(Picture picture) {
     debugAssertNullPointer();
-    rina_canvas_draw_picture(_nativePtr, (picture as _NativePicture)._nativePtr);
+    rina_canvas_draw_picture(
+      _nativePtr,
+      (picture as _NativePicture)._nativePtr,
+    );
   }
 
   void drawPath(Path path, Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_draw_path(
-      _nativePtr,
-      (path as _NativePath)._nativePtr,
-      paint._createPaintMetadata(arena),
-    )
+    using(
+      (arena) => rina_canvas_draw_path(
+        _nativePtr,
+        (path as _NativePath)._nativePtr,
+        paint._createPaintMetadata(arena),
+      ),
     );
   }
 
@@ -6857,11 +7298,11 @@ class Canvas {
     debugAssertNullPointer();
     rina_canvas_scale(_nativePtr, sx, sy);
   }
+
   void skew(double sx, double sy) {
     debugAssertNullPointer();
     rina_canvas_skew(_nativePtr, sx, sy);
   }
-
 
   void rotate(double degrees) {
     debugAssertNullPointer();
@@ -6876,9 +7317,10 @@ class Canvas {
       rect.top,
       rect.width,
       rect.height,
-      doAntiAlias
+      doAntiAlias,
     );
   }
+
   void clipRRect(RRect rrect, bool doAntiAlias) {
     debugAssertNullPointer();
     rina_canvas_clip_rrect(
@@ -6895,25 +7337,30 @@ class Canvas {
       rrect.blRadiusY,
       rrect.brRadiusX,
       rrect.brRadiusY,
-      doAntiAlias
+      doAntiAlias,
     );
   }
 
   void saveLayer(Paint paint) {
     debugAssertNullPointer();
-    using((arena)=>
-    rina_canvas_save_layer(_nativePtr,paint._createPaintMetadata(arena))
+    using(
+      (arena) =>
+          rina_canvas_save_layer(_nativePtr, paint._createPaintMetadata(arena)),
     );
   }
+
   void saveLayerWithBackdrop(ImageFilter filter) {
     debugAssertNullPointer();
-    rina_canvas_save_layer_rec(_nativePtr, filter._toNativeImageFilter()._nativePtr);
-  }
-  void saveLayerAlpha(int alpha) {
-    debugAssertNullPointer();
-    rina_canvas_save_layer_alpha(_nativePtr,alpha);
+    rina_canvas_save_layer_rec(
+      _nativePtr,
+      filter._toNativeImageFilter()._nativePtr,
+    );
   }
 
+  void saveLayerAlpha(int alpha) {
+    debugAssertNullPointer();
+    rina_canvas_save_layer_alpha(_nativePtr, alpha);
+  }
 
   /// this [Canvas] is effectively unusable after this call
   Picture endRecording() {
