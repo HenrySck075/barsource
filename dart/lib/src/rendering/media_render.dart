@@ -477,6 +477,7 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
 
     final loopedTimeUs = elapsed.inMicroseconds % (super.duration * 1000000).toInt();
     final loopedFrameTime = attachedAt + Duration(microseconds: loopedTimeUs);
+    // print the loopedFrameTime and move cursor to beginning of this line
     final mixedSamples = collectSubtreeMixedAudioForFrame(
       loopedFrameTime,
       sampleCount,

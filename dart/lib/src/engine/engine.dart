@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:ffi';
 import 'dart:typed_data';
@@ -14,6 +15,7 @@ import 'package:barsource/src/widgets/binding.dart';
 import 'package:barsource/src/widgets/root.dart';
 import 'package:barsource/src/engine/audio_binding.dart';
 import 'package:barsource/src/engine/audio_contributor.dart';
+import 'package:barsource/src/elements/framework.dart' show Element;
 import 'package:logging/logging.dart';
 import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/rendering/view.dart';
@@ -125,23 +127,80 @@ class Engine extends BindingBase
   VmService? _vmService;
 
   Completer<void>? _reassembleCompleter;
+  static const _reassembleExtension = 'ext.barsource.reassemble';
+  static const _widgetTreeExtension = 'ext.barsource.widgetTree';
+  static const _statusExtension = 'ext.barsource.status';
 
-  // idc
-  // runs only if the Engine is rendering and devtools extensions is enabled
-  Future<ServiceExtensionResponse> _serviceMethodHandler(String method, Map<String, String> parameters) {
-    if (!_rendering || !_devtoolsEnabled) {
-      return Future.value(
-        ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Service extension called when not rendering or devtools not enabled',
-        ),
-      );
+  ServiceExtensionResponse _jsonResult(Map<String, Object?> payload) {
+    return ServiceExtensionResponse.result(jsonEncode(payload));
+  }
+
+  Map<String, Object?> _serializeElementNode(Element element) {
+    final children = <Map<String, Object?>>[];
+    element.visitChildren((child) {
+      children.add(_serializeElementNode(child));
+    });
+
+    final renderObject = element.renderObject;
+    return {
+      'id': identityHashCode(element).toString(),
+      'widgetType': element.widget.runtimeType.toString(),
+      'elementType': element.runtimeType.toString(),
+      'renderObjectType': renderObject?.runtimeType.toString(),
+      'slot': element.slot?.toString(),
+      'key': element.widget.key?.toString(),
+      'children': children,
+    };
+  }
+
+  ServiceExtensionResponse _statusResponse() {
+    return _jsonResult({
+      'rendering': _rendering,
+      'devtoolsEnabled': _devtoolsEnabled,
+      'reassembleInProgress': _reassembleCompleter != null,
+      'currentTimeMicros': _currentTime.inMicroseconds,
+      'frameDurationMs': _frameDuration,
+    });
+  }
+
+  ServiceExtensionResponse _widgetTreeResponse() {
+    if (!_rendering) {
+      return _jsonResult({'rendering': false, 'tree': null});
     }
+    return _jsonResult({
+      'rendering': true,
+      'tree': _serializeElementNode(renderViewElement),
+      'currentTimeMicros': _currentTime.inMicroseconds,
+      'frameDurationMs': _frameDuration,
+    });
+  }
 
-    if (method == "ext.barsource.reassemble") {
+  // runs only if the Engine is rendering and devtools extensions is enabled
+  Future<ServiceExtensionResponse> _serviceMethodHandler(
+    String method,
+    Map<String, String> parameters,
+  ) {
+    if (method == _statusExtension) {
+      return Future.value(_statusResponse());
+    }
+    if (method == _widgetTreeExtension) {
+      return Future.value(_widgetTreeResponse());
+    }
+    if (method == _reassembleExtension) {
+      if (!_rendering || !_devtoolsEnabled || _vmService == null) {
+        return Future.value(
+          ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'Reassemble is unavailable while not rendering or when devtools is disabled',
+          ),
+        );
+      }
+
       // cancel if _reassembleCompleter != null (a reload is happening)
       if (_reassembleCompleter != null) {
-        _log.warning("Received reassemble request while another reassemble is in progress, ignoring");
+        _log.warning(
+          "Received reassemble request while another reassemble is in progress, ignoring",
+        );
         return Future.value(
           ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
@@ -151,7 +210,7 @@ class Engine extends BindingBase
       }
       _log.info("Received reassemble request from DevTools");
       _reassembleCompleter = Completer();
-      return _reassembleCompleter!.future.then((_)=>ServiceExtensionResponse.result("{}"));
+      return _reassembleCompleter!.future.then((_) => _jsonResult({}));
     }
 
     return Future.value(
@@ -161,7 +220,6 @@ class Engine extends BindingBase
       ),
     );
   }
-
 
   bool _rendering = false;
 
@@ -278,7 +336,9 @@ class Engine extends BindingBase
       }
     }
     if (_devtoolsEnabled) {
-      registerExtension("ext.barsource.reassemble", _serviceMethodHandler);
+      registerExtension(_reassembleExtension, _serviceMethodHandler);
+      registerExtension(_widgetTreeExtension, _serviceMethodHandler);
+      registerExtension(_statusExtension, _serviceMethodHandler);
     }
     _rendering = true;
     try {
@@ -400,11 +460,17 @@ class Engine extends BindingBase
         // reassemble
         if (_reassembleCompleter != null) {
           _log.info("Performing hot reload reassemble");
-          final isolateId = Service.getIsolateId(isolate.Isolate.current)!;
-          await _vmService!.reloadSources(isolateId);
-          reassembleApplication();
-          _reassembleCompleter!.complete();
+          final pendingReassemble = _reassembleCompleter!;
           _reassembleCompleter = null;
+          try {
+            final isolateId = Service.getIsolateId(isolate.Isolate.current)!;
+            await _vmService!.reloadSources(isolateId);
+            reassembleApplication();
+            pendingReassemble.complete();
+          } catch (error, stackTrace) {
+            _log.severe('Hot reload reassemble failed', error, stackTrace);
+            pendingReassemble.completeError(error, stackTrace);
+          }
         }
 
         _currentTime += frameDuration;
@@ -440,6 +506,15 @@ class Engine extends BindingBase
       calloc.free(sampleBuffer);
 
       detachRootWidget();
+      final pendingReassemble = _reassembleCompleter;
+      if (pendingReassemble != null && !pendingReassemble.isCompleted) {
+        pendingReassemble.completeError(
+          StateError('Render loop exited before reassemble completed'),
+        );
+      }
+      _reassembleCompleter = null;
+      _vmService = null;
+      _devtoolsEnabled = false;
       _log.info('Render run completed.');
       _frameDuration = null;
       _rendering = false;

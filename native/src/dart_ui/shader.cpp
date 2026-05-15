@@ -157,6 +157,7 @@ TENNOJI_EXPORT TennojiShader* rina_image_shader_create(
   uint8_t filterQuality,
   float* matrix4
 ) {
+  if (!image || !image->image) return nullptr;
   auto skimage = image->image;
   auto matrix = matrix_from_matrix4_array(matrix4);
   auto shader = SkImageShader::Make(
@@ -227,6 +228,8 @@ TENNOJI_EXPORT void rina_fragment_shader_set_image_sampler(
   TennojiCanvasImage* image, 
   uint8_t filterQuality
 ) {
+  if (!shader || !shader->program || !shader->program->effect) return;
+  if (!image || !image->image) return;
   if (index >= shader->imageSamplers.size()) {
     // todo: tell dart the sampler index is out of bounds
     return;

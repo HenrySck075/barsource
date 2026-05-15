@@ -204,7 +204,7 @@ class _AnimatedListState<T extends Object> extends State<AnimatedList<T>> {
   void removeItem(int index, {AnimatedRemovedItemBuilder<T>? builder, Duration duration = _kDuration}) {
     assert(index >= 0);
 
-    final int itemIndex = _indexToItemIndex(index);
+    final int itemIndex = index;//_indexToItemIndex(index);
     assert(itemIndex >= 0 && itemIndex < _items.length);
     assert(_activeItemAt(_outgoingItems, itemIndex) == null);
 

@@ -95,6 +95,7 @@ TENNOJI_EXPORT TennojiImageFilter* rina_image_filter_create_composed(
   TennojiImageFilter* outer,
   TennojiImageFilter* inner
 ) {
+  /// TODO: probably return the other if one of them is nullptr and null if both is null
   return tennoji_mk_imgfilter_pointer(SkImageFilters::Compose(outer->filter, inner->filter));
 }
 

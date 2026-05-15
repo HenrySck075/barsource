@@ -132,8 +132,7 @@ TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
 }
 
 TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas) {
-  if (!canvas) return;
-  delete canvas;
+  if (canvas) delete canvas;
 }
 
 TENNOJI_EXPORT void rina_canvas_draw_color(
@@ -159,7 +158,7 @@ TENNOJI_EXPORT void rina_canvas_draw_paint(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas) return;
+  if (!canvas || !canvas->canvas || !paintData) return;
   canvas->canvas->drawPaint(paint_create_from_encoded(paintData));
 }
 
@@ -168,7 +167,7 @@ TENNOJI_EXPORT void rina_canvas_draw_circle(
   float cx, float cy, float radius,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas) return;
+  if (!canvas || !canvas->canvas || !paintData) return;
   canvas->canvas->drawCircle(cx, cy, radius, paint_create_from_encoded(paintData));
 }
 TENNOJI_EXPORT void rina_canvas_draw_rect(
@@ -177,7 +176,7 @@ TENNOJI_EXPORT void rina_canvas_draw_rect(
   float width, float height,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas) return;
+  if (!canvas || !canvas->canvas || !paintData) return;
 
   canvas->canvas->drawRect(
     SkRect::MakeXYWH(left, top, width, height), 
@@ -194,7 +193,7 @@ TENNOJI_EXPORT void rina_canvas_draw_rrect(
   float brRx, float brRy,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas) return;
+  if (!canvas || !canvas->canvas || !paintData) return;
 
   SkVector radii[4] = {
     {tlRx, tlRy},
@@ -221,7 +220,7 @@ TENNOJI_EXPORT void rina_canvas_draw_image_rect(
   float dstWidth, float dstHeight,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas || !image) return;
+  if (!canvas || !canvas->canvas || !image || !paintData || !paintData->encodedData) return;
 
   sk_sp<SkImage> img = image->image;
   if (!img) return;
@@ -267,7 +266,7 @@ TENNOJI_EXPORT void rina_canvas_draw_path(
   TennojiCanvasPath* path,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas || !path) return;
+  if (!canvas || !canvas->canvas || !path || !paintData) return;
 
   canvas->canvas->drawPath(
     path->builder->snapshot(), 
@@ -350,7 +349,7 @@ TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas,
   TennojiCanvasPaintMetadata* metadata
 ) {
-  if (!canvas || !canvas->canvas) return -1;
+  if (!canvas || !canvas->canvas || !metadata) return -1;
   auto paint = paint_create_from_encoded(metadata);
   return canvas->canvas->saveLayer(nullptr, &paint);
 }

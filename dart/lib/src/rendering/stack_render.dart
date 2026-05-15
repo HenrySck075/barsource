@@ -345,7 +345,7 @@ class RenderStack extends RenderBox
     size = hasNonPositionedChildren
         ? parentConstraints.constrain(Size(maxWidth, maxHeight))
         : parentConstraints.biggest;
-    final resolvedAlignment = alignment.resolve(textDirection);
+    final resolvedAlignment = alignment.resolve(textDirection ?? TextDirection.ltr);
 
     for (
       RenderBox? child = firstChild;

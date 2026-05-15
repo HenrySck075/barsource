@@ -25,6 +25,7 @@ TENNOJI_EXPORT int rina_texture_get_height(TennojiCanvasImage* texture) {
 TennojiCodec* rina_codec_from_encoded_skdata(sk_sp<SkData>& d) {
   SkCodec::Result r;
   auto codec = SkCodec::MakeFromData(d);
+  if (!codec) return nullptr;
   auto info = codec->getInfo();
 
   return new TennojiCodec{
@@ -50,6 +51,7 @@ TENNOJI_EXPORT void rina_codec_destroy(TennojiCodec* codec) {
   if (codec) delete codec;
 };
 
+// intentionally unchecked (null checked on frontend) unless someone does batshit crazy with the (undetectable) inavlid address
 TENNOJI_EXPORT int rina_codec_get_frame_count(TennojiCodec* codec) {
   return codec->fromRaw ? 1 : codec->codec->getFrameCount();
 };
@@ -116,6 +118,7 @@ TENNOJI_EXPORT TennojiImageDescriptor* rina_idesc_from_encoded(const uint8_t* da
   auto d = SkData::MakeWithoutCopy(data, length);
 
   auto codec = rina_codec_from_encoded_skdata(d); 
+  if (!codec) return nullptr;
 
   auto ret = new TennojiImageDescriptor {
     .buffer = d,

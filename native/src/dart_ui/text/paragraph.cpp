@@ -218,10 +218,10 @@ skia::textlayout::TextStyle text_style_from_encoded(
     const uint32_t count = fontFeaturesData[0];
 
     for (uint32_t i = 0; i < count; i++) {
-      const char* featureName = 
-        reinterpret_cast<const char*>(fontFeaturesData[i*8 + 4]);
-      const int32_t featureValue = 
-        *reinterpret_cast<int32_t*>(&fontFeaturesData[i*8 + 8]);
+      char featureName[4];
+        memcpy(featureName, &fontFeaturesData[i*2+1], 4);
+      int32_t featureValue;
+        memcpy(&featureValue, &fontFeaturesData[i*2+2],4);
       style.addFontFeature({featureName,4}, featureValue);
     }
   }
@@ -605,7 +605,7 @@ TENNOJI_EXPORT float* rina_paragraph_compute_line_metrics(
   */
 
   uint32_t length = metrics.size();
-  float* ret = (float*)malloc(sizeof(float)*length);
+  float* ret = (float*)malloc(sizeof(float)*(1+length*9));
   ret[0] = *reinterpret_cast<float*>(&length);
 
   float* list = ret+1;

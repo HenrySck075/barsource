@@ -27,22 +27,23 @@ TENNOJI_EXPORT void rina_path_destroy(TennojiCanvasPath* path) {
 }
 
 TENNOJI_EXPORT uint8_t rina_path_get_fill_type(TennojiCanvasPath* path) {
+  if (!path) return 0;
   return static_cast<uint8_t>(path->builder->fillType());
 };
 TENNOJI_EXPORT void rina_path_set_fill_type(TennojiCanvasPath* path, uint8_t type) {
-  path->builder->setFillType(static_cast<SkPathFillType>(type));
+  if (path) path->builder->setFillType(static_cast<SkPathFillType>(type));
 };
 
 
 TENNOJI_EXPORT void rina_path_move_to(TennojiCanvasPath* path, float x, float y) {
-  path->builder->moveTo({x,y});
+  if (path) path->builder->moveTo({x,y});
 }
 TENNOJI_EXPORT void rina_path_relative_move_to(TennojiCanvasPath* path, float dx, float dy) {
-  path->builder->rMoveTo({dx,dy});
+  if (path) path->builder->rMoveTo({dx,dy});
 }
 
 TENNOJI_EXPORT void rina_path_line_to(TennojiCanvasPath* path, float x, float y) {
-  path->builder->lineTo({x,y});
+  if (path) path->builder->lineTo({x,y});
 }
 TENNOJI_EXPORT void rina_path_relative_line_to(TennojiCanvasPath* path, float dx, float dy) {
   path->builder->rLineTo({dx,dy});
@@ -52,39 +53,39 @@ TENNOJI_EXPORT void rina_path_quadratic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2
 ) {
-  path->builder->quadTo({x1,y1},{x2,y2});
+  if (path) path->builder->quadTo({x1,y1},{x2,y2});
 }
 TENNOJI_EXPORT void rina_path_relative_quadratic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2
 ) {
-  path->builder->rQuadTo({x1,y1},{x2,y2});
+  if (path) path->builder->rQuadTo({x1,y1},{x2,y2});
 }
 
 TENNOJI_EXPORT void rina_path_cubic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2, float x3, float y3
 ) {
-  path->builder->cubicTo({x1,y1},{x2,y2},{x3,y3});
+  if (path) path->builder->cubicTo({x1,y1},{x2,y2},{x3,y3});
 }
 TENNOJI_EXPORT void rina_path_relative_cubic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2, float x3, float y3
 ) {
-  path->builder->rCubicTo({x1,y1},{x2,y2},{x3,y3});
+  if (path) path->builder->rCubicTo({x1,y1},{x2,y2},{x3,y3});
 }
 
 TENNOJI_EXPORT void rina_path_conic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2, float w
 ) {
-  path->builder->conicTo({x1,y1},{x2,y2},w);
+  if (path) path->builder->conicTo({x1,y1},{x2,y2},w);
 }
 TENNOJI_EXPORT void rina_path_relative_conic_to(
   TennojiCanvasPath* path, 
   float x1, float y1, float x2, float y2, float w
 ) {
-  path->builder->rConicTo({x1,y1},{x2,y2},w);
+  if (path) path->builder->rConicTo({x1,y1},{x2,y2},w);
 }
 
 TENNOJI_EXPORT void rina_path_arc_to_rect(
@@ -97,7 +98,7 @@ TENNOJI_EXPORT void rina_path_arc_to_rect(
   float sweepAngle,
   bool forceMoveTo
 ) {
-  path->builder->arcTo(
+  if (path) path->builder->arcTo(
     {left,top,right,bottom},
     RAD2DEG(startAngle),
     RAD2DEG(sweepAngle),
@@ -131,7 +132,7 @@ TENNOJI_EXPORT void rina_path_relative_arc_to_point(
   bool largeArc,
   bool clockwise
 ) {
-  path->builder->rArcTo(
+  if (path) path->builder->rArcTo(
     {radiusX,radiusY},rotation,
     (SkPathBuilder::ArcSize)(!largeArc),
     (SkPathDirection)clockwise,
@@ -144,24 +145,25 @@ TENNOJI_EXPORT void rina_path_add_rect(
   TennojiCanvasPath* path, 
   float l, float t, float r, float b
 ) {
-  path->builder->addRect({l,t,r,b});
+  if (path) path->builder->addRect({l,t,r,b});
 }
 TENNOJI_EXPORT void rina_path_add_oval(
   TennojiCanvasPath* path,
   float l, float t, float r, float b
 ) {
-  path->builder->addOval({l,t,r,b});
+  if (path) path->builder->addOval({l,t,r,b});
 }
 TENNOJI_EXPORT void rina_path_add_arc(
   TennojiCanvasPath* path,
   float l, float t, float r, float b, float startAngle, float sweepAngle
 ) {
-  path->builder->addArc({l,t,r,b},RAD2DEG(startAngle),RAD2DEG(sweepAngle));
+  if (path) path->builder->addArc({l,t,r,b},RAD2DEG(startAngle),RAD2DEG(sweepAngle));
 }
 TENNOJI_EXPORT void rina_path_add_polygon(
   TennojiCanvasPath* path,
   float* points, uint64_t length, bool close
 ) {
+  if (!path) return;
   SkPoint* skPoints = new SkPoint[length];
   for (uint64_t i = 0; i < length; i++) {
     skPoints[i] = {points[2*i], points[2*i + 1]};
@@ -173,12 +175,14 @@ TENNOJI_EXPORT void rina_path_add_rrect(
   TennojiCanvasPath* path,
   float* rrect_data 
 ) {
+  if (!path || !rrect_data) return;
   // reinterprets everything after the 4th item (corresponds to tlRadiusX) as an array of 4 SkVectors
   SkRRect rrect;
   rrect.setRectRadii({rrect_data[0], rrect_data[1], rrect_data[2], rrect_data[3]}, (SkVector*)(rrect_data + 4));
   path->builder->addRRect(rrect);
 }
 TENNOJI_EXPORT void rina_path_add_rsuperellipse(TennojiCanvasPath* path, float* rsuperellipse_data) {
+  if (!path) return;
   // rsuperellipse_data is stored the same as rrect_data, in fact it contains the exact same set of data as rrect
   constexpr float smoothness = 0.67; // SIX SEVEN
 
@@ -221,8 +225,9 @@ TENNOJI_EXPORT void rina_path_add_path_with_matrix(
   float dx, float dy,
   float* matrix4
 ) {
+  if (!path || !otherPath) return;
   auto matrix = matrix_from_matrix4_array(matrix4);
-  matrix->postTranslate(dx, dy);
+  if (matrix) matrix->postTranslate(dx, dy);
   path->builder->addPath(otherPath->builder->snapshot(), *matrix, extend ? SkPath::kExtend_AddPathMode : SkPath::kAppend_AddPathMode);
 }
 
@@ -231,25 +236,25 @@ TENNOJI_EXPORT void rina_path_add_path(
   bool extend,
   float dx, float dy
 ) {
-  path->builder->addPath(otherPath->builder->snapshot(), dx,dy, extend ? SkPath::kExtend_AddPathMode : SkPath::kAppend_AddPathMode);
+  if (path) path->builder->addPath(otherPath->builder->snapshot(), dx,dy, extend ? SkPath::kExtend_AddPathMode : SkPath::kAppend_AddPathMode);
 }
 
 
 TENNOJI_EXPORT void rina_path_close(TennojiCanvasPath* path) {
-  path->builder->close();
+  if (path) path->builder->close();
 }
 TENNOJI_EXPORT void rina_path_reset(TennojiCanvasPath* path) {
-  path->builder->reset();
+  if (path) path->builder->reset();
 }
 
 TENNOJI_EXPORT bool rina_path_contains(TennojiCanvasPath* path, float x, float y) {
-  return path->builder->contains({x,y});
+  return path ? path->builder->contains({x,y}) : false;
 }
 TENNOJI_EXPORT void rina_path_shift(TennojiCanvasPath* path, float x, float y) {
-  path->builder->transform(SkMatrix::Translate(x,y));
+  if (path) path->builder->transform(SkMatrix::Translate(x,y));
 }
 TENNOJI_EXPORT void rina_path_transform(TennojiCanvasPath* path, float* matrix4) {
-  path->builder->transform(*matrix_from_matrix4_array(matrix4));
+  if (path) path->builder->transform(*matrix_from_matrix4_array(matrix4));
 }
 
 TENNOJI_EXPORT bool rina_path_combine_op(
@@ -257,6 +262,7 @@ TENNOJI_EXPORT bool rina_path_combine_op(
   TennojiCanvasPath* path1, TennojiCanvasPath* path2, 
   int operationId
 ) {
+  if (!resultPath || !path1 || !path2) return false;
   SkPath betterPath;
   auto ret = Op(path1->builder->snapshot(), path2->builder->snapshot(), (SkPathOp)operationId, &betterPath);
   resultPath->builder = std::make_unique<SkPathBuilder>(betterPath);
@@ -264,26 +270,30 @@ TENNOJI_EXPORT bool rina_path_combine_op(
 }
 
 TENNOJI_EXPORT float* rina_path_get_tight_bounds(TennojiCanvasPath* path) {
-  auto bound = path->builder->computeTightBounds();
   // calloc so if bound is nullopt everything represents a zero-sized rect
   float* gamer = (float*)calloc(4, sizeof(float));
-  if (bound.has_value()) {
-    gamer[0] = bound->left();
-    gamer[1] = bound->top();
-    gamer[2] = bound->right();
-    gamer[3] = bound->bottom();
+  if (path) {
+    auto bound = path->builder->computeTightBounds();
+    if (bound.has_value()) {
+      gamer[0] = bound->left();
+      gamer[1] = bound->top();
+      gamer[2] = bound->right();
+      gamer[3] = bound->bottom();
+    }
   }
   return gamer;
 }
 TENNOJI_EXPORT float* rina_path_get_bounds(TennojiCanvasPath* path) {
-  auto bound = path->builder->computeFiniteBounds();
   // calloc so if bound is nullopt everything represents a zero-sized rect
   float* gamer = (float*)calloc(4, sizeof(float));
-  if (bound.has_value()) {
-    gamer[0] = bound->left();
-    gamer[1] = bound->top();
-    gamer[2] = bound->right();
-    gamer[3] = bound->bottom();
+  if (path) {
+    auto bound = path->builder->computeFiniteBounds();
+    if (bound.has_value()) {
+      gamer[0] = bound->left();
+      gamer[1] = bound->top();
+      gamer[2] = bound->right();
+      gamer[3] = bound->bottom();
+    }
   }
   return gamer;
 }

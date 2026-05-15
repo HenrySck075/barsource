@@ -32,7 +32,7 @@ TENNOJI_EXPORT TennojiCanvasVertices* rina_vertices_init(
   SkColor* skColors = nullptr;
   if (colors) {
     skColors = new SkColor[length];
-    for (uint64_t i = 0; i < length; i++) {
+    for (uint64_t i = 0; i < length/2; i++) {
       // convert ARGB to SkColor (which is RGBA)
       uint32_t argb = static_cast<uint32_t>(colors[i]);
       uint8_t a = (argb >> 24) & 0xFF;
