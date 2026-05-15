@@ -22,6 +22,7 @@ extern "C" {
 #include "frame_pool.h"
 #include "demuxer.h"
 #include <cstring>
+#include <cstdlib>
 
 // HW pixel format callback for hw-accel decoding
 static enum AVPixelFormat get_hw_format(AVCodecContext* ctx,
@@ -140,14 +141,19 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
         swFrame = tmpFrame;
     }
 
-    int dstWidth = swFrame->width;
-    int dstHeight = swFrame->height;
-    size_t rowBytes = dstWidth * 4;
-    decoder->rgbaScratch.resize(rowBytes * dstHeight);
+    const int dstWidth = swFrame->width;
+    const int dstHeight = swFrame->height;
+    const size_t rowBytes = static_cast<size_t>(dstWidth) * 4;
+    const size_t frameBytes = rowBytes * static_cast<size_t>(dstHeight);
+    uint8_t* rgbaData = static_cast<uint8_t*>(malloc(frameBytes));
+    if (!rgbaData) {
+        if (tmpFrame) av_frame_free(&tmpFrame);
+        return nullptr;
+    }
 
     const AVPixelFormat srcFmt = static_cast<AVPixelFormat>(swFrame->format);
     if (srcFmt == AV_PIX_FMT_BGRA && swFrame->linesize[0] == static_cast<int>(rowBytes)) {
-        memcpy(decoder->rgbaScratch.data(), swFrame->data[0], rowBytes * dstHeight);
+        memcpy(rgbaData, swFrame->data[0], frameBytes);
     } else {
         decoder->videoSwsCtx = sws_getCachedContext(
             decoder->videoSwsCtx,
@@ -155,11 +161,12 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
             dstWidth, dstHeight, AV_PIX_FMT_BGRA,
             SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         if (!decoder->videoSwsCtx) {
+            free(rgbaData);
             if (tmpFrame) av_frame_free(&tmpFrame);
             return nullptr;
         }
 
-        uint8_t* dstData[4] = { decoder->rgbaScratch.data(), nullptr, nullptr, nullptr };
+        uint8_t* dstData[4] = { rgbaData, nullptr, nullptr, nullptr };
         int dstLinesize[4] = { static_cast<int>(rowBytes), 0, 0, 0 };
         if (sws_scale(decoder->videoSwsCtx,
                       swFrame->data,
@@ -168,6 +175,7 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
                       swFrame->height,
                       dstData,
                       dstLinesize) <= 0) {
+            free(rgbaData);
             if (tmpFrame) av_frame_free(&tmpFrame);
             return nullptr;
         }
@@ -176,7 +184,18 @@ static sk_sp<SkImage> avframe_to_skimage(TennojiDecoder* decoder, AVFrame* frame
     SkImageInfo imageInfo = SkImageInfo::Make(
         dstWidth, dstHeight, kBGRA_8888_SkColorType, kPremul_SkAlphaType);
 
-    sk_sp<SkData> data = SkData::MakeWithCopy(decoder->rgbaScratch.data(), rowBytes * dstHeight);
+    sk_sp<SkData> data = SkData::MakeWithProc(
+        rgbaData,
+        frameBytes,
+        [](const void* ptr, void*) {
+            free(const_cast<void*>(ptr));
+        },
+        nullptr);
+    if (!data) {
+        free(rgbaData);
+        if (tmpFrame) av_frame_free(&tmpFrame);
+        return nullptr;
+    }
     sk_sp<SkImage> image = SkImages::RasterFromData(imageInfo, data, rowBytes);
 
     // Upload to GPU if context available
@@ -269,9 +288,11 @@ TENNOJI_EXPORT TennojiDecoder* rina_decoder_open(TennojiEngine* engine,
     decoder->framePool = new tennoji::FramePool(8);
     decoder->decodePacket = av_packet_alloc();
     decoder->decodeFrame = av_frame_alloc();
-    if (!decoder->decodePacket || !decoder->decodeFrame) {
+    decoder->audioDecodeFrame = av_frame_alloc();
+    if (!decoder->decodePacket || !decoder->decodeFrame || !decoder->audioDecodeFrame) {
         if (decoder->decodePacket) av_packet_free(&decoder->decodePacket);
         if (decoder->decodeFrame) av_frame_free(&decoder->decodeFrame);
+        if (decoder->audioDecodeFrame) av_frame_free(&decoder->audioDecodeFrame);
         delete decoder->framePool;
         if (decoder->videoCodecCtx) avcodec_free_context(&decoder->videoCodecCtx);
         if (decoder->audioCodecCtx) avcodec_free_context(&decoder->audioCodecCtx);
@@ -292,6 +313,7 @@ TENNOJI_EXPORT void rina_decoder_close(TennojiDecoder* decoder) {
     delete decoder->framePool;
     av_packet_free(&decoder->decodePacket);
     av_frame_free(&decoder->decodeFrame);
+    av_frame_free(&decoder->audioDecodeFrame);
     if (decoder->audioFifo) av_audio_fifo_free(decoder->audioFifo);
     if (decoder->swrCtx) swr_free(&decoder->swrCtx);
     if (decoder->videoSwsCtx) sws_freeContext(decoder->videoSwsCtx);
@@ -543,7 +565,9 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
         if (!decoder->audioFifo) return -1;
     }
 
-    AVFrame* frame = av_frame_alloc();
+    AVFrame* frame = decoder->audioDecodeFrame;
+    if (!frame) return AVERROR(ENOMEM);
+    av_frame_unref(frame);
     
     // 1. Keep decoding packets until we have enough samples in the FIFO
     while (av_audio_fifo_size(decoder->audioFifo) < sample_count) {
@@ -587,7 +611,7 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
                         &frame->ch_layout, (AVSampleFormat)frame->format, frame->sample_rate,
                         0, nullptr);
                     if (!decoder->swrCtx || swr_init(decoder->swrCtx) < 0) {
-                        av_frame_free(&frame);
+                        av_frame_unref(frame);
                         return -1;
                     }
                     decoder->swrOutSampleRate = sample_rate;
@@ -615,13 +639,25 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
                 
                 // Push converted samples into FIFO
                 if (converted > 0) {
-                    const int needed = av_audio_fifo_size(decoder->audioFifo) + converted;
-                    if (av_audio_fifo_realloc(decoder->audioFifo, needed) < 0) {
-                        av_frame_free(&frame);
-                        return -1;
+                    const int available_space = av_audio_fifo_space(decoder->audioFifo);
+                    if (available_space < converted) {
+                        const int current_size = av_audio_fifo_size(decoder->audioFifo);
+                        int new_capacity = current_size + converted;
+                        const int reserve = sample_count * 2;
+                        if (new_capacity < current_size + reserve) {
+                            new_capacity = current_size + reserve;
+                        }
+                        if (av_audio_fifo_realloc(decoder->audioFifo, new_capacity) < 0) {
+                            av_frame_unref(frame);
+                            return -1;
+                        }
                     }
                     void* fifo_data[1] = { decoder->audioScratch.data() };
-                    av_audio_fifo_write(decoder->audioFifo, fifo_data, converted);
+                    const int written = av_audio_fifo_write(decoder->audioFifo, fifo_data, converted);
+                    if (written < converted) {
+                        av_frame_unref(frame);
+                        return -1;
+                    }
                 }
                 av_frame_unref(frame);
             }
@@ -639,7 +675,7 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
         av_audio_fifo_read(decoder->audioFifo, (void**)&samples_out, to_read);
     }
 
-    av_frame_free(&frame);
+    av_frame_unref(frame);
     return to_read; // Return actual samples written to avoid "glitches"
 }
 

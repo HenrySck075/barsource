@@ -10,6 +10,7 @@ This repo has two Dart packages (`dart/` and `example/`) plus a native C++ backe
 cd dart
 dart pub get
 dart analyze
+# This package does not have any tests available at the moment, included here just in case this message goes away
 dart test
 ```
 

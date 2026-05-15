@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:barsource/src/scheduler/binding.dart';
@@ -32,6 +33,9 @@ class RenderVideoClip extends RenderBox with AudioContributor {
   Pointer<TennojiDecoder>? _decoder;
   Pointer<TennojiCanvasImage>? _texture;
   int? _textureTimestamp;
+  Pointer<Float>? _audioSampleBuffer;
+  int _audioSampleBufferCapacity = 0;
+  Float32List? _audioOutputBuffer;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
 
@@ -140,11 +144,34 @@ class RenderVideoClip extends RenderBox with AudioContributor {
 
   @override
   void dispose() {
+    if (_audioSampleBuffer != null) {
+      calloc.free(_audioSampleBuffer!);
+      _audioSampleBuffer = null;
+      _audioSampleBufferCapacity = 0;
+      _audioOutputBuffer = null;
+    }
     if (_decoder != null) {
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
     _ticker.stop();
+  }
+
+  void _ensureAudioBuffers({
+    required int nativeBufferFloats,
+    required int outputBufferFloats,
+  }) {
+    if (_audioSampleBufferCapacity < nativeBufferFloats) {
+      if (_audioSampleBuffer != null) {
+        calloc.free(_audioSampleBuffer!);
+      }
+      _audioSampleBuffer = calloc<Float>(nativeBufferFloats);
+      _audioSampleBufferCapacity = nativeBufferFloats;
+    }
+    final outputBuffer = _audioOutputBuffer;
+    if (outputBuffer == null || outputBuffer.length != outputBufferFloats) {
+      _audioOutputBuffer = Float32List(outputBufferFloats);
+    }
   }
 
   @override
@@ -196,35 +223,36 @@ class RenderVideoClip extends RenderBox with AudioContributor {
     // For 2x speed, we need to read 2x samples; for 0.5x speed, 0.5x samples
     final adjustedSampleCount = (sampleCount * playbackSpeed).round();
     final timeUs = clipTime.inMicroseconds;
+    final outputBufferSize = sampleCount * 2;
+    final nativeBufferSize = adjustedSampleCount * 2;
+    _ensureAudioBuffers(
+      nativeBufferFloats: nativeBufferSize,
+      outputBufferFloats: outputBufferSize,
+    );
 
-    // Allocate buffer for interleaved stereo samples
-    final sampleBufferSize = adjustedSampleCount * 2; // stereo
-    final sampleBuffer = calloc<Float>(sampleBufferSize);
+    final samplesRead = rina_decoder_read_audio_samples(
+      _decoder!,
+      timeUs,
+      _audioSampleBuffer!,
+      adjustedSampleCount,
+      sampleRate,
+    );
 
-    try {
-      final samplesRead = rina_decoder_read_audio_samples(
-        _decoder!,
-        timeUs,
-        sampleBuffer,
-        adjustedSampleCount,
-        sampleRate,
-      );
-
-      if (samplesRead <= 0) {
-        // No audio available - return null (silence will be filled by engine)
-        return null;
-      }
-
-      // Copy to Float32List (only the samples that were actually read)
-      final result = Float32List(samplesRead * 2);
-      for (int i = 0; i < samplesRead * 2; i++) {
-        result[i] = sampleBuffer[i];
-      }
-
-      return result;
-    } finally {
-      calloc.free(sampleBuffer);
+    if (samplesRead <= 0) {
+      return null;
     }
+
+    final output = _audioOutputBuffer!;
+    final copiedFloats = math.min(samplesRead * 2, outputBufferSize);
+    output.setRange(
+      0,
+      copiedFloats,
+      _audioSampleBuffer!.asTypedList(copiedFloats),
+    );
+    if (copiedFloats < outputBufferSize) {
+      output.fillRange(copiedFloats, outputBufferSize, 0.0);
+    }
+    return output;
   }
 }
 
@@ -245,6 +273,9 @@ class RenderAudioClip extends RenderProxyBox with AudioContributor {
   bool _sourceDurationResolved = false;
 
   Pointer<TennojiDecoder>? _decoder;
+  Pointer<Float>? _audioSampleBuffer;
+  int _audioSampleBufferCapacity = 0;
+  Float32List? _audioOutputBuffer;
 
   Pointer<TennojiDecoder>? get decoderPtr => _decoder;
 
@@ -332,11 +363,31 @@ class RenderAudioClip extends RenderProxyBox with AudioContributor {
 
   @override
   void dispose() {
+    if (_audioSampleBuffer != null) {
+      calloc.free(_audioSampleBuffer!);
+      _audioSampleBuffer = null;
+      _audioSampleBufferCapacity = 0;
+      _audioOutputBuffer = null;
+    }
     if (_decoder != null) {
       rina_decoder_close(_decoder!);
       _decoder = null;
     }
     super.dispose();
+  }
+
+  void _ensureAudioBuffers(int sampleBufferFloats) {
+    if (_audioSampleBufferCapacity < sampleBufferFloats) {
+      if (_audioSampleBuffer != null) {
+        calloc.free(_audioSampleBuffer!);
+      }
+      _audioSampleBuffer = calloc<Float>(sampleBufferFloats);
+      _audioSampleBufferCapacity = sampleBufferFloats;
+    }
+    final outputBuffer = _audioOutputBuffer;
+    if (outputBuffer == null || outputBuffer.length != sampleBufferFloats) {
+      _audioOutputBuffer = Float32List(sampleBufferFloats);
+    }
   }
 
   @override
@@ -355,33 +406,29 @@ class RenderAudioClip extends RenderProxyBox with AudioContributor {
 
     final timeUs = clipTime.inMicroseconds;
 
-    // Allocate buffer for interleaved stereo samples
     final sampleBufferSize = sampleCount * 2; // stereo
-    final sampleBuffer = calloc<Float>(sampleBufferSize);
-
-    try {
-      final samplesRead = rina_decoder_read_audio_samples(
-        _decoder!,
-        timeUs,
-        sampleBuffer,
-        sampleCount,
-        sampleRate,
-      );
-
-      if (samplesRead <= 0) {
-        return null;
-      }
-
-      // Copy to Float32List and apply volume
-      final result = Float32List(samplesRead * 2);
-      for (int i = 0; i < samplesRead * 2; i++) {
-        result[i] = sampleBuffer[i] * volume;
-      }
-
-      return result;
-    } finally {
-      calloc.free(sampleBuffer);
+    _ensureAudioBuffers(sampleBufferSize);
+    final samplesRead = rina_decoder_read_audio_samples(
+      _decoder!,
+      timeUs,
+      _audioSampleBuffer!,
+      sampleCount,
+      sampleRate,
+    );
+    if (samplesRead <= 0) {
+      return null;
     }
+
+    final output = _audioOutputBuffer!;
+    final copiedFloats = math.min(samplesRead * 2, sampleBufferSize);
+    final inputView = _audioSampleBuffer!.asTypedList(copiedFloats);
+    for (int i = 0; i < copiedFloats; i++) {
+      output[i] = inputView[i] * volume;
+    }
+    if (copiedFloats < sampleBufferSize) {
+      output.fillRange(copiedFloats, sampleBufferSize, 0.0);
+    }
+    return output;
   }
 
   @override
@@ -397,7 +444,6 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
       _repeatCount = repeatCount;
 
   double? _overrideDuration;
-
 
   int? _repeatCount;
   int? get repeatCount => _repeatCount;
@@ -419,8 +465,7 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
     if (repeatCount == null) {
       return double.infinity;
     }
-    return super.duration *
-        repeatCount;
+    return super.duration * repeatCount;
   }
 
   @override
@@ -474,8 +519,8 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
       }
     }
 
-
-    final loopedTimeUs = elapsed.inMicroseconds % (super.duration * 1000000).toInt();
+    final loopedTimeUs =
+        elapsed.inMicroseconds % (super.duration * 1000000).toInt();
     final loopedFrameTime = attachedAt + Duration(microseconds: loopedTimeUs);
     // print the loopedFrameTime and move cursor to beginning of this line
     final mixedSamples = collectSubtreeMixedAudioForFrame(

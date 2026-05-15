@@ -38,6 +38,7 @@ struct TennojiDecoder {
     std::vector<uint8_t> rgbaScratch;
     AVPacket* decodePacket = nullptr;
     AVFrame* decodeFrame = nullptr;
+    AVFrame* audioDecodeFrame = nullptr;
 
     // Audio packet queue: video decode stashes audio packets here
     // instead of discarding them, so they can be drained by the encoder.
