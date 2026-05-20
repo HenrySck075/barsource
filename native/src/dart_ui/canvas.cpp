@@ -131,6 +131,11 @@ TENNOJI_EXPORT TennojiCanvas* rina_canvas_create(
   return c;
 }
 
+TENNOJI_EXPORT void rina_canvas_begin_recording(TennojiCanvas* canvas) {
+  if (!canvas || !canvas->recorder || canvas->canvas) return;
+  canvas->canvas = canvas->recorder->beginRecording(canvas->width, canvas->height);
+}
+
 TENNOJI_EXPORT void rina_canvas_destroy(TennojiCanvas* canvas) {
   if (canvas) delete canvas;
 }
@@ -374,10 +379,17 @@ TENNOJI_EXPORT uint64_t rina_canvas_get_save_count(TennojiCanvas* canvas) {
   return canvas->canvas->getSaveCount();
 }
 
+TENNOJI_EXPORT void rina_canvas_clear(TennojiCanvas* canvas) {
+  if (!canvas || !canvas->canvas) return;
+  canvas->canvas->clear(SK_ColorTRANSPARENT);
+}
 TENNOJI_EXPORT TennojiPicture* rina_canvas_finish_recording(TennojiCanvas* canvas) {
-  if (!canvas) return nullptr;
+  if (!canvas || !canvas->recorder || !canvas->canvas) return nullptr;
+  sk_sp<SkPicture> picture = canvas->recorder->finishRecordingAsPicture();
+  canvas->canvas = nullptr;
+  if (!picture) return nullptr;
   return new TennojiPicture {
-    .picture = canvas->recorder->finishRecordingAsPicture()
+    .picture = std::move(picture)
   };
 }
 

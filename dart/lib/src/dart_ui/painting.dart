@@ -7123,6 +7123,11 @@ class Canvas {
   @protected
   Pointer<TennojiCanvas> get nativePtr => _nativePtr;
 
+  void beginRecording() {
+    debugAssertNullPointer();
+    rina_canvas_begin_recording(_nativePtr);
+  }
+
   void drawColor(Color color, BlendMode blendMode) {
     debugAssertNullPointer();
     rina_canvas_draw_color(_nativePtr, color.value, blendMode.index);

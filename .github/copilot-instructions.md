@@ -10,22 +10,7 @@ This repo has two Dart packages (`dart/` and `example/`) plus a native C++ backe
 cd dart
 dart pub get
 dart analyze
-# This package does not have any tests available at the moment, included here just in case this message goes away
-dart test
-```
-
-Run a single test file:
-
-```bash
-cd dart
-dart test test/<file_name>_test.dart
-```
-
-Run a single test by name:
-
-```bash
-cd dart
-dart test -n "<test name substring>"
+# This package does not have any tests available at the moment. Not even the test folder.
 ```
 
 ### Example package (`example/`)
@@ -34,14 +19,6 @@ dart test -n "<test name substring>"
 cd example
 dart pub get
 dart analyze
-dart test
-```
-
-Run a single test file:
-
-```bash
-cd example
-dart test test/<file_name>_test.dart
 ```
 
 ### Native backend (`native/`)
@@ -49,7 +26,7 @@ dart test test/<file_name>_test.dart
 ```bash
 cd native
 cmake -S . -B build
-cmake --build build -- -j$(nproc)
+cmake --build build -- -j$(nproc) # library automatically copied to the dart package
 ```
 
 ### End-to-end local render run

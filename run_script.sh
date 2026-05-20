@@ -19,7 +19,5 @@ fi
 
 cmake --build . -- -j$(nproc)
 
-find . -name "*.so" -exec cp {} "${SCRIPT_DIR}/dart/lib/blob/" \;
-
 cd "${SCRIPT_DIR}/example"
 dart run $* 

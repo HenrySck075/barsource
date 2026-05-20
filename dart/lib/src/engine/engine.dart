@@ -340,6 +340,7 @@ class Engine extends BindingBase
       registerExtension(_widgetTreeExtension, _serviceMethodHandler);
       registerExtension(_statusExtension, _serviceMethodHandler);
     }
+    bool hasPaintedFrame = false;
     _rendering = true;
     try {
       while (!_stopRequested &&
@@ -357,35 +358,43 @@ class Engine extends BindingBase
         // Paint phase
         // ignore: invalid_use_of_protected_member
         final nativeCanvas = canvas.nativePtr;
-        rina_canvas_draw_color(
-          nativeCanvas,
-          0xFF000000,
-          BlendMode.dstOver.index,
-        );
+        // ignore: invalid_use_of_protected_member
+        final shouldPaintFrame =
+            !hasPaintedFrame || pipelineOwner.consumeFramePaintInvalidation();
 
-        // Paint directly without layers
-        try {
-          final context = PaintingContext(
-            canvas,
-            Rect.fromLTWH(
-              0,
-              0,
-              renderResolution.width,
-              renderResolution.height,
-            ),
+        if (shouldPaintFrame) {
+          canvas.beginRecording();
+          rina_canvas_draw_color(
+            nativeCanvas,
+            0xFF000000,
+            BlendMode.dstOver.index,
           );
-          renderView.paint(context, Offset.zero);
-        } catch (e, st) {
-          _log.severe('Error during painting at $_currentTime: $e', e, st);
-          _log.severe(st);
-          exitReason = 'paint failed at $_currentTime';
-          break;
+
+          // Paint directly without layers
+          try {
+            final context = PaintingContext(
+              canvas,
+              Rect.fromLTWH(
+                0,
+                0,
+                renderResolution.width,
+                renderResolution.height,
+              ),
+            );
+            renderView.paint(context, Offset.zero);
+            hasPaintedFrame = true;
+          } catch (e, st) {
+            _log.severe('Error during painting at $_currentTime: $e', e, st);
+            _log.severe(st);
+            exitReason = 'paint failed at $_currentTime';
+            break;
+          }
         }
 
         // Encode video
         final videoWriteResult = rina_encoder_write_frame(
           encoder,
-          nativeCanvas,
+          shouldPaintFrame ? nativeCanvas : nullptr,
         );
         if (videoWriteResult < 0) {
           exitReason =

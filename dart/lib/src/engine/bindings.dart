@@ -95,6 +95,9 @@ external ffi.Pointer<TennojiCanvas> rina_canvas_create(
   int height,
 );
 
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
+external void rina_canvas_begin_recording(ffi.Pointer<TennojiCanvas> canvas);
+
 @ffi.Native<ffi.Pointer<TennojiPicture> Function(ffi.Pointer<TennojiCanvas>)>(
   isLeaf: true,
 )
@@ -751,9 +754,9 @@ external void rina_load_font_from_list(
   ffi.Pointer<ffi.Char> fontFamily,
 );
 
-@ffi.Native<
-  ffi.Bool Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)
->(isLeaf: true)
+@ffi.Native<ffi.Bool Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>(
+  isLeaf: true,
+)
 external bool rina_load_font_from_file(
   ffi.Pointer<ffi.Char> filePath,
   ffi.Pointer<ffi.Char> fontFamily,

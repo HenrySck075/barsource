@@ -155,6 +155,7 @@ class PaintingContext {
 class PipelineOwner {
   final List<RenderObject> _nodesNeedingLayout = [];
   List<RenderObject> _nodesNeedingPaint = <RenderObject>[];
+  bool _framePaintInvalidated = false;
   @protected
   List<RenderObject> get nodesNeedingPaint => _nodesNeedingPaint;
 
@@ -166,6 +167,13 @@ class PipelineOwner {
 
   void requestPaint(RenderObject node) {
     _nodesNeedingPaint.add(node);
+    _framePaintInvalidated = true;
+  }
+
+  bool consumeFramePaintInvalidation() {
+    final invalidated = _framePaintInvalidated;
+    _framePaintInvalidated = false;
+    return invalidated;
   }
 
   void flushLayout() {
@@ -263,9 +271,11 @@ abstract class RenderObject {
 
   bool _wasRepaintBoundary = false;
 
-  /// markNeedsPaint is now a no-op as layers have been removed
+  /// Marks this node dirty for paint and signals the engine output changed.
   void markNeedsPaint() {
-    // No-op: layers logic removed
+    if (_needsPaint) return;
+    _needsPaint = true;
+    _owner?.requestPaint(this);
   }
 
   /// The layout constraints most recently supplied by the parent.
@@ -422,7 +432,6 @@ abstract class RenderObject {
       return _debugDisposed = true;
     }());
   }
-
 
   void reassemble() {
     markNeedsLayout();
@@ -708,7 +717,6 @@ mixin ContainerRenderObjectMixin<
     final childParentData = child.parentData! as ParentDataType;
     return childParentData.nextSibling;
   }
-
 }
 
 abstract class ContainerBoxParentData<ChildType extends RenderObject>

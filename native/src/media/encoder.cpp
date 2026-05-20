@@ -94,6 +94,7 @@ struct TennojiEncoder {
 
     std::atomic<bool> running{true};
     std::atomic<bool> renderFinished{false};
+    sk_sp<SkPicture> lastPicture;
     std::vector<float> audioLeftScratch;
     std::vector<float> audioRightScratch;
     AVPacket* audioEncodePkt = nullptr;
@@ -640,13 +641,18 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
 
 TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
                                                 TennojiCanvas* canvas) {
-    if (!encoder || !canvas || !canvas->recorder) return -1;
+    if (!encoder) return -1;
+    sk_sp<SkPicture> pic;
 
-    sk_sp<SkPicture> pic = canvas->recorder->finishRecordingAsPicture();
-    
-    canvas->canvas = canvas->recorder->beginRecording(canvas->width, canvas->height);
-
-    if (!pic) return -1;
+    if (canvas && canvas->recorder && canvas->canvas) {
+        pic = canvas->recorder->finishRecordingAsPicture();
+        canvas->canvas = nullptr;
+        if (!pic) return -1;
+        encoder->lastPicture = pic;
+    } else {
+        pic = encoder->lastPicture;
+        if (!pic) return -1;
+    }
 
     {
         std::unique_lock<std::mutex> lock(encoder->renderMutex);
