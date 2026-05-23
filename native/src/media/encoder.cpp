@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstring>
 #include <cerrno>
+#include <cctype>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -108,6 +109,33 @@ static void log_ffmpeg_error(const char* context, int error_code) {
     char error_buf[AV_ERROR_MAX_STRING_SIZE];
     av_strerror(error_code, error_buf, sizeof(error_buf));
     std::cerr << context << ": " << error_buf << " (" << error_code << ")" << std::endl;
+}
+
+static bool starts_with_case_insensitive(const char* value, const char* prefix) {
+    if (!value || !prefix) return false;
+    for (size_t i = 0; prefix[i] != '\0'; ++i) {
+        if (value[i] == '\0') return false;
+        const auto left = static_cast<unsigned char>(value[i]);
+        const auto right = static_cast<unsigned char>(prefix[i]);
+        if (std::tolower(left) != std::tolower(right)) return false;
+    }
+    return true;
+}
+
+static const char* resolve_stream_format(const char* output_path) {
+    if (!output_path) return nullptr;
+    if (starts_with_case_insensitive(output_path, "rtmp://") ||
+        starts_with_case_insensitive(output_path, "rtmps://") ||
+        starts_with_case_insensitive(output_path, "rtmpe://") ||
+        starts_with_case_insensitive(output_path, "rtmpt://")) {
+        return "flv";
+    }
+    if (starts_with_case_insensitive(output_path, "udp://") ||
+        starts_with_case_insensitive(output_path, "udps://") ||
+        starts_with_case_insensitive(output_path, "srt://")) {
+        return "mpegts";
+    }
+    return nullptr;
 }
 
 static int write_interleaved_frame_locked(TennojiEncoder* encoder, AVPacket* pkt) {
@@ -458,8 +486,8 @@ extern "C" {
 TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                                                        const TennojiEncoderConfig* config) {
     if (!engine || !config || !config->output_path) return nullptr;
-    const bool is_youtube_stream = config->output_mode == TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM;
-    const char* format_name = is_youtube_stream ? "flv" : nullptr;
+    const bool is_streaming = config->output_mode == TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM;
+    const char* format_name = is_streaming ? resolve_stream_format(config->output_path) : nullptr;
 
     auto* enc = new TennojiEncoder();
     enc->engine = engine;
@@ -541,7 +569,7 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
     const char* crf = is_h265 ? "30" : "28";
     const int qp = is_h265 ? 28 : 26;
 
-    if (is_youtube_stream) {
+    if (is_streaming) {
         // Keep local render settings untouched; streaming gets its own low-latency CBR profile.
         av_opt_set(enc->videoCodecCtx->priv_data, "preset", "veryfast", 0);
         av_opt_set(enc->videoCodecCtx->priv_data, "tune", "zerolatency", 0);
@@ -626,7 +654,18 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         }
     }
 
-    ret = avformat_write_header(enc->fmtCtx, nullptr);
+    AVDictionary* format_opts = nullptr;
+    if (is_streaming) {
+        enc->fmtCtx->flags |= AVFMT_FLAG_FLUSH_PACKETS;
+        if (format_name && strcmp(format_name, "mpegts") == 0) {
+            av_dict_set(&format_opts, "mpegts_flags", "resend_headers", 0);
+            av_dict_set(&format_opts, "muxdelay", "0", 0);
+            av_dict_set(&format_opts, "muxpreload", "0", 0);
+        }
+    }
+
+    ret = avformat_write_header(enc->fmtCtx, format_opts ? &format_opts : nullptr);
+    av_dict_free(&format_opts);
     if (ret < 0) {
         rina_encoder_destroy(enc);
         return nullptr;

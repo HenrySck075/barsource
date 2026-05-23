@@ -14,6 +14,8 @@ see the example folder
 ## Is it really that easy if you're familiar with Flutter?
 yeah ofc its just swapping `runApp` with `render` plus delete the WidgetsApp widgets and adding a render config
 
+> TODO: add WidgetsApp 
+
 ## How fast is it tho
 i have no idea, but it should be fast because it does less work on each cycle than flutter (obviously)
 
@@ -27,3 +29,9 @@ why not whos stopping me
 
 ## does barsource means anything
 [no](https://wikipedia.org/wiki/Thanh_H%C3%B3a)
+
+## why is the native backend named libtennoji
+whole project historically named that and i didnt bother renaming the backend since almost nobody interacts with them directly anyway
+
+## what did you even learn from this
+i know how to abuse render objects!

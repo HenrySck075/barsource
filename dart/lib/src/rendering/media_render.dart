@@ -60,10 +60,10 @@ class RenderVideoClip extends RenderBox with AudioContributor {
       uri.cast(),
     );
     calloc.free(uri);
-    _sourceDurationResolved = true;
     if (durationUs <= 0) {
       return null;
     }
+    _sourceDurationResolved = true;
     _sourceDurationUs = durationUs;
     return durationUs;
   }
@@ -204,6 +204,13 @@ class RenderVideoClip extends RenderBox with AudioContributor {
     int sampleRate,
   ) {
     if (_decoder == null) return null;
+
+    if (!_sourceDurationResolved) {
+      final durationUs = _resolveSourceDurationUs();
+      if (durationUs != null) {
+        parent?.onChildDurationUpdated(this);
+      }
+    }
 
     final clipTime = frameTime - trimStart;
 
@@ -468,14 +475,39 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
   }
 
   Duration? _attachedAt;
+  Duration? _lastFrameTime;
 
   Duration _resolveAttachTime(Duration frameTime) {
+    final lastFrameTime = _lastFrameTime;
+    if (lastFrameTime != null && frameTime < lastFrameTime) {
+      _attachedAt = null;
+    }
+    _lastFrameTime = frameTime;
     final attachedAt = _attachedAt;
     if (attachedAt != null) {
+      if (frameTime < attachedAt) {
+        _attachedAt = frameTime;
+        return frameTime;
+      }
       return attachedAt;
     }
     _attachedAt = frameTime;
     return frameTime;
+  }
+
+  double _resolveLoopDurationSeconds() {
+    final currentDuration = super.duration;
+    if (currentDuration.isFinite && currentDuration > 0) {
+      return currentDuration;
+    }
+    final childDuration = child?.duration;
+    if (childDuration != null &&
+        childDuration.isFinite &&
+        childDuration > 0) {
+      super.duration = childDuration;
+      return childDuration;
+    }
+    return currentDuration;
   }
 
   @override
@@ -487,6 +519,7 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
   @override
   void detach() {
     _attachedAt = null;
+    _lastFrameTime = null;
     super.detach();
   }
 
@@ -511,9 +544,28 @@ class RenderRepeatAudio extends RenderProxyBox with AudioContributor {
       }
     }
 
-    final loopedTimeUs =
-        elapsed.inMicroseconds % (super.duration * 1000000).toInt();
-    final loopedFrameTime = attachedAt + Duration(microseconds: loopedTimeUs);
+    final loopDurationSeconds = _resolveLoopDurationSeconds();
+    if (!loopDurationSeconds.isFinite || loopDurationSeconds <= 0) {
+      final mixedSamples = collectSubtreeMixedAudioForFrame(
+        frameTime,
+        sampleCount,
+        sampleRate,
+      );
+      if (mixedSamples == null) {
+        return null;
+      }
+      return processMixedAudioForFrame(
+        frameTime,
+        sampleCount,
+        sampleRate,
+        mixedSamples,
+      );
+    }
+
+    final loopDurationUs =
+        (loopDurationSeconds * Duration.microsecondsPerSecond).round();
+    final loopedTimeUs = elapsed.inMicroseconds % loopDurationUs;
+    final loopedFrameTime = Duration(microseconds: loopedTimeUs);
     // print the loopedFrameTime and move cursor to beginning of this line
     final mixedSamples = collectSubtreeMixedAudioForFrame(
       loopedFrameTime,

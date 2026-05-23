@@ -43,11 +43,11 @@ abstract class State<T extends StatefulWidget> {
   elements.StatefulElement? _element;
 
   // Called by StatefulElement to wire up the state
-  void bindElement(elements.StatefulElement element) {
+  void bindElement(elements.StatefulElement? element) {
     _element = element;
   }
 
-  void bindWidget(T widget) {
+  void bindWidget(T? widget) {
     _widget = widget;
   }
 

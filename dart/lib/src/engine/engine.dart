@@ -64,7 +64,7 @@ enum VideoCodec { h264, h265 }
 
 enum AudioCodec { aac, opus }
 
-enum OutputMode { local, youtubeStream }
+enum OutputMode { local, stream }
 
 class Engine extends BindingBase
     with SchedulerBinding, RendererBinding, WidgetsBinding, AudioBinding {
@@ -227,8 +227,8 @@ class Engine extends BindingBase
   /// The entire operation is designed to be synchronous. The function was set to async to give room for event queues
   /// (otherwise all of them will run after the loop ends)
   Future<void> run(Widget app, RenderConfig config) async {
-    final useYouTubeStreaming = config.outputMode == OutputMode.youtubeStream;
-    if (!useYouTubeStreaming && config.duration == null) {
+    final useStreaming = config.outputMode == OutputMode.stream;
+    if (!useStreaming && config.duration == null) {
       throw ArgumentError(
         'duration is required when outputMode is OutputMode.local',
       );
@@ -254,10 +254,10 @@ class Engine extends BindingBase
 
     // 3. Create Encoder
     final encConfig = calloc<TennojiEncoderConfig>();
-    final resolvedVideoCodec = useYouTubeStreaming
+    final resolvedVideoCodec = useStreaming
         ? VideoCodec.h264
         : config.codec;
-    final resolvedAudioCodec = useYouTubeStreaming
+    final resolvedAudioCodec = useStreaming
         ? AudioCodec.aac
         : config.audioCodec;
     final outputPathUtf8 = config.output.toNativeUtf8(allocator: calloc);
@@ -318,12 +318,12 @@ class Engine extends BindingBase
     final sampleBuffer = calloc<Float>(expectedStereoSamples);
     final sampleBufferView = sampleBuffer.asTypedList(expectedStereoSamples);
     final mixedAudioBuffer = Float32List(expectedStereoSamples);
-    final streamWallClock = (useYouTubeStreaming || config.throttleRenderTime)
+    final streamWallClock = (useStreaming || config.throttleRenderTime)
         ? (Stopwatch()..start())
         : null;
     String? exitReason;
 
-    _devtoolsEnabled = useYouTubeStreaming;
+    _devtoolsEnabled = useStreaming;
     if (_devtoolsEnabled) {
       // try to connect to the vm service
       final info = await Service.getInfo();
@@ -344,7 +344,7 @@ class Engine extends BindingBase
     _rendering = true;
     try {
       while (!_stopRequested &&
-          (useYouTubeStreaming || _currentTime < renderDuration!)) {
+          (useStreaming || _currentTime < renderDuration!)) {
         handleBeginFrame(_currentTime);
 
         // Trigger microtasks / futures
@@ -352,7 +352,7 @@ class Engine extends BindingBase
         await Future(() {});
 
         // Draw frame (Build + Layout)
-        _log.fine('Drawing frame at $_currentTime');
+        //_log.fine('Drawing frame at $_currentTime');
         handleDrawFrame();
 
         // Paint phase
@@ -494,7 +494,7 @@ class Engine extends BindingBase
       if (exitReason == null) {
         if (_stopRequested) {
           exitReason = 'stop requested';
-        } else if (!useYouTubeStreaming) {
+        } else if (!useStreaming) {
           exitReason = 'duration reached';
         } else {
           exitReason = 'stream loop ended';

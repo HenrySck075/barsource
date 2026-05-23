@@ -913,6 +913,14 @@ class StatefulElement extends ComponentElement {
     _state.reassemble();
     super.reassemble();
   }
+
+  @override
+  void unmount() {
+    super.unmount();
+    _state.dispose();
+    _state.bindElement(null);
+    _state.bindWidget(null);
+  }
 }
 
 abstract class RenderObjectElement extends Element {

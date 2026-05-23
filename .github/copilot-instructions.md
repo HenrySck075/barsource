@@ -68,3 +68,7 @@ dart run ffigen
 - Native artifact bundling for Dart uses the hook in `dart/hook/build.dart` and expects platform libraries in `dart/lib/blob/` (`libtennoji.so`, `libtennoji.dylib`, or `tennoji.dll`).
 - The root render attachment is done through `RootWidget`/`RootElement` (`dart/lib/src/widgets/root.dart`), which intentionally bypasses normal ancestor render-object attachment for the render tree root.
 - The render loop and many image/media operations are intentionally synchronous for deterministic frame-by-frame output.
+
+## Styling guidelines for Dart code
+- Generally just do what Dart suggests.
+- cant believe i have to mention this its been long enough but: Use enum dot-shorthand if the enum name and the argument/variable name is similar.

@@ -1,18 +1,21 @@
 #include "gpu_context.h"
 
-#include "include/gpu/ganesh/GrDirectContext.h"
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#ifdef TENNOJI_IS_LINUX 
   #define TENNOJI_USE_VULKAN 1
-#elif defined(__APPLE__)
+#elif defined(TENNOJI_IS_MACOS)
   #define TENNOJI_USE_METAL 1
-#elif defined(_WIN32)
+#elif defined(TENNOJI_IS_WINDOWS)
   #define TENNOJI_USE_D3D11 1
 #endif
 
 #ifdef TENNOJI_USE_VULKAN
   #include "include/gpu/ganesh/vk/GrVkDirectContext.h"
   #include "include/gpu/vk/VulkanBackendContext.h"
+  #include "include/gpu/ganesh/GrDirectContext.h"
+  #include "include/gpu/vk/VulkanExtensions.h"
+  #include "src/gpu/vk/vulkanmemoryallocator/VulkanAMDMemoryAllocator.h"
+  #include "src/gpu/vk/VulkanInterface.h"
   #include <vulkan/vulkan.h>
 #endif
 
@@ -32,6 +35,8 @@
 namespace tennoji {
 
 #ifdef TENNOJI_USE_VULKAN
+
+skgpu::VulkanExtensions extensions;
 static GPUContext* create_vulkan_context() {
     auto* ctx = new GPUContext();
     ctx->type = GPUBackendType::Vulkan;
@@ -49,6 +54,7 @@ static GPUContext* create_vulkan_context() {
     VkInstance instance = VK_NULL_HANDLE;
     if (vkCreateInstance(&instanceInfo, nullptr, &instance) != VK_SUCCESS) {
         delete ctx;
+        printf("vkCreateInstance failed.\n");
         return nullptr;
     }
 
@@ -57,6 +63,7 @@ static GPUContext* create_vulkan_context() {
     if (vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr) != VK_SUCCESS || deviceCount == 0) {
         vkDestroyInstance(instance, nullptr);
         delete ctx;
+        printf("vkEnumeratePhysicalDevices (for getting device counts) failed.\n");
         return nullptr;
     }
 
@@ -64,6 +71,7 @@ static GPUContext* create_vulkan_context() {
     if (vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()) != VK_SUCCESS) {
         vkDestroyInstance(instance, nullptr);
         delete ctx;
+        printf("vkEnumeratePhysicalDevices (for getting real list) failed.\n");
         return nullptr;
     }
     VkPhysicalDevice physicalDevice = devices[0]; // Pick first device
@@ -84,6 +92,7 @@ static GPUContext* create_vulkan_context() {
     if (graphicsFamily == UINT32_MAX) {
         vkDestroyInstance(instance, nullptr);
         delete ctx;
+        printf("graphicsFamily unqueriable.\n");
         return nullptr;
     }
 
@@ -102,15 +111,18 @@ static GPUContext* create_vulkan_context() {
 
     // Enable External Memory FD extension for zero-copy
     const char* deviceExtensions[] = {
-        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
+        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+        VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
+        VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME
     };
-    deviceCreateInfo.enabledExtensionCount = 1;
+    deviceCreateInfo.enabledExtensionCount = 3;
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
 
     VkDevice device = VK_NULL_HANDLE;
     if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
         vkDestroyInstance(instance, nullptr);
         delete ctx;
+        printf("vkCreateDevice failed.\n");
         return nullptr;
     }
 
@@ -124,24 +136,50 @@ static GPUContext* create_vulkan_context() {
 
     // Create Skia GrDirectContext from Vulkan
     skgpu::VulkanBackendContext vkBackendCtx = {};
+
     vkBackendCtx.fInstance = instance;
     vkBackendCtx.fPhysicalDevice = physicalDevice;
     vkBackendCtx.fDevice = device;
     vkBackendCtx.fQueue = queue;
     vkBackendCtx.fGraphicsQueueIndex = graphicsFamily;
     vkBackendCtx.fMaxAPIVersion = VK_API_VERSION_1_1;
-    vkBackendCtx.fGetProc = [instance](const char* name, VkInstance inst, VkDevice dev) {
-        if (dev != VK_NULL_HANDLE) {
-            return vkGetDeviceProcAddr(dev, name);
-        }
-        return vkGetInstanceProcAddr(inst ? inst : instance, name);
+    vkBackendCtx.fVkExtensions = &extensions;
+    vkBackendCtx.fGetProc = [](const char* name, VkInstance inst, VkDevice dev) {
+        if (dev) return vkGetDeviceProcAddr(dev, name);
+        if (inst) return vkGetInstanceProcAddr(inst, name);
+        return vkGetInstanceProcAddr(VK_NULL_HANDLE, name); // Fallback for global lookups
     };
+    vkBackendCtx.fMemoryAllocator = skgpu::VulkanAMDMemoryAllocator::Make(
+        instance, 
+        physicalDevice, 
+        device, 
+        VK_API_VERSION_1_1,
+        vkBackendCtx.fVkExtensions,
+        new skgpu::VulkanInterface(
+            vkBackendCtx.fGetProc, 
+            instance, 
+            device, 
+            VK_API_VERSION_1_1,
+            VK_API_VERSION_1_1,
+            vkBackendCtx.fVkExtensions
+        ),
+        (skgpu::ThreadSafe)false
+    );
+    extensions.init(
+        vkBackendCtx.fGetProc, 
+        instance, 
+        physicalDevice, 
+        0, nullptr,        // Instance extensions count/names if you have them
+        deviceCreateInfo.enabledExtensionCount, 
+        deviceCreateInfo.ppEnabledExtensionNames
+    );
 
     ctx->grContext = GrDirectContexts::MakeVulkan(vkBackendCtx).release();
     if (!ctx->grContext) {
         vkDestroyDevice(device, nullptr);
         vkDestroyInstance(instance, nullptr);
         delete ctx;
+        printf("grContext creation failed.\n");
         return nullptr;
     }
 
@@ -211,6 +249,8 @@ static GPUContext* create_d3d11_context() {
 
 GPUContext* gpu_context_create(const char* backend) {
     if (!backend) backend = "vulkan";
+
+    printf("%s",backend);
 
 #ifdef TENNOJI_USE_VULKAN
     if (strcmp(backend, "vulkan") == 0) {

@@ -7201,7 +7201,7 @@ class Canvas {
   }
 
   /// this is specifically used by RenderVideoClip.paint
-  /// because it has the pointer
+  /// because it has the direct pointer
   void drawImageNative(
     Pointer<TennojiCanvasImage> image,
     Offset offset,

@@ -273,7 +273,7 @@ abstract class RenderObject {
 
   /// Marks this node dirty for paint and signals the engine output changed.
   void markNeedsPaint() {
-    if (_needsPaint) return;
+    if (_needsPaint || _parent == null) return;
     _needsPaint = true;
     _owner?.requestPaint(this);
   }

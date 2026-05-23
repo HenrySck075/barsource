@@ -23,6 +23,9 @@
 extern "C" {
 #endif
 
+// use this to verify if your own native assets can find this package's native library
+TENNOJI_EXPORT void rina_tennoji();
+
 // Engine lifecycle
 TENNOJI_EXPORT TennojiEngine* rina_engine_create(const TennojiEngineConfig* config);
 TENNOJI_EXPORT void rina_engine_destroy(TennojiEngine* engine);
@@ -199,6 +202,11 @@ TENNOJI_EXPORT bool rina_texture_equals(
 
 TENNOJI_EXPORT int rina_texture_get_width(TennojiCanvasImage* texture);
 TENNOJI_EXPORT int rina_texture_get_height(TennojiCanvasImage* texture);
+TENNOJI_EXPORT TennojiCanvasImage* rina_texture_from_dmabuf(
+    TennojiEngine* engine,
+    int dmaBufFd, int32_t width, int32_t height,
+    int32_t rowBytes, int64_t offsetBytes,
+    uint32_t pixelFormat, uint64_t modifier);
 
 
 // Encoder (export)

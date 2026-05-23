@@ -132,7 +132,7 @@ class Ticker {
     _muted = value;
     if (value) {
       unscheduleTick();
-    } else /*if (shouldScheduleTick)*/ {
+    } else if (isActive)/*if (shouldScheduleTick)*/ {
       scheduleTick();
     }
   }
@@ -154,8 +154,8 @@ class Ticker {
   TickerFuture start() {
     assert(!isTicking, "nuh uh you arent starting this twice");
     _future = TickerFuture._();
-    scheduleTick();
     _startTime = Engine.instance.currentTime;
+    scheduleTick();
     return _future!;
   }
 
@@ -173,7 +173,10 @@ class Ticker {
   }
 
   void _tick(Duration timeStamp) {
-    if (!muted) _onTick(timeStamp - _startTime!);
+    if (
+      !muted && 
+      _startTime != null // this happened out of nowhere
+    ) _onTick(timeStamp - _startTime!);
     // We request the next tick
     if (isActive) {
        scheduleTick();

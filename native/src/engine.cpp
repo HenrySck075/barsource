@@ -40,6 +40,8 @@ TENNOJI_EXPORT TennojiEngine* rina_engine_create(const TennojiEngineConfig* conf
     engine->gpuCtx = tennoji::gpu_context_create(backend);
     if (engine->gpuCtx) {
         engine->grContext = engine->gpuCtx->grContext;
+    } else {
+      printf("no gpu?\n");
     }
 
     // Init thread pool (hardware concurrency or at least 4 threads)

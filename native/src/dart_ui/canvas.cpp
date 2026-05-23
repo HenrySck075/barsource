@@ -246,7 +246,7 @@ TENNOJI_EXPORT void rina_canvas_draw_image(
   float dx, float dy,
   TennojiCanvasPaintMetadata* paintData
 ) {
-  if (!canvas || !canvas->canvas || !canvas->engine) return;
+  if (!canvas || !canvas->canvas || !canvas->engine || !texture) return;
 
   sk_sp<SkImage> image = texture->image;
   if (!image) return;

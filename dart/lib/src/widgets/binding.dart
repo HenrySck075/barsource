@@ -2,9 +2,7 @@ import 'package:barsource/src/foundation/binding_base.dart';
 import 'package:barsource/src/rendering/binding.dart';
 import 'package:barsource/src/scheduler/binding.dart';
 import 'package:barsource/src/elements/framework.dart';
-import 'package:barsource/src/widgets/framework.dart';
 import 'package:barsource/src/widgets/root.dart';
-import 'package:barsource/src/rendering/box.dart';
 import 'package:meta/meta.dart';
 
 mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
@@ -32,6 +30,7 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
     _buildOwner!.buildScope(_renderViewElement!, (){
       _renderViewElement!.mount(null, null);
     });
+    //_buildOwner!.finalizeTree();
     
     /*
     // Attach render object
@@ -45,6 +44,7 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
   @override
   void drawFrame() {
     _buildOwner!.buildScope(_renderViewElement!);
+    _buildOwner!.finalizeTree();
     super.drawFrame();
   }
 
@@ -64,4 +64,3 @@ mixin WidgetsBinding on BindingBase, SchedulerBinding, RendererBinding {
     super.reassembleApplication();
   }
 }
-

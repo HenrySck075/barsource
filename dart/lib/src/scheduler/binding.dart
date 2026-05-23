@@ -57,7 +57,8 @@ mixin SchedulerBinding on BindingBase {
     _postFrameCallbacks.add(callback);
   }
   int scheduleFrameCallback(FrameCallback callback, {bool rescheduling = false}) {
-    _transientCallbacks[_transientCallbackId++] = _FrameCallbackEntry(
+    _transientCallbackId++;
+    _transientCallbacks[_transientCallbackId] = _FrameCallbackEntry(
       callback,
       rescheduling: rescheduling
     );
