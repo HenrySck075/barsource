@@ -11,9 +11,11 @@
 #if defined(__linux__) && !defined(__ANDROID__)
 #define TENNOJI_USE_VULKAN 1
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 #include <unistd.h>
 #include <iostream>
 #include "include/gpu/vk/VulkanTypes.h"
+#include "drm/drm_fourcc.h"
 #endif
 
 namespace tennoji {
@@ -36,6 +38,16 @@ sk_sp<SkSurface> create_gpu_surface(GrDirectContext* grContext, int32_t width, i
 }
 
 #if defined(TENNOJI_USE_VULKAN)
+PFN_vkGetImageDrmFormatModifierPropertiesEXT pfnGetImageDrmFormatModifierPropertiesEXT = nullptr;
+
+static void init_vulkan_extensions(VkDevice device) {
+  if (!pfnGetImageDrmFormatModifierPropertiesEXT) {
+    pfnGetImageDrmFormatModifierPropertiesEXT = (PFN_vkGetImageDrmFormatModifierPropertiesEXT)vkGetDeviceProcAddr(device, "vkGetImageDrmFormatModifierPropertiesEXT");
+    if (!pfnGetImageDrmFormatModifierPropertiesEXT) {
+      std::cerr << "Failed to get vkGetImageDrmFormatModifierPropertiesEXT" << std::endl;
+    }
+  }
+}
 
 static uint32_t find_memory_type(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
@@ -54,6 +66,7 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
     if (!ctx || ctx->type != GPUBackendType::Vulkan) return result;
 
     VkDevice device = (VkDevice)ctx->native_device;
+    init_vulkan_extensions(device); // TODO: figure out where to better place this
     VkPhysicalDevice physicalDevice = (VkPhysicalDevice)ctx->native_context;
     
     // Get function pointer for vkGetMemoryFdKHR
@@ -63,9 +76,21 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
         return result;
     }
 
+    uint64_t modifiers[] = {
+      I915_FORMAT_MOD_4_TILED,
+      I915_FORMAT_MOD_Y_TILED,
+      I915_FORMAT_MOD_X_TILED,
+      DRM_FORMAT_MOD_LINEAR
+    };
+    VkImageDrmFormatModifierListCreateInfoEXT modifierListInfo = {};
+    modifierListInfo.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT;
+    modifierListInfo.drmFormatModifierCount = sizeof(modifiers) / sizeof(modifiers[0]);
+    modifierListInfo.pDrmFormatModifiers = modifiers;
+
     // Create Image
     VkExternalMemoryImageCreateInfo externalImageInfo = {};
     externalImageInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+    externalImageInfo.pNext = &modifierListInfo;
     externalImageInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
 
     VkImageCreateInfo imageInfo = {};
@@ -78,7 +103,7 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
     imageInfo.format = VK_FORMAT_B8G8R8A8_UNORM; 
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -137,7 +162,7 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
     GrVkImageInfo grInfo;
     grInfo.fImage = image;
     grInfo.fAlloc = valloc;
-    grInfo.fImageTiling = VK_IMAGE_TILING_OPTIMAL;
+    grInfo.fImageTiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
     grInfo.fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     grInfo.fFormat = VK_FORMAT_B8G8R8A8_UNORM;
     grInfo.fLevelCount = 1;
@@ -170,6 +195,20 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
     result.vkImage = (void*)image;
     result.vkMemory = (void*)imageMemory;
     result.fd = fd;
+    // the new thing
+    {
+      VkImageDrmFormatModifierPropertiesEXT g;
+      g.sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT;
+      if (pfnGetImageDrmFormatModifierPropertiesEXT(device, image, &g) != VK_SUCCESS) {
+        printf("uhm no modifier\n");
+      } else {
+        result.modifier = g.drmFormatModifier;
+      }
+      VkSubresourceLayout g2;
+      VkImageSubresource irsc{VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT, 0, 0};
+      vkGetImageSubresourceLayout(device, image, &irsc, &g2);
+      result.pitch = g2.rowPitch;
+    }
     return result;
 }
 

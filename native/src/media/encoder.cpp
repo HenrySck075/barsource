@@ -62,6 +62,7 @@ struct TennojiEncoder {
     AVStream* audioStream = nullptr;
     AVBufferRef* hwDeviceCtx = nullptr;
     AVBufferRef* hwFramesCtx = nullptr;
+    std::atomic<bool> zeroCopyEnabled{false};
     SwsContext* swsCtx = nullptr;
     TennojiEngine* engine = nullptr;
     tennoji::AudioMixer* audioMixer = nullptr;
@@ -109,6 +110,17 @@ static void log_ffmpeg_error(const char* context, int error_code) {
     char error_buf[AV_ERROR_MAX_STRING_SIZE];
     av_strerror(error_code, error_buf, sizeof(error_buf));
     std::cerr << context << ": " << error_buf << " (" << error_code << ")" << std::endl;
+}
+
+static void disable_zero_copy(TennojiEncoder* encoder, const char* context, int error_code = 0) {
+    if (!encoder) return;
+    bool expected = true;
+    if (!encoder->zeroCopyEnabled.compare_exchange_strong(expected, false)) return;
+    if (error_code != 0) {
+        log_ffmpeg_error(context, error_code);
+    } else {
+        std::cerr << context << std::endl;
+    }
 }
 
 static bool starts_with_case_insensitive(const char* value, const char* prefix) {
@@ -172,6 +184,7 @@ static void render_loop(TennojiEncoder* enc) {
         enc->renderCv.notify_one();
 
         tennoji::ExportableSurface exSurface;
+        const bool tryZeroCopy = enc->zeroCopyEnabled.load();
         {
             std::lock_guard<std::mutex> lock(enc->poolMutex);
             if (!enc->freeSurfaces.empty()) {
@@ -181,8 +194,11 @@ static void render_loop(TennojiEncoder* enc) {
         }
 
         if (!exSurface.skSurface) {
-            if (enc->hwFramesCtx) {
+            if (tryZeroCopy && enc->hwFramesCtx) {
                 exSurface = tennoji::create_exportable_gpu_surface(enc->engine->gpuCtx, enc->width, enc->height);
+                if (!exSurface.isValid()) {
+                    disable_zero_copy(enc, "Zero-copy export failed; falling back to readback path.");
+                }
             }
             if (!exSurface.isValid()) {
                 exSurface.skSurface = tennoji::create_gpu_surface(enc->engine->grContext, enc->width, enc->height);
@@ -202,8 +218,9 @@ static void render_loop(TennojiEncoder* enc) {
         if (exSurface.skSurface) {
              exSurface.skSurface->getCanvas()->clear(SK_ColorTRANSPARENT);
              exSurface.skSurface->getCanvas()->drawPicture(frame.picture);
-             
-                if (exSurface.fd != -1) {
+              
+                const bool useZeroCopy = tryZeroCopy && exSurface.fd != -1;
+                if (useZeroCopy) {
                     if (auto* grCtx = exSurface.skSurface->recordingContext()) {
                         static_cast<GrDirectContext*>(grCtx)->flushAndSubmit(GrSyncCpu::kNo);
                     }
@@ -301,39 +318,46 @@ static void encode_loop(TennojiEncoder* encoder) {
             AVDRMFrameDescriptor* desc = (AVDRMFrameDescriptor*)av_mallocz(sizeof(AVDRMFrameDescriptor));
             desc->nb_objects = 1;
             desc->objects[0].fd = frameData.surface.fd;
-            desc->objects[0].size = encoder->width * encoder->height * 4; // Approx for B8G8R8A8
-            desc->objects[0].format_modifier = DRM_FORMAT_MOD_INVALID;
+            desc->objects[0].size = frameData.surface.pitch * encoder->height; 
+            desc->objects[0].format_modifier = frameData.surface.modifier;
 
             desc->nb_layers = 1;
             desc->layers[0].format = DRM_FORMAT_ARGB8888;
             desc->layers[0].nb_planes = 1;
             desc->layers[0].planes[0].object_index = 0;
             desc->layers[0].planes[0].offset = 0;
-            desc->layers[0].planes[0].pitch = encoder->width * 4;
-
+            desc->layers[0].planes[0].pitch = frameData.surface.pitch;
             sw_frame->buf[0] = av_buffer_create((uint8_t*)desc, sizeof(AVDRMFrameDescriptor),
                                                 av_buffer_default_free, nullptr, 0);
             sw_frame->data[0] = (uint8_t*)desc;
 
             // Import to HW frame
             hw_frame = av_frame_alloc();
-            if (av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0) < 0) {
+            hw_frame->format = AV_PIX_FMT_VAAPI;
+            hw_frame->width = encoder->width;
+            hw_frame->height = encoder->height;
+            hw_frame->hw_frames_ctx = av_buffer_ref(encoder->hwFramesCtx);
+            
+            if (!hw_frame->hw_frames_ctx) {
+                disable_zero_copy(encoder, "Failed to reference hw frames context.", AVERROR(ENOMEM));
                 av_frame_free(&sw_frame);
                 av_frame_free(&hw_frame);
-                // Should return surface to pool!
                 return_surface_to_pool(encoder, frameData.surface);
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
-            hw_frame->pts = sw_frame->pts;
 
-            if (av_hwframe_transfer_data(hw_frame, sw_frame, 0) < 0) {
+            // Map the DRM PRIME frame directly to the VAAPI frame context
+            //int ret = av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0);
+            int ret = av_hwframe_map(hw_frame, sw_frame, 0);
+            if (ret < 0) {
+                disable_zero_copy(encoder, "hwframe map failed; falling back to readback path.", ret);
                 av_frame_free(&sw_frame);
                 av_frame_free(&hw_frame);
                 return_surface_to_pool(encoder, frameData.surface);
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
-            }
+            }            
             encode_frame = hw_frame;
         } else {
             // SW Path
@@ -553,6 +577,7 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                      if (av_hwframe_ctx_init(enc->hwFramesCtx) >= 0) {
                         enc->videoCodecCtx->hw_frames_ctx = av_buffer_ref(enc->hwFramesCtx);
                         sw_format = AV_PIX_FMT_NV12;
+                        enc->zeroCopyEnabled = (engine->gpuCtx && engine->gpuCtx->type == tennoji::GPUBackendType::Vulkan);
                      } else {
                          av_buffer_unref(&enc->hwFramesCtx);
                      }

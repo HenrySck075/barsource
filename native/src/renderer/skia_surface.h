@@ -12,6 +12,8 @@ struct ExportableSurface {
     void* vkImage = nullptr; // VkImage
     void* vkMemory = nullptr; // VkDeviceMemory
     int fd = -1; // DMA-BUF fd
+    uint32_t pitch;
+    uint64_t modifier;
 
     bool isValid() const { return skSurface != nullptr && fd != -1; }
     void release(GPUContext* ctx);
