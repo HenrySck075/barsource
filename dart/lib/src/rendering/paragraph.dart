@@ -144,4 +144,10 @@ class RenderParagraph extends RenderBox {
   void paint(PaintingContext context, Offset offset) {
     _textPainter.paint(context.canvas, offset);
   }
+
+  @override
+  void dispose() {
+    super.dispose();
+    _textPainter.dispose();
+  }
 }

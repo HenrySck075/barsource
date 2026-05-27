@@ -13,6 +13,7 @@ extern "C" {
 #include <deque>
 #include <mutex>
 #include <vector>
+#include <cstddef>
 
 #include "frame_pool.h"
 
@@ -49,12 +50,46 @@ struct TennojiDecoder {
     std::mutex audioQueueMutex;
     std::deque<AVPacket*> videoPacketQueue;
     std::mutex videoQueueMutex;
+    size_t audioQueueBytes = 0;
+    size_t videoQueueBytes = 0;
+    static constexpr size_t kMaxAudioQueueBytes = 32 * 1024 * 1024;
+    static constexpr size_t kMaxVideoQueueBytes = 128 * 1024 * 1024;
+    static constexpr size_t kMaxAudioQueuePackets = 2048;
+    static constexpr size_t kMaxVideoQueuePackets = 2048;
+
+    static size_t packet_size(const AVPacket* pkt) {
+        return (pkt && pkt->size > 0) ? static_cast<size_t>(pkt->size) : 0;
+    }
+
+    void trim_audio_queue_locked() {
+        while ((audioQueueBytes > kMaxAudioQueueBytes ||
+                audioPacketQueue.size() > kMaxAudioQueuePackets) &&
+               !audioPacketQueue.empty()) {
+            auto* pkt = audioPacketQueue.front();
+            audioPacketQueue.pop_front();
+            audioQueueBytes -= packet_size(pkt);
+            av_packet_free(&pkt);
+        }
+    }
+
+    void trim_video_queue_locked() {
+        while ((videoQueueBytes > kMaxVideoQueueBytes ||
+                videoPacketQueue.size() > kMaxVideoQueuePackets) &&
+               !videoPacketQueue.empty()) {
+            auto* pkt = videoPacketQueue.front();
+            videoPacketQueue.pop_front();
+            videoQueueBytes -= packet_size(pkt);
+            av_packet_free(&pkt);
+        }
+    }
 
     void enqueue_audio_packet(AVPacket* pkt) {
         AVPacket* clone = av_packet_clone(pkt);
         if (clone) {
             std::lock_guard<std::mutex> lock(audioQueueMutex);
             audioPacketQueue.push_back(clone);
+            audioQueueBytes += packet_size(clone);
+            trim_audio_queue_locked();
         }
     }
 
@@ -62,6 +97,7 @@ struct TennojiDecoder {
         std::lock_guard<std::mutex> lock(audioQueueMutex);
         for (auto* p : audioPacketQueue) av_packet_free(&p);
         audioPacketQueue.clear();
+        audioQueueBytes = 0;
     }
 
     void enqueue_video_packet(AVPacket* pkt) {
@@ -69,6 +105,8 @@ struct TennojiDecoder {
         if (clone) {
             std::lock_guard<std::mutex> lock(videoQueueMutex);
             videoPacketQueue.push_back(clone);
+            videoQueueBytes += packet_size(clone);
+            trim_video_queue_locked();
         }
     }
 
@@ -76,5 +114,6 @@ struct TennojiDecoder {
         std::lock_guard<std::mutex> lock(videoQueueMutex);
         for (auto* p : videoPacketQueue) av_packet_free(&p);
         videoPacketQueue.clear();
+        videoQueueBytes = 0;
     }
 };

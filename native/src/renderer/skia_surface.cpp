@@ -77,9 +77,9 @@ ExportableSurface create_exportable_gpu_surface(GPUContext* ctx, int32_t width, 
     }
 
     uint64_t modifiers[] = {
-      I915_FORMAT_MOD_4_TILED,
-      I915_FORMAT_MOD_Y_TILED,
-      I915_FORMAT_MOD_X_TILED,
+      //I915_FORMAT_MOD_4_TILED,
+      //I915_FORMAT_MOD_Y_TILED,
+      //I915_FORMAT_MOD_X_TILED,
       DRM_FORMAT_MOD_LINEAR
     };
     VkImageDrmFormatModifierListCreateInfoEXT modifierListInfo = {};

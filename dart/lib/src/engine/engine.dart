@@ -527,6 +527,7 @@ class Engine extends BindingBase
       _log.info('Render run completed.');
       _frameDuration = null;
       _rendering = false;
+      canvas.dispose();
     }
   }
 

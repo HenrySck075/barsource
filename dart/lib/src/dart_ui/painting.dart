@@ -2731,6 +2731,7 @@ class TargetImageSize {
 Image? decodeImageFromList(Uint8List list) {
   final Codec codec = instantiateImageCodec(list);
   final frameInfo = codec.getNextFrame();
+  codec.dispose();
   return frameInfo?.image;
 }
 
@@ -4906,7 +4907,8 @@ base class Shader {
 
     /// Consumer of this pointer should rina_shader_copy before disposing.
     // It's lightwieght since the actual SkShader is not copied, only its pointer is.
-    //rina_shader_destroy(_nativePtr);
+    // TODO: observe.
+    rina_shader_destroy(_nativePtr);
   }
 }
 
@@ -5138,6 +5140,8 @@ base class Gradient extends Shader {
       matrix,
     );
     malloc.free(matrix);
+    malloc.free(colorStopsBuffer);
+    malloc.free(colorsBuffer);
   }
 
   /// Creates a radial gradient centered at `center` that ends at `radius`
@@ -5359,13 +5363,15 @@ base class ImageShader extends Shader {
     if (_matrix4IsValid(matrix4)) {
       throw ArgumentError('"matrix4" must have 16 entries.');
     }
+    final matrix = _createArrayFromTypedList(matrix4);
     _nativePtr = rina_image_shader_create(
       image._image._nativePtr,
       tmx.index,
       tmy.index,
       filterQuality?.index ?? -1,
-      _createArrayFromTypedList(matrix4),
+      matrix,
     );
+    malloc.free(matrix);
   }
 }
 
@@ -6329,39 +6335,42 @@ base class Vertices {
     }());
 
     // because these fuckers does not allow real address pinning of typed_data objects
-    final tcPtr = textureCoordinates != null
-        ? malloc<Float>(textureCoordinates.length)
-        : nullptr.cast<Float>();
-    if (textureCoordinates != null) {
-      tcPtr
-          .asTypedList(textureCoordinates.length)
-          .setAll(0, textureCoordinates);
-    }
-    final cPtr = colors != null
-        ? malloc<Int32>(colors.length)
-        : nullptr.cast<Int32>();
-    if (colors != null) {
-      cPtr.asTypedList(colors.length).setAll(0, colors);
-    }
-    final iPtr = indices != null
-        ? malloc<Uint16>(indices.length)
-        : nullptr.cast<Uint16>();
-    if (indices != null) {
-      iPtr.asTypedList(indices.length).setAll(0, indices);
-    }
+    using((arena){
+      final tcPtr = textureCoordinates != null
+          ? arena<Float>(textureCoordinates.length)
+          : nullptr.cast<Float>();
+      if (textureCoordinates != null) {
+        tcPtr
+            .asTypedList(textureCoordinates.length)
+            .setAll(0, textureCoordinates);
+      }
+      final cPtr = colors != null
+          ? arena<Int32>(colors.length)
+          : nullptr.cast<Int32>();
+      if (colors != null) {
+        cPtr.asTypedList(colors.length).setAll(0, colors);
+      }
+      final iPtr = indices != null
+          ? arena<Uint16>(indices.length)
+          : nullptr.cast<Uint16>();
+      if (indices != null) {
+        iPtr.asTypedList(indices.length).setAll(0, indices);
+      }
 
-    _nativePtr = rina_vertices_init(
-      mode.index,
-      positions.length,
-      positions.address,
-      tcPtr,
-      cPtr,
-      iPtr,
-      indices?.length ?? 0,
-    );
-    if (_nativePtr == nullptr) {
-      throw ArgumentError('Invalid configuration for vertices.');
-    }
+      _nativePtr = rina_vertices_init(
+        mode.index,
+        positions.length,
+        positions.address,
+        tcPtr,
+        cPtr,
+        iPtr,
+        indices?.length ?? 0,
+      );
+
+      if (_nativePtr == nullptr) {
+        throw ArgumentError('Invalid configuration for vertices.');
+      }
+    });
   }
 
   late final Pointer<TennojiCanvasVertices> _nativePtr;
@@ -6386,6 +6395,7 @@ base class Vertices {
       return true;
     }());
     rina_vertices_destroy(_nativePtr);
+    _nativePtr = nullptr;
   }
 
   bool _disposed = false;
@@ -6916,7 +6926,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
   }
 
   (Pointer<Uint8>, int) _createNativeBuffer(Uint8List buffer) {
-    var p = calloc<Uint8>(buffer.lengthInBytes);
+    var p = malloc<Uint8>(buffer.lengthInBytes);
     final nativeBuffer = p.asTypedList(buffer.lengthInBytes);
     nativeBuffer.setAll(0, buffer);
     return (p, buffer.lengthInBytes);
@@ -6949,6 +6959,7 @@ base class _NativeImageDescriptor implements ImageDescriptor {
   @override
   void dispose() {
     rina_idesc_destroy(_nativePtr);
+    malloc.free(_buffer.$1);
     _nativePtr = nullptr;
   }
 

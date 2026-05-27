@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include "../engine_internal.h"
+#include "include/gpu/ganesh/GrTypes.h"
 
 extern "C" {
 
@@ -13,6 +15,12 @@ TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture) {
   if (!texture) return;
   if (texture->managedByDecoder) return;
   delete texture;
+}
+TENNOJI_EXPORT void rina_engine_flush_textures(TennojiEngine* engine) {
+  if (engine && engine->grContext) {
+    engine->grContext->flushAndSubmit(GrSyncCpu::kYes);
+    engine->grContext->freeGpuResources();
+  }
 }
 
 TENNOJI_EXPORT int rina_texture_get_width(TennojiCanvasImage* texture) {
@@ -185,8 +193,7 @@ TENNOJI_EXPORT TennojiCodec* rina_idesc_instantiate_codec(
   };
 };
 TENNOJI_EXPORT void rina_idesc_destroy(TennojiImageDescriptor* descriptor) {
-  if (!descriptor) return;
-  delete descriptor;
+  if (descriptor) delete descriptor;
 };
 
 TENNOJI_EXPORT bool rina_texture_equals(

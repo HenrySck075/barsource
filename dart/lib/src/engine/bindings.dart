@@ -12,6 +12,9 @@ library;
 import 'dart:ffi' as ffi;
 import '' as self;
 
+@ffi.Native<ffi.Void Function()>(isLeaf: true)
+external void rina_tennoji();
+
 @ffi.Native<
   ffi.Pointer<TennojiEngine> Function(ffi.Pointer<TennojiEngineConfig>)
 >(isLeaf: true)
@@ -414,6 +417,9 @@ external int rina_canvas_save_layer_alpha(
 @ffi.Native<ffi.Uint64 Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
 external int rina_canvas_get_save_count(ffi.Pointer<TennojiCanvas> canvas);
 
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvas>)>(isLeaf: true)
+external void rina_canvas_clear(ffi.Pointer<TennojiCanvas> canvas);
+
 @ffi.Native<
   ffi.Pointer<TennojiCanvasImage> Function(
     ffi.Pointer<TennojiPicture>,
@@ -440,6 +446,9 @@ external int rina_picture_approximate_op_count(
 
 @ffi.Native<ffi.Void Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
 external void rina_texture_destroy(ffi.Pointer<TennojiCanvasImage> texture);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<TennojiEngine>)>(isLeaf: true)
+external void rina_engine_flush_textures(ffi.Pointer<TennojiEngine> engine);
 
 @ffi.Native<
   ffi.Pointer<TennojiCodec> Function(ffi.Pointer<ffi.Uint8>, ffi.Uint64)
@@ -556,6 +565,29 @@ external int rina_texture_get_width(ffi.Pointer<TennojiCanvasImage> texture);
 
 @ffi.Native<ffi.Int Function(ffi.Pointer<TennojiCanvasImage>)>(isLeaf: true)
 external int rina_texture_get_height(ffi.Pointer<TennojiCanvasImage> texture);
+
+@ffi.Native<
+  ffi.Pointer<TennojiCanvasImage> Function(
+    ffi.Pointer<TennojiEngine>,
+    ffi.Int,
+    ffi.Int32,
+    ffi.Int32,
+    ffi.Int32,
+    ffi.Int64,
+    ffi.Uint32,
+    ffi.Uint64,
+  )
+>(isLeaf: true)
+external ffi.Pointer<TennojiCanvasImage> rina_texture_from_dmabuf(
+  ffi.Pointer<TennojiEngine> engine,
+  int dmaBufFd,
+  int width,
+  int height,
+  int rowBytes,
+  int offsetBytes,
+  int pixelFormat,
+  int modifier,
+);
 
 @ffi.Native<
   ffi.Pointer<TennojiEncoder> Function(
@@ -1876,6 +1908,20 @@ enum TennojiHWAccel {
     0 => TENNOJI_HW_ACCEL_AUTO,
     1 => TENNOJI_HW_ACCEL_NONE,
     _ => throw ArgumentError('Unknown value for TennojiHWAccel: $value'),
+  };
+}
+
+enum TennojiOutputMode {
+  TENNOJI_OUTPUT_MODE_LOCAL(0),
+  TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM(1);
+
+  final int value;
+  const TennojiOutputMode(this.value);
+
+  static TennojiOutputMode fromValue(int value) => switch (value) {
+    0 => TENNOJI_OUTPUT_MODE_LOCAL,
+    1 => TENNOJI_OUTPUT_MODE_YOUTUBE_STREAM,
+    _ => throw ArgumentError('Unknown value for TennojiOutputMode: $value'),
   };
 }
 

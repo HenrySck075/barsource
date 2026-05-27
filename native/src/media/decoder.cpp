@@ -411,7 +411,12 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
             std::lock_guard<std::mutex> lock(decoder->videoQueueMutex);
             if (!decoder->videoPacketQueue.empty()) {
                 AVPacket* queuedPkt = decoder->videoPacketQueue.front();
+                const size_t queuedSize = TennojiDecoder::packet_size(queuedPkt);
                 decoder->videoPacketQueue.pop_front();
+                decoder->videoQueueBytes =
+                    (decoder->videoQueueBytes > queuedSize)
+                        ? (decoder->videoQueueBytes - queuedSize)
+                        : 0;
                 av_packet_move_ref(pkt, queuedPkt);
                 av_packet_free(&queuedPkt);
                 fromVideoQueue = true;
@@ -597,6 +602,11 @@ TENNOJI_EXPORT int rina_decoder_read_audio_samples(TennojiDecoder* decoder,
             if (!decoder->audioPacketQueue.empty()) {
                 pkt = decoder->audioPacketQueue.front();
                 decoder->audioPacketQueue.pop_front();
+                const size_t queuedSize = TennojiDecoder::packet_size(pkt);
+                decoder->audioQueueBytes =
+                    (decoder->audioQueueBytes > queuedSize)
+                        ? (decoder->audioQueueBytes - queuedSize)
+                        : 0;
             }
         }
         

@@ -169,8 +169,8 @@ TENNOJI_EXPORT int rina_picture_approximate_bytes_used(TennojiPicture* picture);
 TENNOJI_EXPORT int rina_picture_approximate_op_count(TennojiPicture* picture);
 
 // Texture (GPU texture handle, opaque int ID)
-// no longer true
 TENNOJI_EXPORT void rina_texture_destroy(TennojiCanvasImage* texture);
+TENNOJI_EXPORT void rina_engine_flush_textures(TennojiEngine* engine);
 
 TENNOJI_EXPORT TennojiCodec* rina_codec_from_encoded(const uint8_t* data, const uint64_t length);
 TENNOJI_EXPORT TennojiCodec* rina_codec_from_file(const char* path);

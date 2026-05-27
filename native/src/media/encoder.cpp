@@ -1,4 +1,5 @@
 #include "../engine_internal.h"
+#include "tennoji/engine.h"
 #include <iostream>
 #include <thread>
 #include <queue>
@@ -11,6 +12,9 @@
 #include <cctype>
 
 extern "C" {
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/hwcontext.h>
@@ -71,6 +75,12 @@ struct TennojiEncoder {
     int32_t width = 0;
     int32_t height = 0;
     int32_t fps = 0;
+
+    // Color space conversion lore
+    AVBufferRef* bgraFramesCtx = nullptr;
+    AVFilterGraph* filterGraph = nullptr;
+    AVFilterContext* bufferSrcCtx = nullptr;
+    AVFilterContext* bufferSinkCtx = nullptr;
 
     // Audio buffering for frame size mismatch
     AVAudioFifo* audioFifo = nullptr;
@@ -161,6 +171,8 @@ static void return_surface_to_pool(TennojiEncoder* enc, const tennoji::Exportabl
         std::lock_guard<std::mutex> lock(enc->poolMutex);
         enc->freeSurfaces.push(surface);
     }
+    //???
+    //rina_engine_flush_textures(enc->engine);
 }
 
 static void return_pixels_to_pool(TennojiEncoder* enc, std::vector<uint8_t>& pixels) {
@@ -222,7 +234,7 @@ static void render_loop(TennojiEncoder* enc) {
                 const bool useZeroCopy = tryZeroCopy && exSurface.fd != -1;
                 if (useZeroCopy) {
                     if (auto* grCtx = exSurface.skSurface->recordingContext()) {
-                        static_cast<GrDirectContext*>(grCtx)->flushAndSubmit(GrSyncCpu::kNo);
+                        static_cast<GrDirectContext*>(grCtx)->flushAndSubmit(GrSyncCpu::kYes);
                     }
                     // Zero copy path
                    {
@@ -283,9 +295,15 @@ static void render_loop(TennojiEncoder* enc) {
     enc->encodeCv.notify_one();
 }
 
+struct SurfaceReleaseContext {
+    TennojiEncoder* encoder;
+    tennoji::ExportableSurface surface;
+};
 static void encode_loop(TennojiEncoder* encoder) {
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) return;
+
+    std::queue<tennoji::ExportableSurface> surfaceDelayQueue;
 
     while (true) {
         EncodeFrame frameData;
@@ -314,6 +332,7 @@ static void encode_loop(TennojiEncoder* encoder) {
             sw_frame->width = encoder->width;
             sw_frame->height = encoder->height;
             sw_frame->pts = frameData.pts;
+            sw_frame->linesize[0] = frameData.surface.pitch;
 
             AVDRMFrameDescriptor* desc = (AVDRMFrameDescriptor*)av_mallocz(sizeof(AVDRMFrameDescriptor));
             desc->nb_objects = 1;
@@ -348,17 +367,47 @@ static void encode_loop(TennojiEncoder* encoder) {
             }
 
             // Map the DRM PRIME frame directly to the VAAPI frame context
-            //int ret = av_hwframe_get_buffer(encoder->hwFramesCtx, hw_frame, 0);
-            int ret = av_hwframe_map(hw_frame, sw_frame, 0);
+            // Import to HW frame using the BGRA context
+            AVFrame* hw_frame_bgra = av_frame_alloc();
+            hw_frame_bgra->format = AV_PIX_FMT_VAAPI;
+            hw_frame_bgra->hw_frames_ctx = av_buffer_ref(encoder->bgraFramesCtx);
+
+            int ret = av_hwframe_map(hw_frame_bgra, sw_frame, 0);
             if (ret < 0) {
                 disable_zero_copy(encoder, "hwframe map failed; falling back to readback path.", ret);
                 av_frame_free(&sw_frame);
-                av_frame_free(&hw_frame);
+                av_frame_free(&hw_frame_bgra);
+                return_surface_to_pool(encoder, frameData.surface);
+                return_pixels_to_pool(encoder, frameData.pixels);
+                continue;
+            }
+
+            // AMENDED: Explicitly attach timestamps so they flow through the filter graph
+            hw_frame_bgra->pts = frameData.pts;
+
+            // Push the mapped BGRA frame into the hardware scaler
+            ret = av_buffersrc_add_frame_flags(encoder->bufferSrcCtx, hw_frame_bgra, AV_BUFFERSRC_FLAG_KEEP_REF);
+            av_frame_free(&hw_frame_bgra);
+            if (ret < 0) {
+                log_ffmpeg_error("av_buffersrc_add_frame_flags failed", ret);
+                av_frame_free(&sw_frame);
+                return_surface_to_pool(encoder, frameData.surface);
+                return_pixels_to_pool(encoder, frameData.pixels);
+                continue;
+            }
+
+            // Pull the converted NV12 frame out of the scaler
+            encode_frame = av_frame_alloc();
+            ret = av_buffersink_get_frame(encoder->bufferSinkCtx, encode_frame);
+            if (ret < 0) {
+                log_ffmpeg_error("av_buffersink_get_frame failed", ret);
+                av_frame_free(&encode_frame);
+                encode_frame = nullptr;
+                av_frame_free(&sw_frame);
                 return_surface_to_pool(encoder, frameData.surface);
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }            
-            encode_frame = hw_frame;
         } else {
             // SW Path
             sw_frame = av_frame_alloc();
@@ -366,6 +415,7 @@ static void encode_loop(TennojiEncoder* encoder) {
             sw_frame->width = encoder->width;
             sw_frame->height = encoder->height;
             sw_frame->pts = frameData.pts;
+            sw_frame->linesize[0] = frameData.surface.pitch;
             
             if (av_frame_get_buffer(sw_frame, 32) < 0) {
                 av_frame_free(&sw_frame);
@@ -410,9 +460,16 @@ static void encode_loop(TennojiEncoder* encoder) {
             }
         }
 
-        // Return surface to pool immediately after use/copy
+        // Return surface to pool AFTER a hardware delay
         if (frameData.surface.skSurface) {
-            return_surface_to_pool(encoder, frameData.surface);
+            surfaceDelayQueue.push(frameData.surface);
+        }
+
+        // AMENDED: Keep a 3-frame delay to ensure VAAPI hardware scaling is completely 
+        // finished on the GPU before letting Skia overwrite the memory.
+        while (surfaceDelayQueue.size() > 3) {
+            return_surface_to_pool(encoder, surfaceDelayQueue.front());
+            surfaceDelayQueue.pop();
         }
 
         // Encode the frame
@@ -420,6 +477,7 @@ static void encode_loop(TennojiEncoder* encoder) {
         
         if (hw_frame) av_frame_free(&hw_frame);
         if (sw_frame) av_frame_free(&sw_frame);
+        av_frame_free(&encode_frame);
         
         if (ret < 0) {
             return_pixels_to_pool(encoder, frameData.pixels);
@@ -452,6 +510,10 @@ static void encode_loop(TennojiEncoder* encoder) {
             break;
         }
         return_pixels_to_pool(encoder, frameData.pixels);
+    }
+    while (!surfaceDelayQueue.empty()) {
+        return_surface_to_pool(encoder, surfaceDelayQueue.front());
+        surfaceDelayQueue.pop();
     }
     av_packet_free(&pkt);
 }
@@ -568,20 +630,54 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                  
                  enc->hwFramesCtx = av_hwframe_ctx_alloc(enc->hwDeviceCtx);
                  if (enc->hwFramesCtx) {
-                     AVHWFramesContext* frames_ctx = (AVHWFramesContext*)enc->hwFramesCtx->data;
-                     frames_ctx->format = enc->videoCodecCtx->pix_fmt;
-                     frames_ctx->sw_format = AV_PIX_FMT_NV12; 
-                     frames_ctx->width = enc->width;
-                     frames_ctx->height = enc->height;
-                     frames_ctx->initial_pool_size = 20;
-                     if (av_hwframe_ctx_init(enc->hwFramesCtx) >= 0) {
-                        enc->videoCodecCtx->hw_frames_ctx = av_buffer_ref(enc->hwFramesCtx);
-                        sw_format = AV_PIX_FMT_NV12;
-                        enc->zeroCopyEnabled = (engine->gpuCtx && engine->gpuCtx->type == tennoji::GPUBackendType::Vulkan);
-                     } else {
-                         av_buffer_unref(&enc->hwFramesCtx);
-                     }
-                 }
+                      AVHWFramesContext* frames_ctx = (AVHWFramesContext*)enc->hwFramesCtx->data;
+                      frames_ctx->format = enc->videoCodecCtx->pix_fmt;
+                      frames_ctx->sw_format = AV_PIX_FMT_NV12; 
+                      frames_ctx->width = enc->width;
+                      frames_ctx->height = enc->height;
+                      frames_ctx->initial_pool_size = 20;
+                      if (av_hwframe_ctx_init(enc->hwFramesCtx) >= 0) {
+                         enc->videoCodecCtx->hw_frames_ctx = av_buffer_ref(enc->hwFramesCtx);
+                         sw_format = AV_PIX_FMT_NV12;
+                         enc->zeroCopyEnabled = (engine->gpuCtx && engine->gpuCtx->type == tennoji::GPUBackendType::Vulkan);
+                      } else {
+                          av_buffer_unref(&enc->hwFramesCtx);
+                      }
+                      // 1. Create a context for the incoming BGRA Vulkan frames
+                      enc->bgraFramesCtx = av_hwframe_ctx_alloc(enc->hwDeviceCtx);
+                      AVHWFramesContext* bgra_ctx = (AVHWFramesContext*)enc->bgraFramesCtx->data;
+                      bgra_ctx->format = AV_PIX_FMT_VAAPI;
+                      bgra_ctx->sw_format = AV_PIX_FMT_BGRA;
+                      bgra_ctx->width = enc->width;
+                      bgra_ctx->height = enc->height;
+                      av_hwframe_ctx_init(enc->bgraFramesCtx);
+
+                      // 2. Build the hardware conversion filter graph
+                      enc->filterGraph = avfilter_graph_alloc();
+                      char args[512];
+                      snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=1/1",
+                               enc->width, enc->height, AV_PIX_FMT_VAAPI, 1, enc->fps);
+
+                      enc->bufferSrcCtx = avfilter_graph_alloc_filter(enc->filterGraph, avfilter_get_by_name("buffer"), "in");
+
+                      AVBufferSrcParameters* par = av_buffersrc_parameters_alloc();
+                      par->hw_frames_ctx = enc->bgraFramesCtx; // Tie input to the BGRA context
+                      av_buffersrc_parameters_set(enc->bufferSrcCtx, par);
+                      av_freep(&par);
+                      if (avfilter_init_str(enc->bufferSrcCtx, args) < 0) {
+                          // Handle initialization failure if needed
+                      }
+
+                      avfilter_graph_create_filter(&enc->bufferSinkCtx, avfilter_get_by_name("buffersink"), "out", nullptr, nullptr, enc->filterGraph);
+
+                      AVFilterContext* scaleCtx;
+                      // scale_vaapi triggers Intel's VPP to convert BGRA to NV12 purely on the GPU
+                      avfilter_graph_create_filter(&scaleCtx, avfilter_get_by_name("scale_vaapi"), "scale", "format=nv12", nullptr, enc->filterGraph);
+
+                      avfilter_link(enc->bufferSrcCtx, 0, scaleCtx, 0);
+                      avfilter_link(scaleCtx, 0, enc->bufferSinkCtx, 0);
+                      avfilter_graph_config(enc->filterGraph, nullptr);
+                  }
             }
         }
     }
@@ -848,6 +944,7 @@ TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
     {
         std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
         packets.swap(decoder->audioPacketQueue);
+        decoder->audioQueueBytes = 0;
     }
 
     AVFrame* frame = av_frame_alloc();
@@ -1038,6 +1135,13 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
             avio_closep(&encoder->fmtCtx->pb);
         }
         avformat_free_context(encoder->fmtCtx);
+    }
+
+    if (encoder->filterGraph) {
+        avfilter_graph_free(&encoder->filterGraph);
+    }
+    if (encoder->bgraFramesCtx) {
+        av_buffer_unref(&encoder->bgraFramesCtx);
     }
 
     delete encoder;

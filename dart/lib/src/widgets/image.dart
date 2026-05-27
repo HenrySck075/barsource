@@ -102,13 +102,15 @@ class _RenderLocalImage extends RenderBox {
 
   late Ticker ticker;
 
+  late ImageDescriptor _descriptor;
+
   _RenderLocalImage(this.source) {
     // read the file content 
     final file = File(source);
     final bytes = file.readAsBytesSync();
-    final descriptor = ImageDescriptor.encoded(bytes);
+    _descriptor = ImageDescriptor.encoded(bytes);
 
-    codec = descriptor.instantiateCodec();
+    codec = _descriptor.instantiateCodec(); 
 
     currentFrameInfo = codec.getNextFrame();
 
@@ -133,6 +135,7 @@ class _RenderLocalImage extends RenderBox {
     var didAdvanceFrame = false;
     while (durationFromLastFrame + currentFrameInfo!.duration <= elapsed) {
       durationFromLastFrame += currentFrameInfo!.duration;
+      currentFrameInfo!.image.dispose();
       currentFrameInfo = codec.getNextFrame();
       didAdvanceFrame = true;
     }
@@ -162,6 +165,8 @@ class _RenderLocalImage extends RenderBox {
     currentFrameInfo?.image.dispose();
     if (ticker.isActive) ticker.stop();
     ticker.dispose();
+    codec.dispose();
+    _descriptor.dispose();
     super.dispose();
   }
 }

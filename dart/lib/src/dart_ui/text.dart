@@ -3330,22 +3330,29 @@ base class _NativeParagraph implements Paragraph {
   TextPosition getPositionForOffset(Offset offset) {
     _assertDisposed();
     final Pointer<Int32> encoded = rina_paragraph_get_position_for_offset(_nativePtr, offset.dx, offset.dy);
-    return TextPosition(offset: encoded[0], affinity: TextAffinity.values[encoded[1]]);
+    final ret = TextPosition(offset: encoded[0], affinity: TextAffinity.values[encoded[1]]);
+    malloc.free(encoded);
+    return ret;
   }
 
   @override
   GlyphInfo? getGlyphInfoAt(int codeUnitOffset) {
     _assertDisposed();
-    return GlyphInfo._packedArray(rina_paragraph_get_glyph_info_at(
+    final encoded = rina_paragraph_get_glyph_info_at(
       _nativePtr, codeUnitOffset
-    ));
+    );
+    final ret = GlyphInfo._packedArray(encoded);
+    malloc.free(encoded);
+    return ret;
   }
+
   @override
   GlyphInfo? getClosestGlyphInfoForOffset(Offset offset) {
     _assertDisposed();
-    return GlyphInfo._packedArray(
-      rina_paragraph_get_glyph_info_for_offset(_nativePtr,offset.dx, offset.dy
-    ));
+    final encoded = rina_paragraph_get_glyph_info_for_offset(_nativePtr,offset.dx, offset.dy);
+    final ret = GlyphInfo._packedArray(encoded);
+    malloc.free(encoded);
+    return ret;
   }
 
 
@@ -3615,8 +3622,8 @@ abstract class ParagraphBuilder {
   Paragraph build();
 }
 
-base class _NativeParagraphBuilder implements ParagraphBuilder {
-  static final NativeFinalizer _paragraphBuilderFinalizer = NativeFinalizer(
+base class _NativeParagraphBuilder implements ParagraphBuilder, Finalizable {
+  static final NativeFinalizer _finalizer = NativeFinalizer(
     addresses.rina_paragraph_builder_destroy.cast<NativeFinalizerFunction>(),
   );
   _NativeParagraphBuilder(ParagraphStyle style)
@@ -3650,6 +3657,7 @@ base class _NativeParagraphBuilder implements ParagraphBuilder {
       (style._ellipsis ?? '').asNativePointer(arena).cast<Char>(),
       style._locale.toString().asNativePointer(arena).cast<Char>(),
     );
+    _finalizer.attach(this, _nativePtr.cast(), detach: this);
     });
     if (_nativePtr == nullptr) throw StateError('Failed to create ParagraphBuilder with the given ParagraphStyle.');
   }
@@ -3797,6 +3805,8 @@ base class _NativeParagraphBuilder implements ParagraphBuilder {
   Paragraph build() {
     final nativePtr = rina_paragraph_builder_build(_nativePtr);
     final paragraph = _NativeParagraph._(nativePtr);
+    rina_paragraph_builder_destroy(_nativePtr);
+    _finalizer.detach(this);
     return paragraph;
   }
   @override
