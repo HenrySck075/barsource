@@ -332,10 +332,7 @@ class RenderAudioClip extends RenderProxyBox with AudioContributor {
 
   @override
   set duration(double value) {
-    assert(value >= 0, 'duration must be >= 0');
-    if (_overrideDuration == value) return;
-    _overrideDuration = value;
-    parent?.onChildDurationUpdated(this);
+    throw "no.";
   }
 
   @override
