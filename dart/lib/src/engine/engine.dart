@@ -41,7 +41,7 @@ class RenderConfig {
     this.audioCodec = .aac,
     this.outputMode = .local,
     this.logLevel = Level.INFO,
-    this.showProgressBar = true,
+    this.showProgressBar = false,
     this.throttleRenderTime = false,
   });
   final String output;

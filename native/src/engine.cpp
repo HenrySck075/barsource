@@ -64,7 +64,8 @@ TENNOJI_EXPORT void rina_engine_destroy(TennojiEngine* engine) {
     delete engine->threadPool;
 
     if (engine->grContext) {
-        engine->grContext->abandonContext();
+        engine->grContext->flushAndSubmit(GrSyncCpu::kYes);
+        engine->grContext->releaseResourcesAndAbandonContext();
     }
 
     tennoji::gpu_context_destroy(engine->gpuCtx);

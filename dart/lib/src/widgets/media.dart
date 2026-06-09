@@ -171,6 +171,7 @@ class MediaController extends ChangeNotifier {
 
   Pointer<TennojiCanvasImage>? getCurrentTexture() {
     if (_decoder == null) return null;
+    _log.fine(_currentPosition);
     return rina_decoder_get_texture(_decoder!, _currentPosition.inMicroseconds);
   }
 

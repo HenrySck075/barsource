@@ -163,7 +163,7 @@ static GPUContext* create_vulkan_context() {
             VK_API_VERSION_1_1,
             vkBackendCtx.fVkExtensions
         ),
-        (skgpu::ThreadSafe)false
+        (skgpu::ThreadSafe)true
     );
     extensions.init(
         vkBackendCtx.fGetProc, 
@@ -289,6 +289,7 @@ void gpu_context_destroy(GPUContext* ctx) {
 #ifdef TENNOJI_USE_VULKAN
     if (ctx->type == GPUBackendType::Vulkan) {
         if (ctx->native_device) {
+            vkDeviceWaitIdle(static_cast<VkDevice>(ctx->native_device));
             vkDestroyDevice(static_cast<VkDevice>(ctx->native_device), nullptr);
         }
         if (ctx->native_display) {

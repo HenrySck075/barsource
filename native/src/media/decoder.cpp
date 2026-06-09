@@ -441,7 +441,10 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
 
         ret = avcodec_send_packet(decoder->videoCodecCtx, pkt);
         av_packet_unref(pkt);
-        if (ret < 0) break;
+
+        // Safeguard: If we ever do hit EAGAIN, don't completely kill the loop.
+        // (Though if you drain properly below, send_packet shouldn't return EAGAIN).
+        if (ret < 0 && ret != AVERROR(EAGAIN)) break;
 
         while (true) {
             ret = avcodec_receive_frame(decoder->videoCodecCtx, frame);
@@ -452,7 +455,9 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
 
             if (frame->pts >= target_pts) {
                 found = true;
-                break;
+                // AMENDED: Removed the 'break;' here. 
+                // We MUST let this loop continue until it hits EAGAIN 
+                // to keep the decoder queue healthy.
             }
             av_frame_unref(frame);
         }

@@ -299,6 +299,15 @@ struct SurfaceReleaseContext {
     TennojiEncoder* encoder;
     tennoji::ExportableSurface surface;
 };
+static void hw_surface_free_callback(void* opaque, uint8_t* data) {
+    auto* ctx = static_cast<SurfaceReleaseContext*>(opaque);
+    if (ctx) {
+        return_surface_to_pool(ctx->encoder, ctx->surface);
+        delete ctx;
+    }
+    // Free the AVDRMFrameDescriptor that was allocated via av_mallocz
+    av_freep(&data);
+}
 static void encode_loop(TennojiEncoder* encoder) {
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) return;
@@ -346,25 +355,10 @@ static void encode_loop(TennojiEncoder* encoder) {
             desc->layers[0].planes[0].object_index = 0;
             desc->layers[0].planes[0].offset = 0;
             desc->layers[0].planes[0].pitch = frameData.surface.pitch;
+            auto* releaseCtx = new SurfaceReleaseContext{encoder, frameData.surface};
             sw_frame->buf[0] = av_buffer_create((uint8_t*)desc, sizeof(AVDRMFrameDescriptor),
-                                                av_buffer_default_free, nullptr, 0);
+                                                hw_surface_free_callback, releaseCtx, 0);
             sw_frame->data[0] = (uint8_t*)desc;
-
-            // Import to HW frame
-            hw_frame = av_frame_alloc();
-            hw_frame->format = AV_PIX_FMT_VAAPI;
-            hw_frame->width = encoder->width;
-            hw_frame->height = encoder->height;
-            hw_frame->hw_frames_ctx = av_buffer_ref(encoder->hwFramesCtx);
-            
-            if (!hw_frame->hw_frames_ctx) {
-                disable_zero_copy(encoder, "Failed to reference hw frames context.", AVERROR(ENOMEM));
-                av_frame_free(&sw_frame);
-                av_frame_free(&hw_frame);
-                return_surface_to_pool(encoder, frameData.surface);
-                return_pixels_to_pool(encoder, frameData.pixels);
-                continue;
-            }
 
             // Map the DRM PRIME frame directly to the VAAPI frame context
             // Import to HW frame using the BGRA context
@@ -381,33 +375,28 @@ static void encode_loop(TennojiEncoder* encoder) {
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
-
-            // AMENDED: Explicitly attach timestamps so they flow through the filter graph
+            
             hw_frame_bgra->pts = frameData.pts;
 
-            // Push the mapped BGRA frame into the hardware scaler
             ret = av_buffersrc_add_frame_flags(encoder->bufferSrcCtx, hw_frame_bgra, AV_BUFFERSRC_FLAG_KEEP_REF);
             av_frame_free(&hw_frame_bgra);
             if (ret < 0) {
                 log_ffmpeg_error("av_buffersrc_add_frame_flags failed", ret);
-                av_frame_free(&sw_frame);
-                return_surface_to_pool(encoder, frameData.surface);
+                av_frame_free(&sw_frame); // Automatically returns the surface
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }
 
-            // Pull the converted NV12 frame out of the scaler
             encode_frame = av_frame_alloc();
             ret = av_buffersink_get_frame(encoder->bufferSinkCtx, encode_frame);
             if (ret < 0) {
                 log_ffmpeg_error("av_buffersink_get_frame failed", ret);
                 av_frame_free(&encode_frame);
                 encode_frame = nullptr;
-                av_frame_free(&sw_frame);
-                return_surface_to_pool(encoder, frameData.surface);
+                av_frame_free(&sw_frame); // Automatically returns the surface
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
-            }            
+            }          
         } else {
             // SW Path
             sw_frame = av_frame_alloc();
@@ -461,15 +450,8 @@ static void encode_loop(TennojiEncoder* encoder) {
         }
 
         // Return surface to pool AFTER a hardware delay
-        if (frameData.surface.skSurface) {
-            surfaceDelayQueue.push(frameData.surface);
-        }
-
-        // AMENDED: Keep a 3-frame delay to ensure VAAPI hardware scaling is completely 
-        // finished on the GPU before letting Skia overwrite the memory.
-        while (surfaceDelayQueue.size() > 3) {
-            return_surface_to_pool(encoder, surfaceDelayQueue.front());
-            surfaceDelayQueue.pop();
+        if (frameData.surface.skSurface && !frameData.pixels.empty()) {
+            return_surface_to_pool(encoder, frameData.surface);
         }
 
         // Encode the frame
@@ -511,10 +493,12 @@ static void encode_loop(TennojiEncoder* encoder) {
         }
         return_pixels_to_pool(encoder, frameData.pixels);
     }
+    /*
     while (!surfaceDelayQueue.empty()) {
         return_surface_to_pool(encoder, surfaceDelayQueue.front());
         surfaceDelayQueue.pop();
     }
+    */
     av_packet_free(&pkt);
 }
 

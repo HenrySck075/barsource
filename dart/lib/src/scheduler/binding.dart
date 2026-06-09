@@ -85,7 +85,7 @@ mixin SchedulerBinding on BindingBase {
     _schedulerPhase = .midFrameMicrotasks;
   }
   void handleDrawFrame() {
-    _log.fine('handleDrawFrame');
+    //_log.fine('handleDrawFrame');
     assert(_schedulerPhase == SchedulerPhase.midFrameMicrotasks);
     try {
       // PERSISTENT FRAME CALLBACKS

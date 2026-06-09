@@ -5,7 +5,7 @@ export 'src/widgets/ticker_provider.dart';
 export 'src/widgets/render_widget.dart';
 export 'src/widgets/text.dart';
 export 'src/widgets/image.dart';
-export 'src/widgets/clip.dart';
+export 'src/widgets/media.dart';
 export 'src/widgets/inherited_theme.dart';
 export 'src/widgets/root.dart';
 export 'src/widgets/sequence.dart';
