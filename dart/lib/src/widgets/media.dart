@@ -14,7 +14,7 @@ import '../engine/engine.dart';
 import 'package:barsource/src/rendering/object.dart';
 
 // ---------------------------------------------------------------------------
-// Media Controller (The Source of Truth)
+// Media Controller
 // ---------------------------------------------------------------------------
 
 class MediaController extends ChangeNotifier {

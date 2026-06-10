@@ -439,12 +439,57 @@ TENNOJI_EXPORT TennojiCanvasImage* rina_decoder_get_texture(TennojiDecoder* deco
             continue;
         }
 
-        ret = avcodec_send_packet(decoder->videoCodecCtx, pkt);
-        av_packet_unref(pkt);
+        bool packet_sent = false;
+        while (!packet_sent) {
+            ret = avcodec_send_packet(decoder->videoCodecCtx, pkt);
+            
+            // If it's a real error (not EAGAIN), abort
+            if (ret < 0 && ret != AVERROR(EAGAIN)) break; 
+            
+            // Packet successfully consumed by the decoder
+            if (ret >= 0) packet_sent = true; 
 
-        // Safeguard: If we ever do hit EAGAIN, don't completely kill the loop.
-        // (Though if you drain properly below, send_packet shouldn't return EAGAIN).
-        if (ret < 0 && ret != AVERROR(EAGAIN)) break;
+            // Always drain the decoder completely
+            while (true) {
+                int recv_ret = avcodec_receive_frame(decoder->videoCodecCtx, frame);
+                if (recv_ret == AVERROR(EAGAIN) || recv_ret == AVERROR_EOF) break;
+                if (recv_ret < 0) { found = true; break; }
+
+                // CRITICAL FOR VAAPI: Transfer hardware frames to the CPU immediately.
+                // This releases the hardware surface back to Intel's driver pool instantly,
+                // preventing the decoder from overwriting frames sitting in the framePool.
+                AVFrame* pushFrame = frame;
+                AVFrame* tmpFrame = nullptr;
+                
+                if (frame->hw_frames_ctx) {
+                    tmpFrame = av_frame_alloc();
+                    if (av_hwframe_transfer_data(tmpFrame, frame, 0) >= 0) {
+                        tmpFrame->pts = frame->pts;
+                        pushFrame = tmpFrame;
+                    } else {
+                        av_frame_free(&tmpFrame);
+                    }
+                }
+
+                decoder->framePool->push(pushFrame);
+                
+                // Clean up the temporary CPU frame if we allocated one
+                if (pushFrame != frame) {
+                    av_frame_free(&pushFrame);
+                }
+
+                if (frame->pts >= target_pts) {
+                    found = true;
+                }
+                
+                // Release the underlying hardware surface reference
+                av_frame_unref(frame);
+            }
+        }
+        
+        // We only unref the packet after we successfully sent it
+        av_packet_unref(pkt);
+        if (ret < 0 && ret != AVERROR(EAGAIN)) break;        
 
         while (true) {
             ret = avcodec_receive_frame(decoder->videoCodecCtx, frame);

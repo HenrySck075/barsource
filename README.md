@@ -1,7 +1,7 @@
 ![](assets/readme_img.png)
 
 # BarSource Video Editing Library
-The most library of all time
+The most programmatic video editing library of all time....2
 
 # Code example
 see the example folder
@@ -9,6 +9,7 @@ see the example folder
 # Note
 - All image operations are synchronous. Not because of the way the native library is built (it is) but because in the context of a video renderer it doesnt make sense to have them asynchronous.
 - `RenderObject.paint` is called every frame.
+- GPU acceleration feature was only tested on an Intel i5-7200U system using Vulkan (linux), other backend's and device's stability are not guaranteed. Especially MediaCodec (android) i still need to figure out how to compile a custom dartdev that actually supports android build hooks
 
 # FAQ
 ## Is it really that easy if you're familiar with Flutter?
@@ -23,6 +24,8 @@ if you wanted to get technical, it also internally didn't use `Dart_Handle` to p
 
 ## who is that girl
 [:D](https://google.com/search?q=rina+tennoji)
+
+also remind me to remove that image from the repo when we get serious
 
 ## why is she there
 why not whos stopping me
