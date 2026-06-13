@@ -1,3 +1,9 @@
+// Copyright (c) 2026 HenrySck075. All Sogginess Reserved.
+// 
+// Part of the file contains source code Copyright 2014 The Flutter Authors,
+// which is governed by a BSD-style license that can be
+// found in the LICENSE.flutter file.
+
 import 'dart:math' as math;
 
 import 'package:barsource/src/painting/basic_types.dart';
@@ -26,9 +32,7 @@ class FlexParentData extends ContainerBoxParentData<RenderBox> {
 }
 
 class RenderExpanded extends RenderProxyBox {
-  RenderExpanded({int flex = 1, FlexFit fit = FlexFit.loose})
-    : _flex = flex,
-      _fit = fit;
+  RenderExpanded({this._flex = 1, this._fit = FlexFit.loose});
 
   int get flex => _flex;
   int _flex;
@@ -61,17 +65,22 @@ class RenderFlex extends RenderBox
     with ContainerRenderObjectMixin<RenderBox, FlexParentData> {
   RenderFlex({
     List<RenderBox>? children,
-    Axis direction = Axis.horizontal,
-    MainAxisAlignment mainAxisAlignment = MainAxisAlignment.start,
-    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
-    MainAxisSize mainAxisSize = MainAxisSize.max,
-    Clip clipBehavior = Clip.none,
-  }) : _direction = direction,
-       _mainAxisAlignment = mainAxisAlignment,
-       _crossAxisAlignment = crossAxisAlignment,
-       _mainAxisSize = mainAxisSize,
-       _clipBehavior = clipBehavior {
+    this._direction = Axis.horizontal,
+    this._mainAxisAlignment = .start,
+    this._crossAxisAlignment = .center,
+    this._mainAxisSize = .max,
+    this._clipBehavior = Clip.none,
+    this._spacing = 0.0,
+  }) {
     addAll(children);
+  }
+
+  double get spacing => _spacing;
+  double _spacing = 0.0;
+  set spacing(double value) {
+    if (_spacing == value) return;
+    _spacing = value;
+    markNeedsLayout();
   }
 
   Axis get direction => _direction;
@@ -124,6 +133,7 @@ class RenderFlex extends RenderBox
     }
   }
 
+  
   int _getFlex(RenderBox child) {
     if (child is RenderExpanded) {
       return child.flex;

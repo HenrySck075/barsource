@@ -15,6 +15,7 @@ export 'src/widgets/overlay.dart';
 export 'src/widgets/custom_paint.dart';
 export 'src/widgets/timeline_position_mixin.dart';
 export 'src/widgets/framework.dart';
+export 'src/widgets/table.dart';
 export 'src/widgets/backdrop.dart';
 export 'src/widgets/binding.dart';
 export 'src/widgets/stack.dart';
