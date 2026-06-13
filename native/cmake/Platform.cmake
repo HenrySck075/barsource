@@ -22,7 +22,6 @@ elseif(APPLE)
 
 # 4. Detect Linux & Termux
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(PLATFORM_LINUX TRUE)
     
     # Check for Termux specifically
     # Termux usually sets the prefix to its internal data directory
@@ -31,9 +30,16 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_definitions(-DTENNOJI_IS_TERMUX)
         message(STATUS "Platform: Linux (Termux Environment detected)")
     else()
+        set(PLATFORM_LINUX TRUE)
         add_definitions(-DTENNOJI_IS_LINUX)
         message(STATUS "Platform: Linux")
     endif()
+
+# 5. Detect Termux (at least, thats what my system yields)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(PLATFORM_TERMUX TRUE)
+    add_definitions(-DTENNOJI_IS_TERMUX)
+    message(STATUS "Platform: Android (Termux)")
 
 # 5. Fallback for everything else
 else()

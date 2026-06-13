@@ -99,11 +99,11 @@ target_link_libraries(tennoji PRIVATE
 #target_compile_options(tennoji PUBLIC "-fsanitize=address" "-fno-omit-frame-pointer" "-g")
 #target_link_options(tennoji PUBLIC "-fsanitize=address")
 
-if(WIN32)
+if(PLATFORM_WINDOWS)
   target_link_libraries(tennoji PRIVATE d3d11 dxgi)
-elseif(APPLE)
+elseif(PLATFORM_MACOS)
   target_link_libraries(tennoji PRIVATE "-framework Metal" "-framework VideoToolbox")
-else()
+elseif(PLATFORM_LINUX)
   # -fuse-ld=lld
   target_link_options(tennoji PRIVATE "-fuse-ld=lld")
   find_package(Vulkan REQUIRED)
@@ -115,6 +115,18 @@ else()
     Fontconfig::Fontconfig
     Freetype::Freetype
   )
+elseif(PLATFORM_TERMUX)
+  # -fuse-ld=lld
+  target_link_options(tennoji PRIVATE "-fuse-ld=lld")
+  find_package(Vulkan REQUIRED)
+  # find fontconfig and some gang for the font loading
+  #find_package(Fontconfig REQUIRED)
+  find_package(Freetype REQUIRED)
+  target_link_libraries(tennoji PRIVATE 
+    Vulkan::Vulkan
+    #Fontconfig::Fontconfig
+    Freetype::Freetype
+  )
 endif()
 
 
@@ -122,5 +134,5 @@ endif()
 # Post-build script: copy the compiled library to the dart package
 add_custom_command(TARGET tennoji POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tennoji> ${CMAKE_SOURCE_DIR}/../dart/lib/blob/$<TARGET_FILE_NAME:tennoji>
-  COMMENT "Copying libtennoji to dart package..."
+  COMMENT "Copying backend to dart package..."
 )

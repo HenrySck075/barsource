@@ -1,7 +1,8 @@
 #include "gpu_context.h"
+#include <cstdio>
 
 
-#ifdef TENNOJI_IS_LINUX 
+#if defined(TENNOJI_IS_LINUX) || defined(TENNOJI_IS_TERMUX)
   #define TENNOJI_USE_VULKAN 1
 #elif defined(TENNOJI_IS_MACOS)
   #define TENNOJI_USE_METAL 1

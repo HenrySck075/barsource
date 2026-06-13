@@ -25,23 +25,21 @@ extern "C" {
 #include <libavutil/error.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
-
-#if defined(TENNOJI_IS_LINUX)
 #include <libavutil/hwcontext_drm.h>
-#endif
 }
 
-#if defined(TENNOJI_IS_LINUX)
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <libdrm/drm_fourcc.h>
-#include "include/gpu/ganesh/GrDirectContext.h"
+#endif
+
 #ifndef DRM_FORMAT_ARGB8888
 #define DRM_FORMAT_ARGB8888 0x34325241
-#endif
 #endif
 
 #include "include/core/SkSurface.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkPicture.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 
 #include "../dart_ui/canvas_internal.h"
 #include "../renderer/skia_surface.h"
@@ -79,12 +77,10 @@ struct TennojiEncoder {
     int32_t fps = 0;
 
     // Color space conversion lore
-#if defined(TENNOJI_IS_LINUX)
     AVBufferRef* bgraFramesCtx = nullptr;
     AVFilterGraph* filterGraph = nullptr;
     AVFilterContext* bufferSrcCtx = nullptr;
     AVFilterContext* bufferSinkCtx = nullptr;
-#endif
 
     // Audio buffering for frame size mismatch
     AVAudioFifo* audioFifo = nullptr;
@@ -175,6 +171,8 @@ static void return_surface_to_pool(TennojiEncoder* enc, const tennoji::Exportabl
         std::lock_guard<std::mutex> lock(enc->poolMutex);
         enc->freeSurfaces.push(surface);
     }
+    //???
+    //rina_engine_flush_textures(enc->engine);
 }
 
 static void return_pixels_to_pool(TennojiEncoder* enc, std::vector<uint8_t>& pixels) {
@@ -235,11 +233,9 @@ static void render_loop(TennojiEncoder* enc) {
               
                 const bool useZeroCopy = tryZeroCopy && exSurface.fd != -1;
                 if (useZeroCopy) {
-#if defined(TENNOJI_IS_LINUX)
                     if (auto* grCtx = exSurface.skSurface->recordingContext()) {
                         static_cast<GrDirectContext*>(grCtx)->flushAndSubmit(GrSyncCpu::kYes);
                     }
-#endif
                     // Zero copy path
                    {
                       std::unique_lock<std::mutex> lock(enc->encodeMutex);
@@ -299,7 +295,6 @@ static void render_loop(TennojiEncoder* enc) {
     enc->encodeCv.notify_one();
 }
 
-#if defined(TENNOJI_IS_LINUX)
 struct SurfaceReleaseContext {
     TennojiEncoder* encoder;
     tennoji::ExportableSurface surface;
@@ -313,8 +308,6 @@ static void hw_surface_free_callback(void* opaque, uint8_t* data) {
     // Free the AVDRMFrameDescriptor that was allocated via av_mallocz
     av_freep(&data);
 }
-#endif
-
 static void encode_loop(TennojiEncoder* encoder) {
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) return;
@@ -341,7 +334,6 @@ static void encode_loop(TennojiEncoder* encoder) {
         AVFrame* sw_frame = nullptr;
         AVFrame* hw_frame = nullptr;
 
-#if defined(TENNOJI_IS_LINUX)
         if (frameData.surface.isValid() && frameData.surface.fd != -1 && frameData.pixels.empty()) {
             // Zero-copy path
             sw_frame = av_frame_alloc();
@@ -405,9 +397,7 @@ static void encode_loop(TennojiEncoder* encoder) {
                 return_pixels_to_pool(encoder, frameData.pixels);
                 continue;
             }          
-        } else
-#endif
-        {
+        } else {
             // SW Path
             sw_frame = av_frame_alloc();
             sw_frame->format = encoder->hwFramesCtx ? AV_PIX_FMT_NV12 : encoder->videoCodecCtx->pix_fmt;
@@ -503,6 +493,12 @@ static void encode_loop(TennojiEncoder* encoder) {
         }
         return_pixels_to_pool(encoder, frameData.pixels);
     }
+    /*
+    while (!surfaceDelayQueue.empty()) {
+        return_surface_to_pool(encoder, surfaceDelayQueue.front());
+        surfaceDelayQueue.pop();
+    }
+    */
     av_packet_free(&pkt);
 }
 
@@ -511,24 +507,24 @@ static const AVCodec* find_encoder(const char* codec_name, bool try_hw) {
 
     if (try_hw) {
         if (strcmp(codec_name, "h264") == 0) {
-#ifdef TENNOJI_IS_LINUX
+#if defined(__linux__) && !defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("h264_vaapi");
-#elif defined(TENNOJI_IS_TERMUX)
+#elif defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("h264_mediacodec");
-#elif defined(TENNOJI_IS_MACOS)
+#elif defined(__APPLE__)
             codec = avcodec_find_encoder_by_name("h264_videotoolbox");
-#elif defined(TENNOJI_IS_WINDOWS)
+#elif defined(_WIN32)
             codec = avcodec_find_encoder_by_name("h264_nvenc");
             if (!codec) codec = avcodec_find_encoder_by_name("h264_amf");
 #endif
         } else if (strcmp(codec_name, "h265") == 0 || strcmp(codec_name, "hevc") == 0) {
-#ifdef TENNOJI_IS_LINUX
+#if defined(__linux__) && !defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("hevc_vaapi");
-#elif defined(TENNOJI_IS_TERMUX)
+#elif defined(__ANDROID__)
             codec = avcodec_find_encoder_by_name("hevc_mediacodec");
-#elif defined(TENNOJI_IS_MACOS)
+#elif defined(__APPLE__)
             codec = avcodec_find_encoder_by_name("hevc_videotoolbox");
-#elif defined(TENNOJI_IS_WINDOWS)
+#elif defined(_WIN32)
             codec = avcodec_find_encoder_by_name("hevc_nvenc");
             if (!codec) codec = avcodec_find_encoder_by_name("hevc_amf");
 #endif
@@ -627,51 +623,44 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
                       if (av_hwframe_ctx_init(enc->hwFramesCtx) >= 0) {
                          enc->videoCodecCtx->hw_frames_ctx = av_buffer_ref(enc->hwFramesCtx);
                          sw_format = AV_PIX_FMT_NV12;
-
-#if defined(TENNOJI_IS_LINUX)
                          enc->zeroCopyEnabled = (engine->gpuCtx && engine->gpuCtx->type == tennoji::GPUBackendType::Vulkan);
-
-                         // 1. Create a context for the incoming BGRA Vulkan frames
-                         enc->bgraFramesCtx = av_hwframe_ctx_alloc(enc->hwDeviceCtx);
-                         AVHWFramesContext* bgra_ctx = (AVHWFramesContext*)enc->bgraFramesCtx->data;
-                         bgra_ctx->format = AV_PIX_FMT_VAAPI;
-                         bgra_ctx->sw_format = AV_PIX_FMT_BGRA;
-                         bgra_ctx->width = enc->width;
-                         bgra_ctx->height = enc->height;
-                         av_hwframe_ctx_init(enc->bgraFramesCtx);
-
-                         // 2. Build the hardware conversion filter graph
-                         enc->filterGraph = avfilter_graph_alloc();
-                         char args[512];
-                         snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=1/1",
-                                  enc->width, enc->height, AV_PIX_FMT_VAAPI, 1, enc->fps);
-
-                         enc->bufferSrcCtx = avfilter_graph_alloc_filter(enc->filterGraph, avfilter_get_by_name("buffer"), "in");
-
-                         AVBufferSrcParameters* par = av_buffersrc_parameters_alloc();
-                         par->hw_frames_ctx = enc->bgraFramesCtx; // Tie input to the BGRA context
-                         av_buffersrc_parameters_set(enc->bufferSrcCtx, par);
-                         av_freep(&par);
-                         if (avfilter_init_str(enc->bufferSrcCtx, args) < 0) {
-                             // Handle initialization failure if needed
-                         }
-
-                         avfilter_graph_create_filter(&enc->bufferSinkCtx, avfilter_get_by_name("buffersink"), "out", nullptr, nullptr, enc->filterGraph);
-
-                         AVFilterContext* scaleCtx;
-                         // scale_vaapi triggers Intel's VPP to convert BGRA to NV12 purely on the GPU
-                         avfilter_graph_create_filter(&scaleCtx, avfilter_get_by_name("scale_vaapi"), "scale", "format=nv12", nullptr, enc->filterGraph);
-
-                         avfilter_link(enc->bufferSrcCtx, 0, scaleCtx, 0);
-                         avfilter_link(scaleCtx, 0, enc->bufferSinkCtx, 0);
-                         avfilter_graph_config(enc->filterGraph, nullptr);
-#elif defined(TENNOJI_IS_TERMUX)
-                         // Termux/Android MediaCodec relies on standard software frame submission to hwFramesCtx
-                         enc->zeroCopyEnabled = false;
-#endif
                       } else {
                           av_buffer_unref(&enc->hwFramesCtx);
                       }
+                      // 1. Create a context for the incoming BGRA Vulkan frames
+                      enc->bgraFramesCtx = av_hwframe_ctx_alloc(enc->hwDeviceCtx);
+                      AVHWFramesContext* bgra_ctx = (AVHWFramesContext*)enc->bgraFramesCtx->data;
+                      bgra_ctx->format = AV_PIX_FMT_VAAPI;
+                      bgra_ctx->sw_format = AV_PIX_FMT_BGRA;
+                      bgra_ctx->width = enc->width;
+                      bgra_ctx->height = enc->height;
+                      av_hwframe_ctx_init(enc->bgraFramesCtx);
+
+                      // 2. Build the hardware conversion filter graph
+                      enc->filterGraph = avfilter_graph_alloc();
+                      char args[512];
+                      snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=1/1",
+                               enc->width, enc->height, AV_PIX_FMT_VAAPI, 1, enc->fps);
+
+                      enc->bufferSrcCtx = avfilter_graph_alloc_filter(enc->filterGraph, avfilter_get_by_name("buffer"), "in");
+
+                      AVBufferSrcParameters* par = av_buffersrc_parameters_alloc();
+                      par->hw_frames_ctx = enc->bgraFramesCtx; // Tie input to the BGRA context
+                      av_buffersrc_parameters_set(enc->bufferSrcCtx, par);
+                      av_freep(&par);
+                      if (avfilter_init_str(enc->bufferSrcCtx, args) < 0) {
+                          // Handle initialization failure if needed
+                      }
+
+                      avfilter_graph_create_filter(&enc->bufferSinkCtx, avfilter_get_by_name("buffersink"), "out", nullptr, nullptr, enc->filterGraph);
+
+                      AVFilterContext* scaleCtx;
+                      // scale_vaapi triggers Intel's VPP to convert BGRA to NV12 purely on the GPU
+                      avfilter_graph_create_filter(&scaleCtx, avfilter_get_by_name("scale_vaapi"), "scale", "format=nv12", nullptr, enc->filterGraph);
+
+                      avfilter_link(enc->bufferSrcCtx, 0, scaleCtx, 0);
+                      avfilter_link(scaleCtx, 0, enc->bufferSinkCtx, 0);
+                      avfilter_graph_config(enc->filterGraph, nullptr);
                   }
             }
         }
@@ -694,27 +683,16 @@ TENNOJI_EXPORT TennojiEncoder* rina_encoder_create(TennojiEngine* engine,
         enc->videoCodecCtx->rc_max_rate = enc->videoCodecCtx->bit_rate;
         enc->videoCodecCtx->rc_buffer_size = enc->videoCodecCtx->bit_rate * 2;
     } else {
-        av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0); 
+        av_opt_set(enc->videoCodecCtx->priv_data, "preset", "slow", 0); // dont ever change this under any circumstances unless you like huge file sizes
         av_opt_set(enc->videoCodecCtx->priv_data, "crf", crf, 23);
     }
 
-#if defined(TENNOJI_IS_LINUX)
     // VAAPI requires an explicit quality target for compact output.
     if (strstr(vcodec->name, "vaapi")) {
         av_opt_set(enc->videoCodecCtx->priv_data, "rc_mode", "CQP", 0);
         av_opt_set_int(enc->videoCodecCtx->priv_data, "qp", qp, 0);
         enc->videoCodecCtx->global_quality = qp * FF_QP2LAMBDA;
     }
-#elif defined(TENNOJI_IS_TERMUX)
-    // MediaCodec often ignores CRF; set an explicit bitrate if we are not streaming
-    if (strstr(vcodec->name, "mediacodec")) {
-        if (!is_streaming) {
-            enc->videoCodecCtx->bit_rate = 10000000;
-            enc->videoCodecCtx->rc_max_rate = 15000000;
-            enc->videoCodecCtx->rc_buffer_size = 10000000;
-        }
-    }
-#endif
 
     ret = avcodec_open2(enc->videoCodecCtx, vcodec, nullptr);
     if (ret < 0) {
@@ -833,6 +811,179 @@ TENNOJI_EXPORT int rina_encoder_write_frame(TennojiEncoder* encoder,
     return 0;
 }
 
+TENNOJI_EXPORT int rina_encoder_write_audio(TennojiEncoder* encoder,
+                                                TennojiDecoder* audio_decoder,
+                                                int64_t duration_us) {
+#if !TENNOJI_ENABLE_LEGACY_AUDIO_API
+    (void)encoder;
+    (void)audio_decoder;
+    (void)duration_us;
+    return AVERROR(ENOSYS);
+#else
+    if (!encoder || !encoder->audioCodecCtx || !audio_decoder) return -1;
+
+    if (!audio_decoder->audioCodecCtx || audio_decoder->audioStreamIdx < 0) return -1;
+
+    if (encoder->audioMixer) {
+        tennoji::audio_mixer_configure(
+            encoder->audioMixer,
+            audio_decoder->audioCodecCtx->sample_rate,
+            audio_decoder->audioCodecCtx->ch_layout.nb_channels,
+            audio_decoder->audioCodecCtx->sample_fmt,
+            &audio_decoder->audioCodecCtx->ch_layout
+        );
+    }
+
+    int64_t target_samples = av_rescale(duration_us,
+                                         encoder->audioCodecCtx->sample_rate,
+                                         1000000);
+    int64_t samples_written = 0;
+
+    AVPacket* pkt = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+
+    while (samples_written < target_samples) {
+        int ret = av_read_frame(audio_decoder->fmtCtx, pkt);
+        if (ret < 0) break;
+
+        if (pkt->stream_index != audio_decoder->audioStreamIdx) {
+            av_packet_unref(pkt);
+            continue;
+        }
+
+        ret = avcodec_send_packet(audio_decoder->audioCodecCtx, pkt);
+        av_packet_unref(pkt);
+        if (ret < 0) break;
+
+        while (samples_written < target_samples) {
+            ret = avcodec_receive_frame(audio_decoder->audioCodecCtx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+            if (ret < 0) goto done;
+
+            AVFrame* outFrame = frame;
+            AVFrame* convertedFrame = nullptr;
+            if (encoder->audioMixer) {
+                convertedFrame = tennoji::audio_mixer_convert(encoder->audioMixer, frame);
+                if (convertedFrame) outFrame = convertedFrame;
+            }
+
+            outFrame->pts = encoder->audioPts;
+            encoder->audioPts += outFrame->nb_samples;
+            samples_written += outFrame->nb_samples;
+
+            ret = avcodec_send_frame(encoder->audioCodecCtx, outFrame);
+            if (convertedFrame) av_frame_free(&convertedFrame);
+            av_frame_unref(frame);
+            if (ret < 0) goto done;
+
+            AVPacket* outPkt = av_packet_alloc();
+            while (true) {
+                ret = avcodec_receive_packet(encoder->audioCodecCtx, outPkt);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+                if (ret < 0) { av_packet_free(&outPkt); goto done; }
+
+                av_packet_rescale_ts(outPkt, encoder->audioCodecCtx->time_base,
+                                     encoder->audioStream->time_base);
+                outPkt->stream_index = encoder->audioStream->index;
+
+                ret = write_interleaved_frame_locked(encoder, outPkt);
+                if (ret < 0) {
+                    log_ffmpeg_error("audio mux write failed", ret);
+                    av_packet_free(&outPkt);
+                    goto done;
+                }
+            }
+            av_packet_free(&outPkt);
+        }
+    }
+
+done:
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    return 0;
+#endif
+}
+
+TENNOJI_EXPORT int rina_encoder_drain_audio_queue(TennojiEncoder* encoder,
+                                                       TennojiDecoder* decoder) {
+#if !TENNOJI_ENABLE_LEGACY_AUDIO_API
+    (void)encoder;
+    (void)decoder;
+    return AVERROR(ENOSYS);
+#else
+    if (!encoder || !encoder->audioCodecCtx || !decoder) return -1;
+    if (!decoder->audioCodecCtx || decoder->audioStreamIdx < 0) return 0;
+
+    if (encoder->audioMixer) {
+        tennoji::audio_mixer_configure(
+            encoder->audioMixer,
+            decoder->audioCodecCtx->sample_rate,
+            decoder->audioCodecCtx->ch_layout.nb_channels,
+            decoder->audioCodecCtx->sample_fmt,
+            &decoder->audioCodecCtx->ch_layout
+        );
+    }
+
+    std::deque<AVPacket*> packets;
+    {
+        std::lock_guard<std::mutex> lock(decoder->audioQueueMutex);
+        packets.swap(decoder->audioPacketQueue);
+        decoder->audioQueueBytes = 0;
+    }
+
+    AVFrame* frame = av_frame_alloc();
+
+    for (auto* pkt : packets) {
+        int ret = avcodec_send_packet(decoder->audioCodecCtx, pkt);
+        av_packet_free(&pkt);
+        if (ret < 0) continue;
+
+        while (true) {
+            ret = avcodec_receive_frame(decoder->audioCodecCtx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+            if (ret < 0) break;
+
+            AVFrame* outFrame = frame;
+            AVFrame* convertedFrame = nullptr;
+            if (encoder->audioMixer) {
+                convertedFrame = tennoji::audio_mixer_convert(encoder->audioMixer, frame);
+                if (convertedFrame) outFrame = convertedFrame;
+            }
+
+            outFrame->pts = encoder->audioPts;
+            encoder->audioPts += outFrame->nb_samples;
+
+            ret = avcodec_send_frame(encoder->audioCodecCtx, outFrame);
+            if (convertedFrame) av_frame_free(&convertedFrame);
+            av_frame_unref(frame);
+            if (ret < 0) break;
+
+            AVPacket* outPkt = av_packet_alloc();
+            while (true) {
+                ret = avcodec_receive_packet(encoder->audioCodecCtx, outPkt);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+                if (ret < 0) { av_packet_free(&outPkt); goto frame_done; }
+
+                av_packet_rescale_ts(outPkt, encoder->audioCodecCtx->time_base,
+                                     encoder->audioStream->time_base);
+                outPkt->stream_index = encoder->audioStream->index;
+
+                ret = write_interleaved_frame_locked(encoder, outPkt);
+                if (ret < 0) {
+                    log_ffmpeg_error("audio queue mux write failed", ret);
+                    av_packet_free(&outPkt);
+                    goto frame_done;
+                }
+            }
+            av_packet_free(&outPkt);
+        }
+        frame_done:;
+    }
+
+    av_frame_free(&frame);
+    return 0;
+#endif
+}
 
 TENNOJI_EXPORT int rina_encoder_finalize(TennojiEncoder* encoder) {
     if (!encoder || !encoder->fmtCtx) return -1;
@@ -970,14 +1121,12 @@ TENNOJI_EXPORT void rina_encoder_destroy(TennojiEncoder* encoder) {
         avformat_free_context(encoder->fmtCtx);
     }
 
-#if defined(TENNOJI_IS_LINUX)
     if (encoder->filterGraph) {
         avfilter_graph_free(&encoder->filterGraph);
     }
     if (encoder->bgraFramesCtx) {
         av_buffer_unref(&encoder->bgraFramesCtx);
     }
-#endif
 
     delete encoder;
 }
@@ -1122,4 +1271,3 @@ TENNOJI_EXPORT int rina_encoder_write_audio_samples(TennojiEncoder* encoder,
 }
 
 } // extern "C"
-

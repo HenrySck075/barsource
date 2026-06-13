@@ -240,6 +240,7 @@ skia::textlayout::TextStyle text_style_from_encoded(
     #include "include/ports/SkFontScanner_FreeType.h" // For font scanning logic
 #elif defined(TENNOJI_IS_TERMUX)
     #include "include/ports/SkFontMgr_android_ndk.h"
+    #include "include/ports/SkFontMgr_android.h"
     #include "include/ports/SkFontScanner_FreeType.h" // For font scanning logic
 #endif
 
@@ -267,17 +268,19 @@ void LoadDefaultFontManager() {
         // Uses Fontconfig to locate system fonts
         fontMgr = SkFontMgr_New_FontConfig(nullptr, std::move(scanner));
     #elif defined(TENNOJI_IS_TERMUX)
-        std::cout << "g";
+        std::cout << "Android";
         // Create the scanner first (FreeType is the standard choice)
         auto scanner = SkFontScanner_Make_FreeType();
         
         // Create the NDK-specific Font Manager
         // First param: bool is_system_font_mgr (usually false for custom usage, true for system)
-        fFontMgr = SkFontMgr_New_AndroidNDK(scanner); 
+        fontMgr = SkFontMgr_New_AndroidNDK(true, std::move(scanner)); 
         
         // Fallback if NDK API is too old or fails
-        if (!fFontMgr) {
-            fFontMgr = SkFontMgr_New_Android(nullptr);
+        if (!fontMgr) {
+            fontMgr = SkFontMgr_New_Android(nullptr, std::move(scanner));
+        } else {
+            std::cout << " NDK";
         }
     #endif
     std::cout << " font manager." << std::endl;
