@@ -1,5 +1,3 @@
-![](assets/readme_img.png)
-
 # BarSource Video Editing Library
 The most programmatic video editing library of all time....2
 
@@ -26,9 +24,6 @@ if you wanted to get technical, it also internally didn't use `Dart_Handle` to p
 [:D](https://google.com/search?q=rina+tennoji)
 
 also remind me to remove that image from the repo when we get serious
-
-## why is she there
-why not whos stopping me
 
 ## does barsource means anything
 [no](https://wikipedia.org/wiki/Thanh_H%C3%B3a)

@@ -1,4 +1,5 @@
 import 'package:barsource/src/painting/basic_types.dart';
+import 'package:barsource/src/rendering/flex.dart';
 
 import '../rendering/flex_render.dart';
 import '../rendering/object.dart';
@@ -70,51 +71,34 @@ class Column extends Flex {
 }
 
 /// A widget that expands a child of a [Row], [Column], or [Flex].
-class Expanded extends SingleChildRenderObjectWidget {
-  const Expanded({super.key, this.flex = 1, required Widget super.child});
-
-  final int flex;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      RenderExpanded(flex: flex, fit: FlexFit.tight);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant RenderObject renderObject,
-  ) {
-    final expanded = renderObject as RenderExpanded;
-    expanded
-      ..flex = flex
-      ..fit = FlexFit.tight;
-  }
-}
-
-/// A widget like [Expanded] but does not force the child to fill the space.
-class Flexible extends SingleChildRenderObjectWidget {
-  const Flexible({
-    super.key,
-    this.flex = 1,
-    this.fit = FlexFit.loose,
-    required Widget super.child,
-  });
+class Flexible extends ParentDataWidget<FlexParentData> {
+  Flexible({super.key, this.flex = 1, this.fit = .loose, required super.child});
 
   final int flex;
   final FlexFit fit;
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      RenderExpanded(flex: flex, fit: fit);
+  void applyParentData(RenderObject renderObject) {
+    assert(renderObject.parentData is FlexParentData);
+    final parentData = renderObject.parentData! as FlexParentData;
+    var needsLayout = false;
 
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    covariant RenderObject renderObject,
-  ) {
-    final expanded = renderObject as RenderExpanded;
-    expanded
-      ..flex = flex
-      ..fit = fit;
+    if (parentData.flex != flex) {
+      parentData.flex = flex;
+      needsLayout = true;
+    }
+
+    if (parentData.fit != fit) {
+      parentData.fit = fit;
+      needsLayout = true;
+    }
+
+    if (needsLayout) {
+      renderObject.parent?.markNeedsLayout();
+    }
   }
+}
+
+class Expanded extends Flexible {
+  Expanded({super.key, super.flex, required super.child}) : super(fit: .tight);
 }

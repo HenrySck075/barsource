@@ -1,0 +1,2 @@
+# ignore the copy of the backend header in the dart folder
+dart/lib/include/**/* linguist-vendored

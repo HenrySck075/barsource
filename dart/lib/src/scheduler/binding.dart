@@ -81,6 +81,7 @@ mixin SchedulerBinding on BindingBase {
       _FrameCallbackEntry.debugCurrentCallbackStack = cb.debugStack;
       cb.callback(_currentFrameTimestamp);
       // TODO: report the stack, i'm just putting it here though dart devtools will pick it up
+      // the fuck do you mean
     }
     _schedulerPhase = .midFrameMicrotasks;
   }
