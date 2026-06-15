@@ -64,7 +64,22 @@ enum MainAxisAlignment {
   }
 }
 
-enum CrossAxisAlignment { start, end, center, stretch, baseline }
+enum CrossAxisAlignment { 
+  start, end, center, stretch, baseline;
+
+  double _getChildCrossAxisOffset(double freeSpace, bool flipped) {
+    // This method should not be used to position baseline-aligned children.
+    return switch (this) {
+      CrossAxisAlignment.stretch || CrossAxisAlignment.baseline => 0.0,
+      CrossAxisAlignment.start => flipped ? freeSpace : 0.0,
+      CrossAxisAlignment.center => freeSpace / 2,
+      CrossAxisAlignment.end => CrossAxisAlignment.start._getChildCrossAxisOffset(
+        freeSpace,
+        !flipped,
+      ),
+    };
+  }
+}
 
 class FlexParentData extends ContainerBoxParentData<RenderBox> {
   int flex = 0;
@@ -274,12 +289,20 @@ class RenderFlex extends RenderBox
 
     final (RenderBox? Function(RenderBox) nextChild, RenderBox? topLeftChild) = (childAfter, firstChild);
 
+    final crossAxisExtent = _getCrossExtent(size);
     var childMainPosition = leadingSpace;
     for (var child = topLeftChild; child != null; child = nextChild(child)) {
       final childCrossPosition = crossAxisAlignment._getChildCrossAxisOffset(
         crossAxisExtent - _getCrossExtent(child.size),
-        flipCrossAxis,
+        false,//flipCrossAxis,
       );
+      final childParentData = child.parentData! as FlexParentData;
+      childParentData.offset = switch (direction) {
+        Axis.horizontal => Offset(childMainPosition, childCrossPosition),
+        Axis.vertical => Offset(childCrossPosition, childMainPosition),
+      };
+      childMainPosition += _getMainExtent(child.size) + betweenSpace;
+    }
   }
 
   void _paintChildren(PaintingContext context, Offset offset) {
