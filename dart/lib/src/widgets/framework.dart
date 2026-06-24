@@ -98,7 +98,7 @@ abstract class ProxyWidget extends Widget {
   final Widget child;
 }
 abstract class ParentDataWidget<T extends ParentData> extends ProxyWidget {
-  ParentDataWidget({super.key, required super.child});
+  const ParentDataWidget({super.key, required super.child});
 
   @protected
   void applyParentData(RenderObject renderObject);

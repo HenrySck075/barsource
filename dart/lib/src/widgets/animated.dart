@@ -1,4 +1,3 @@
-import 'package:barsource/src/dart_ui/dart_ui.dart';
 import 'package:barsource/src/foundation/listenable.dart';
 import 'package:barsource/src/painting/alignment.dart';
 import 'package:barsource/src/painting/basic_types.dart';

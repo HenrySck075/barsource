@@ -1,82 +1,106 @@
-// Copyright (c) 2026 HenrySck075. All Sogginess Reserved.
-// 
-// Part of the file contains source code Copyright 2014 The Flutter Authors,
-// which is governed by a BSD-style license that can be
-// found in the LICENSE.flutter file.
-
-import 'package:barsource/src/elements/framework.dart';
 import 'package:barsource/src/rendering/object.dart';
 import 'package:barsource/src/rendering/table.dart';
 import 'package:barsource/src/widgets/framework.dart';
-import 'package:meta/meta.dart';
-import 'package:collection/collection.dart';
 
-/// A horizontal group of cells in a [Table].
-///
-/// Every row in a table must have the same number of children, even if there's a spanned child (which covered cells must be annotated with `null`).
-///
-/// The alignment and spanning of individual cells in a row can be controlled using a
-/// [TableCell].
-class TableRow {
+class TableCell extends ParentDataWidget<TableCellParentData> {
+  final int row;
+  final int col;
+  final int colSpan;
+  final int rowSpan;
 
-  /// The widgets that comprise the cells in this row.
-  ///
-  /// Children may be wrapped in [TableCell] widgets to provide per-cell
-  /// configuration to the [Table], but children are not required to be wrapped
-  /// in [TableCell] widgets.
-  ///
-  /// Some elements may require being null due to a TableCell span that covers the slot.
-  /// It is an error if a null slot isn't covered, though.
-  final List<Widget?> children;
+  const TableCell({
+    super.key,
+    required this.row,
+    required this.col,
+    this.colSpan = 1,
+    this.rowSpan = 1,
+    required super.child,
+  }) : assert(row >= 0 && col >= 0 && colSpan > 0 && rowSpan > 0);
 
-  TableRow({this.children = const <Widget?>[]});
+  @override
+  void applyParentData(RenderObject renderObject) {
+    final parentData = renderObject.parentData! as TableCellParentData;
+    if (parentData.colSpan != colSpan || parentData.rowSpan != rowSpan || parentData.x != col || parentData.y != row) {
+      parentData.x = col;
+      parentData.y = row;
+      parentData.colSpan = colSpan;
+      parentData.rowSpan = rowSpan;
+      // flutter apparently doesnt care
+      renderObject.parent?.markNeedsLayout();
+    }
+  }
 }
 
+/// A widget that lays out children as a table.
+///
+/// Laying out children of this widget is an ungodly EXPENSIVE* operation at the moment so don't do fancy animations on this pls thx.
+/// 
+/// *i think so
+class Table extends MultiChildRenderObjectWidget {
+  Table({
+    super.key,
+    required List<TableCell> super.children,
+    this.columnWidths,
+    this.defaultColumnWidth = const FlexColumnWidth(),
+  }) {_debugValidateGridPlacement();}
 
-
-/// A widget that uses table layout algorithm on children.
-class Table extends RenderObjectWidget {
-  final List<TableRow> children;
   final Map<int, TableColumnWidth>? columnWidths;
   final TableColumnWidth defaultColumnWidth;
 
-  Table({super.key, required this.children, required this.columnWidths, required this.defaultColumnWidth});
+  void _debugValidateGridPlacement() {
+    assert(() {
+      // Start with a truly dynamic 2D list
+      final List<List<TableCell?>> occupied = [];
+
+      for (final child in (children as List<TableCell>)) {
+        final int rMax = child.row + child.rowSpan;
+        final int cMax = child.col + child.colSpan;
+
+        // 1. Expand vertically if needed (add new rows)
+        while (occupied.length < rMax) {
+          occupied.add([]);
+        }
+
+        // 2. Expand horizontally for ALL rows up to rMax
+        // (Mismatched row lengths will cause RangeErrors during the overlap check)
+        for (int r = 0; r < rMax; r++) {
+          while (occupied[r].length < cMax) {
+            occupied[r].add(null);
+          }
+        }
+
+        // 3. Scan and check for overlaps
+        for (int r = child.row; r < rMax; r++) {
+          for (int c = child.col; c < cMax; c++) {
+            final existing = occupied[r][c];
+            if (existing != null) {
+              throw ArgumentError(
+                'Grid collision detected at [$r, $c]!\n'
+                'New child at (${child.row}, ${child.col}) with span of (${child.rowSpan}, ${child.colSpan}) conflicts with '
+                'existing child at (${existing.row}, ${existing.col}) with span of (${existing.rowSpan}, ${existing.colSpan}).',
+              );
+            }
+            occupied[r][c] = child;
+          }
+        }
+      }
+      return true;
+    }());
+  }
 
   @override
-  Element createElement() => _TableElement(this); 
-}
-
-class _TableElement extends RenderObjectElement {
-  _TableElement(Table super.widget);
-
-  List<Element> children;
-
-  @override
-  void mount(Element? parent, Object? newSlot) {
-    super.mount(parent, newSlot);
-
-    final Map<(int, int), Widget?> layoutMap = Map.fromEntries(
-      (widget as Table).children.mapIndexed(
-        (row, rc)=>rc.children.mapIndexed(
-          (col, w)=>MapEntry((row,col), w)
-        )
-      ).flattened
+  RenderObject createRenderObject(BuildContext context) {
+    return RenderTable(
+      columnWidths: columnWidths,
+      defaultColumnWidth: defaultColumnWidth,
     );
   }
 
   @override
-  void insertRenderObjectChild(covariant RenderObject child, covariant Object? slot) {
-    // TODO: implement insertRenderObjectChild
+  void updateRenderObject(BuildContext context, RenderTable renderObject) {
+    renderObject
+    ..columnWidths = columnWidths
+    ..defaultColumnWidth = defaultColumnWidth
+    ;
   }
-
-  @override
-  void moveRenderObjectChild(covariant RenderObject child, covariant Object? oldSlot, covariant Object? newSlot) {
-    // TODO: implement moveRenderObjectChild
-  }
-
-  @override
-  void removeRenderObjectChild(covariant RenderObject child, covariant Object? slot) {
-    // TODO: implement removeRenderObjectChild
-  }
-
 }

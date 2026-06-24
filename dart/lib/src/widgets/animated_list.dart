@@ -1,6 +1,6 @@
 import 'package:barsource/dart_ui.dart';
 import 'package:barsource/src/foundation/collections.dart';
-import 'package:barsource/src/rendering/flex_render.dart';
+import 'package:barsource/src/rendering/flex.dart';
 import 'package:barsource/src/widgets/flex.dart';
 
 import '../animation/animation.dart';

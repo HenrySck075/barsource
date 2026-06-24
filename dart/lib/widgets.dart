@@ -8,7 +8,6 @@ export 'src/widgets/image.dart';
 export 'src/widgets/media.dart';
 export 'src/widgets/inherited_theme.dart';
 export 'src/widgets/root.dart';
-export 'src/widgets/sequence.dart';
 export 'src/widgets/implicit_animated.dart';
 export 'src/widgets/animated_list.dart';
 export 'src/widgets/overlay.dart';

@@ -113,3 +113,37 @@ abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<
     print("I hereby report this $runtimeType has a super.duration of ${super.duration} and the main duration of $duration");
   }
 }
+
+
+mixin RenderBoxContainerDefaultsMixin<
+  ChildType extends RenderBox,
+  ParentDataType extends ContainerBoxParentData<ChildType>
+>
+    implements ContainerRenderObjectMixin<ChildType, ParentDataType> {
+
+  /// Paints each child by walking the child list forwards.
+  void defaultPaint(PaintingContext context, Offset offset) {
+    ChildType? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as ParentDataType;
+      context.paintChild(child, childParentData.offset + offset);
+      child = childParentData.nextSibling;
+    }
+  }
+
+  /// Returns a list containing the children of this render object.
+  ///
+  /// This function is useful when you need random-access to the children of
+  /// this render object. If you're accessing the children in order, consider
+  /// walking the child list directly.
+  List<ChildType> getChildrenAsList() {
+    final result = <ChildType>[];
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as ParentDataType;
+      result.add(child as ChildType);
+      child = childParentData.nextSibling;
+    }
+    return result;
+  }
+}

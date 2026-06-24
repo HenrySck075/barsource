@@ -1,7 +1,7 @@
 import 'package:barsource/src/dart_ui/dart_ui.dart';
 import 'package:barsource/src/rendering/object.dart';
 
-import '../rendering/stack_render.dart';
+import '../rendering/stack.dart';
 import 'basic.dart';
 import 'framework.dart';
 

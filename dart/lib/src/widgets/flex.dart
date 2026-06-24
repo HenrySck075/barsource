@@ -1,7 +1,6 @@
 import 'package:barsource/src/painting/basic_types.dart';
 import 'package:barsource/src/rendering/flex.dart';
 
-import '../rendering/flex_render.dart';
 import '../rendering/object.dart';
 import 'framework.dart';
 
