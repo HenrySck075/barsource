@@ -132,6 +132,7 @@ TENNOJI_EXPORT void rina_canvas_transform(TennojiCanvas* canvas, float* matrix4)
 TENNOJI_EXPORT void rina_canvas_scale(TennojiCanvas* canvas, float sx, float sy);
 TENNOJI_EXPORT void rina_canvas_skew(TennojiCanvas* canvas, float sx, float sy);
 TENNOJI_EXPORT void rina_canvas_rotate(TennojiCanvas* canvas, float degrees);
+
 TENNOJI_EXPORT void rina_canvas_clip_rect(
   TennojiCanvas* canvas,
   float left, float top,
@@ -148,6 +149,12 @@ TENNOJI_EXPORT void rina_canvas_clip_rrect(
   float brRx, float brRy,
   bool doAntiAlias
 );
+TENNOJI_EXPORT void rina_canvas_clip_path(
+  TennojiCanvas* canvas,
+  TennojiCanvasPath* path,
+  bool doAntiAlias
+);
+
 TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas, 
   TennojiCanvasPaintMetadata* paint

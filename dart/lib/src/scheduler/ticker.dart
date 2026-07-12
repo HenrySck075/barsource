@@ -151,10 +151,18 @@ class Ticker {
   } 
   bool get isActive => _future != null;
 
-  TickerFuture start() {
+  /// starts the ticker
+  ///
+  /// If `immediate` is true and the engine is currently processing the transient callbacks or microtasks, 
+  /// this will immediately call the ticker callback with a zero-duration argument.
+  /// Can be helpful for logics that requires precise timestamp (e.g. an accompanying animation ticker that starts when another ticker ticks, or smth like that)
+  TickerFuture start({bool immediate = false}) {
     assert(!isTicking, "nuh uh you arent starting this twice");
     _future = TickerFuture._();
     _startTime = Engine.instance.currentTime;
+    if (immediate && (Engine.instance.schedulerPhase == .transientCallbacks || Engine.instance.schedulerPhase == .midFrameMicrotasks)) {
+      _onTick(Duration.zero);
+    }
     scheduleTick();
     return _future!;
   }
@@ -176,7 +184,9 @@ class Ticker {
     if (
       !muted && 
       _startTime != null // this happened out of nowhere
-    ) _onTick(timeStamp - _startTime!);
+    ) {
+      _onTick(timeStamp - _startTime!);
+    }
     // We request the next tick
     if (isActive) {
        scheduleTick();

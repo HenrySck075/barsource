@@ -53,6 +53,7 @@ abstract class State<T extends StatefulWidget> {
 
   void initState() {}
   void didUpdateWidget(covariant T oldWidget) {}
+  void didChangeDependencies() {}
   void dispose() {}
   Widget build(elements.BuildContext context);
 

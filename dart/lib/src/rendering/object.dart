@@ -53,6 +53,19 @@ class BoxConstraints extends Constraints {
 
   bool get hasBoundedWidth => maxWidth < double.infinity;
   bool get hasBoundedHeight => maxHeight < double.infinity;
+  bool get hasTightWidth => minWidth >= maxWidth;
+  bool get hasTightHeight => minHeight >= maxHeight;
+  bool get hasInfiniteWidth => maxWidth == double.infinity;
+  bool get hasInfiniteHeight => maxHeight == double.infinity;
+
+  bool isSatisfiedBy(Size size) {
+    assert(debugAssertIsValid());
+    return (minWidth <= size.width) &&
+        (size.width <= maxWidth) &&
+        (minHeight <= size.height) &&
+        (size.height <= maxHeight);
+  }
+
   Size get smallest => Size(constrainWidth(0.0), constrainHeight(0.0));
   Size get biggest =>
       Size(constrainWidth(double.infinity), constrainHeight(double.infinity));
@@ -117,6 +130,46 @@ class BoxConstraints extends Constraints {
         constraints.minHeight,
         constraints.maxHeight,
       ),
+    );
+  }
+
+  /// Scales each constraint parameter by the given factor.
+  BoxConstraints operator *(double factor) {
+    return BoxConstraints(
+      minWidth: minWidth * factor,
+      maxWidth: maxWidth * factor,
+      minHeight: minHeight * factor,
+      maxHeight: maxHeight * factor,
+    );
+  }
+
+  /// Scales each constraint parameter by the inverse of the given factor.
+  BoxConstraints operator /(double factor) {
+    return BoxConstraints(
+      minWidth: minWidth / factor,
+      maxWidth: maxWidth / factor,
+      minHeight: minHeight / factor,
+      maxHeight: maxHeight / factor,
+    );
+  }
+
+  /// Scales each constraint parameter by the inverse of the given factor, rounded to the nearest integer.
+  BoxConstraints operator ~/(double factor) {
+    return BoxConstraints(
+      minWidth: (minWidth ~/ factor).toDouble(),
+      maxWidth: (maxWidth ~/ factor).toDouble(),
+      minHeight: (minHeight ~/ factor).toDouble(),
+      maxHeight: (maxHeight ~/ factor).toDouble(),
+    );
+  }
+
+  /// Computes the remainder of each constraint parameter by the given value.
+  BoxConstraints operator %(double value) {
+    return BoxConstraints(
+      minWidth: minWidth % value,
+      maxWidth: maxWidth % value,
+      minHeight: minHeight % value,
+      maxHeight: maxHeight % value,
     );
   }
 
@@ -208,7 +261,6 @@ abstract class RenderObject {
   PipelineOwner? _owner;
   bool _needsLayout = false;
   bool _needsPaint = false;
-  double _duration = double.infinity;
   ParentData? parentData;
   Rect get paintBounds;
 
@@ -219,15 +271,6 @@ abstract class RenderObject {
 
   bool get needsLayout => _needsLayout;
   bool get attached => _owner != null;
-  double get duration => _duration;
-  set duration(double value) {
-    assert(value >= 0, 'duration must be >= 0');
-    if (_duration == value) return;
-    _duration = value;
-    parent?.onChildDurationUpdated(this);
-  }
-
-  void onChildDurationUpdated(RenderObject child) {}
 
   @protected
   bool get sizedByParent => false;

@@ -172,9 +172,9 @@ class ColoredBox extends SingleChildRenderObjectWidget {
 
 class RenderColoredBox extends RenderProxyBox {
   RenderColoredBox({
-    required Color color,
-    bool isAntiAlias = false,
-  }) : _color = color, _isAntiAlias = isAntiAlias;
+    required this._color,
+    this._isAntiAlias = false,
+  });
 
   Color get color => _color;
   Color _color;
@@ -210,7 +210,7 @@ class ConstrainedBox extends SingleChildRenderObjectWidget {
   final BoxConstraints constraints;
 
   @override
-  RenderConstrainedBox createRenderObject(BuildContext context) => RenderConstrainedBox(constraints: constraints);
+  RenderConstrainedBox createRenderObject(BuildContext context) => RenderConstrainedBox(additionalConstraints: constraints);
 
   @override
   void updateRenderObject(BuildContext context, RenderConstrainedBox renderObject) {
@@ -220,15 +220,67 @@ class ConstrainedBox extends SingleChildRenderObjectWidget {
 
 class RenderConstrainedBox extends RenderProxyBox {
   RenderConstrainedBox({
-    required BoxConstraints constraints,
-  }) : _constraints = constraints;
+    required this._additionalConstraints,
+  });
 
-  BoxConstraints get additionalConstraints => _constraints;
-  BoxConstraints _constraints;
+  BoxConstraints get additionalConstraints => _additionalConstraints;
+  BoxConstraints _additionalConstraints;
   set additionalConstraints(BoxConstraints value) {
-    if (_constraints == value) return;
-    _constraints = value;
+    if (_additionalConstraints == value) return;
+    _additionalConstraints = value;
     markNeedsLayout();
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    if (_additionalConstraints.hasBoundedWidth && _additionalConstraints.hasTightWidth) {
+      return _additionalConstraints.minWidth;
+    }
+    final double width = super.computeMinIntrinsicWidth(height);
+    assert(width.isFinite);
+    if (!_additionalConstraints.hasInfiniteWidth) {
+      return _additionalConstraints.constrainWidth(width);
+    }
+    return width;
+  }
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    if (_additionalConstraints.hasBoundedWidth && _additionalConstraints.hasTightWidth) {
+      return _additionalConstraints.minWidth;
+    }
+    final double width = super.computeMaxIntrinsicWidth(height);
+    assert(width.isFinite);
+    if (!_additionalConstraints.hasInfiniteWidth) {
+      return _additionalConstraints.constrainWidth(width);
+    }
+    return width;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) {
+    if (_additionalConstraints.hasBoundedHeight && _additionalConstraints.hasTightHeight) {
+      return _additionalConstraints.minHeight;
+    }
+    final double height = super.computeMinIntrinsicHeight(width);
+    assert(height.isFinite);
+    if (!_additionalConstraints.hasInfiniteHeight) {
+      return _additionalConstraints.constrainHeight(height);
+    }
+    return height;
+  }
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    if (_additionalConstraints.hasBoundedHeight && _additionalConstraints.hasTightHeight) {
+      return _additionalConstraints.minHeight;
+    }
+    final double height = super.computeMaxIntrinsicHeight(width);
+    assert(height.isFinite);
+    if (!_additionalConstraints.hasInfiniteHeight) {
+      return _additionalConstraints.constrainHeight(height);
+    }
+    return height;
   }
 
   @override
@@ -281,12 +333,10 @@ enum DecorationPosition { background, foreground }
 
 class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   RenderDecoratedBox({
-    required Decoration decoration,
-    DecorationPosition position = DecorationPosition.background,
-    ImageConfiguration configuration = ImageConfiguration.empty,
-  }) : _decoration = decoration,
-       _position = position,
-       _configuration = configuration;
+    required this._decoration,
+    this._position = .background,
+    this._configuration = ImageConfiguration.empty,
+  });
 
   Decoration _decoration;
   Decoration get decoration => _decoration;
@@ -295,7 +345,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<Rende
     _painter?.dispose();
     _painter = null;
     _decoration = value;
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   DecorationPosition _position;
@@ -303,7 +353,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<Rende
   set position(DecorationPosition value) {
     if (_position == value) return;
     _position = value;
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   ImageConfiguration _configuration;
@@ -311,7 +361,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<Rende
   set configuration(ImageConfiguration value) {
     if (_configuration == value) return;
     _configuration = value;
-    //markNeedsPaint();
+    markNeedsPaint();
   }
 
   BoxPainter? _painter;
@@ -329,7 +379,7 @@ class RenderDecoratedBox extends RenderBox with RenderObjectWithChildMixin<Rende
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    _painter ??= _decoration.createBoxPainter(/*markNeedsPaint*/(){});
+    _painter ??= _decoration.createBoxPainter(markNeedsPaint);
     final ImageConfiguration filledConfiguration = configuration.copyWith(size: size);
     
     if (position == DecorationPosition.background) {
@@ -354,70 +404,13 @@ class SizedBox extends SingleChildRenderObjectWidget {
   final double? height;
 
   @override
-  RenderSizedBox createRenderObject(BuildContext context) => RenderSizedBox(
-        width: width,
-        height: height,
-      );
+  RenderConstrainedBox createRenderObject(BuildContext context) => RenderConstrainedBox(
+    additionalConstraints: BoxConstraints.tightFor(width: width, height: height)
+  );
 
   @override
-  void updateRenderObject(BuildContext context, RenderSizedBox renderObject) {
-    renderObject
-      ..width = width
-      ..height = height;
-  }
-}
-
-class RenderSizedBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
-  RenderSizedBox({
-    double? width,
-    double? height,
-  }) : _width = width, _height = height;
-
-  double? get width => _width;
-  double? _width;
-  set width(double? value) {
-    if (_width == value) return;
-    _width = value;
-    markNeedsLayout();
-  }
-
-  double? get height => _height;
-  double? _height;
-  set height(double? value) {
-    if (_height == value) return;
-    _height = value;
-    markNeedsLayout();
-  }
-
-  @override
-  void performLayout() {
-    BoxConstraints childConstraints = constraints;
-    if (width != null) {
-      childConstraints = childConstraints.tighten(width: width);
-    }
-    if (height != null) {
-      childConstraints = childConstraints.tighten(height: height);
-    }
-
-    if (child != null) {
-      child!.layout(childConstraints, parentUsesSize: true);
-      size = constraints.constrain(Size(
-        width ?? child!.size.width,
-        height ?? child!.size.height,
-      ));
-    } else {
-      size = constraints.constrain(Size(
-        width ?? 0.0,
-        height ?? 0.0,
-      ));
-    }
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    if (child != null) {
-      context.paintChild(child!, offset);
-    }
+  void updateRenderObject(BuildContext context, RenderConstrainedBox renderObject) {
+    renderObject.additionalConstraints = BoxConstraints.tightFor(width: width, height: height);
   }
 }
 
@@ -443,9 +436,9 @@ class Padding extends SingleChildRenderObjectWidget {
 
 class RenderPadding extends RenderProxyBox {
   RenderPadding({
-    required EdgeInsetsGeometry padding,
-    TextDirection? textDirection,
-  }) : _padding = padding, _textDirection = textDirection;
+    required this._padding,
+    this._textDirection,
+  });
 
   EdgeInsets? _resolvedPaddingCache;
 
@@ -564,9 +557,9 @@ class LimitedBox extends SingleChildRenderObjectWidget {
 
 class RenderLimitedBox extends RenderProxyBox {
   RenderLimitedBox({
-    double maxWidth = double.infinity,
-    double maxHeight = double.infinity,
-  }) : _maxWidth = maxWidth, _maxHeight = maxHeight;
+    this._maxWidth = double.infinity,
+    this._maxHeight = double.infinity,
+  });
 
   double get maxWidth => _maxWidth;
   double _maxWidth;

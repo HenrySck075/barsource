@@ -349,6 +349,15 @@ TENNOJI_EXPORT void rina_canvas_clip_rrect(
     ), doAntiAlias
   );
 }
+TENNOJI_EXPORT void rina_canvas_clip_path(
+  TennojiCanvas* canvas,
+  TennojiCanvasPath* path,
+  bool doAntiAlias
+) {
+  if (!canvas || !canvas->canvas || !path) return;
+  canvas->canvas->clipPath(path->builder->snapshot(), doAntiAlias);
+}
+
 
 TENNOJI_EXPORT int rina_canvas_save_layer(
   TennojiCanvas* canvas,

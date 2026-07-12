@@ -8,6 +8,7 @@ see the example folder
 - All image operations are synchronous. Not because of the way the native library is built (it is) but because in the context of a video renderer it doesnt make sense to have them asynchronous.
 - `RenderObject.paint` is called every frame.
 - GPU acceleration feature was only tested on an Intel i5-7200U system using Vulkan (linux), other backend's and device's stability are not guaranteed. Especially MediaCodec (android) i still need to figure out how to compile a custom dartdev that actually supports android build hooks
+- the build hook does not detect the user's gpu yet. nor the repo has a build workflow that can build the code for different gpu targets.
 
 # FAQ
 ## Is it really that easy if you're familiar with Flutter?

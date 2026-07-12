@@ -24,7 +24,7 @@ class MediaController extends ChangeNotifier {
     this.trimEnd,
     this.playbackSpeed = 1.0,
     this.volume = 1.0,
-    this.repeatCount,
+    this.repeatCount = 0,
   }) : assert(repeatCount == null || repeatCount > 0),
        assert(volume >= 0.0 && volume <= 1.0) {
     _ticker = Ticker(_onTick);
@@ -108,7 +108,7 @@ class MediaController extends ChangeNotifier {
     initialize();
     _isPlaying = true;
     _lastTick = null; // Reset tick delta
-    _ticker.start();
+    _ticker.start(immediate: true);
     notifyListeners();
   }
 
@@ -150,7 +150,7 @@ class MediaController extends ChangeNotifier {
 
     // Boundary & Loop Checking
     if (endUs != null && nextPositionUs >= endUs) {
-      if (repeatCount != null && _currentLoops >= repeatCount! - 1) {
+      if (repeatCount != null && _currentLoops >= repeatCount!) {
         // Finished final loop
         nextPositionUs = endUs;
         _currentPosition = Duration(microseconds: nextPositionUs);
@@ -171,8 +171,15 @@ class MediaController extends ChangeNotifier {
 
   Pointer<TennojiCanvasImage>? getCurrentTexture() {
     if (_decoder == null) return null;
-    _log.fine(_currentPosition);
     return rina_decoder_get_texture(_decoder!, _currentPosition.inMicroseconds);
+  }
+
+  Size getVideoSize() {
+    final texturePtr = getCurrentTexture();
+    if (texturePtr == null || texturePtr == nullptr) return Size.zero;
+    final width = rina_texture_get_width(texturePtr);
+    final height = rina_texture_get_height(texturePtr);
+    return Size(width.toDouble(), height.toDouble());
   }
 
   Float32List? getAudioSamples(int sampleCount, int sampleRate) {
@@ -248,9 +255,10 @@ class MediaController extends ChangeNotifier {
 // Unified Widget
 // ---------------------------------------------------------------------------
 
-class MediaClip extends LeafRenderObjectWidget {
+class MediaClip extends SingleChildRenderObjectWidget {
   const MediaClip({
     super.key,
+    super.child,
     required this.controller,
   });
 
@@ -306,7 +314,7 @@ class RenderMediaClip extends RenderBox with AudioContributor {
 
   @override
   void performLayout() {
-    size = Size(constraints.maxWidth, constraints.maxHeight);
+    size = _controller.getVideoSize();//Size(constraints.maxWidth, constraints.maxHeight);
   }
 
   @override
@@ -319,12 +327,9 @@ class RenderMediaClip extends RenderBox with AudioContributor {
 
   @override
   Float32List? getOwnAudioForFrame(
-    Duration frameTime,
     int sampleCount,
     int sampleRate,
   ) {
-    // The engine's frameTime isn't needed for playback sync anymore, 
-    // because the Controller's Ticker manages exact playback position.
     return _controller.getAudioSamples(sampleCount, sampleRate);
   }
 }

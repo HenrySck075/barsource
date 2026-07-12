@@ -7357,6 +7357,15 @@ class Canvas {
     );
   }
 
+  void clipPath(Path path, bool doAntiAlias) {
+    debugAssertNullPointer();
+    rina_canvas_clip_path(
+      _nativePtr,
+      (path as _NativePath)._nativePtr,
+      doAntiAlias
+    );
+  }
+
   void saveLayer(Paint paint) {
     debugAssertNullPointer();
     using(

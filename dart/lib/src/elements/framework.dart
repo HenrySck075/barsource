@@ -901,12 +901,21 @@ class StatefulElement extends ComponentElement {
   @override
   void _firstBuild() {
     _state.initState();
-    //_state.didChangeDependencies();
+    _state.didChangeDependencies();
     super._firstBuild();
   }
 
   @override
   Widget build() => _state.build(this);
+
+  @override
+  void update(covariant Widget newWidget) {
+    super.update(newWidget);
+    final oldWidget = _state.widget;
+    _state.bindWidget(newWidget as StatefulWidget);
+    _state.didUpdateWidget(oldWidget);
+    rebuild(force:true);
+  }
 
   @override
   void reassemble() {

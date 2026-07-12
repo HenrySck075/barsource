@@ -17,6 +17,7 @@ abstract class RenderBox extends RenderObject {
   Size? _size;
   Size get size => _size??(throw StateError("RenderBox $runtimeType was not laid out"));
   set size(Size value) => _size = value;
+  bool get hasSize => _size != null;
   @override
   Rect get paintBounds => Offset.zero & size;
 
@@ -51,9 +52,9 @@ abstract class RenderBox extends RenderObject {
         // this assumes no idiot changes the order of the _IntrinsicDimension enum for no reason.
         final crossAxis = dimension.index < 2 ? "height" : "width";
         // sorry guys
-        final getMinMaxIntrinsicAxis = "get${dimension.index%2==0?'Min':'Max'}Intrinsic${dimension.index<2?'Width':'Height'}";
+        final getLimitedIntrinsicAxis = "get${dimension.index%2==0?'Min':'Max'}Intrinsic${dimension.index<2?'Width':'Height'}";
 
-        throw StateError("The $crossAxis argument to $getMinMaxIntrinsicAxis must not be negative.\n\nIf you perform computations on another $crossAxis before passing it to $getMinMaxIntrinsicAxis, consider using math.max() or double.clamp() to force the value into the valid range.");
+        throw StateError("The $crossAxis argument to $getLimitedIntrinsicAxis must not be negative.\n\nIf you perform computations on another $crossAxis before passing it to $getLimitedIntrinsicAxis, consider using math.max() or double.clamp() to force the value into the valid range.");
       }
       return true;
     }());
@@ -101,16 +102,36 @@ abstract class RenderBox extends RenderObject {
 }
 
 abstract class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
-  @override
-  void performLayout() {
-    child?.layout(constraints);
-    size = child?.size ?? Size(constraints.maxWidth, constraints.maxHeight);
+  RenderProxyBox([RenderBox? child]) {this.child = child;}
+
+  Size computeSizeForNoChild(BoxConstraints constraints) {
+    return constraints.smallest;
   }
 
   @override
-  void onChildDurationUpdated(RenderObject child) {
-    super.duration = child.duration;
-    print("I hereby report this $runtimeType has a super.duration of ${super.duration} and the main duration of $duration");
+  double computeMinIntrinsicWidth(double height) {
+    return child?.getMinIntrinsicWidth(height) ?? 0.0;
+  }
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    return child?.getMaxIntrinsicWidth(height) ?? 0.0;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) {
+    return child?.getMinIntrinsicHeight(width) ?? 0.0;
+  }
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    return child?.getMaxIntrinsicHeight(width) ?? 0.0;
+  }
+
+  @override
+  void performLayout() {
+    child?.layout(constraints);
+    size = child?.size ?? computeSizeForNoChild(constraints);
   }
 }
 

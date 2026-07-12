@@ -14,7 +14,6 @@ mixin AudioContributor on RenderObject {
   /// Override for leaf sources (e.g. decoded clip audio). Return `null` when
   /// this node has no source audio at [frameTime].
   Float32List? getOwnAudioForFrame(
-    Duration frameTime,
     int sampleCount,
     int sampleRate,
   ) => null;
@@ -24,7 +23,6 @@ mixin AudioContributor on RenderObject {
   /// Override to implement effects (gain, filters, etc). The default behavior
   /// returns [mixedSamples] unchanged.
   Float32List processMixedAudioForFrame(
-    Duration frameTime,
     int sampleCount,
     int sampleRate,
     Float32List mixedSamples,
@@ -32,7 +30,6 @@ mixin AudioContributor on RenderObject {
 
   @protected
   Float32List? collectSubtreeMixedAudioForFrame(
-    Duration frameTime,
     int sampleCount,
     int sampleRate, {
     bool includeOwnAudio = true,
@@ -54,7 +51,6 @@ mixin AudioContributor on RenderObject {
       node.visitChildren((RenderObject child) {
         if (child is AudioContributor) {
           final childSamples = child.getAudioForFrame(
-            frameTime,
             sampleCount,
             sampleRate,
           );
@@ -70,7 +66,6 @@ mixin AudioContributor on RenderObject {
     collectDescendantContributorAudio(this);
     if (includeOwnAudio) {
       final ownSamples = getOwnAudioForFrame(
-        frameTime,
         sampleCount,
         sampleRate,
       );
@@ -86,12 +81,10 @@ mixin AudioContributor on RenderObject {
   /// This is the subtree mix for this contributor: descendant contributor audio
   /// + own source audio, then [processMixedAudioForFrame].
   Float32List? getAudioForFrame(
-    Duration frameTime,
     int sampleCount,
     int sampleRate,
   ) {
     final mixedSamples = collectSubtreeMixedAudioForFrame(
-      frameTime,
       sampleCount,
       sampleRate,
     );
@@ -100,7 +93,6 @@ mixin AudioContributor on RenderObject {
     }
 
     return processMixedAudioForFrame(
-      frameTime,
       sampleCount,
       sampleRate,
       mixedSamples,
